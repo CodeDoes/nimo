@@ -7,7 +7,6 @@ NimScript DSL for multi-step LLM pipelines. Run with `nim script pipeline.nim`.
 ```nim
 import std/[os, strutils, tables]
 
-# Pipeline API (injected by nimo runtime)
 type PipelineNode = ref object
   id: string
   output: string
@@ -16,7 +15,7 @@ proc generate(prompt: string, target: string = ""): PipelineNode = discard
 proc extract(src: PipelineNode, filter: string): PipelineNode = discard
 proc summarize(src: PipelineNode, length: string = "brief"): PipelineNode = discard
 
-# ── Pipeline definition ──
+# ── Pipeline ──
 
 let max_wiki    = generate("Generate character entry for Max: robot ninja.",     target = "wiki/max.md")
 let rob_wiki    = generate("Generate character entry for Rob: heavy ordnance.",  target = "wiki/rob.md")
@@ -55,7 +54,7 @@ let draft = generate(
   target = "draft_outline.md"
 )
 
-let ch2_recap  = summarize(ch2, length = "bullet_points")
+let ch2_recap = summarize(ch2, length = "bullet_points")
 
 let ch3 = generate(
   """
@@ -79,11 +78,11 @@ generate(
 
 ## Execution
 
-Independent `generate` calls at the same indentation level run in parallel.
-Downstream nodes wait for their dependencies (topological sort).
+Independent calls at the same scope run in parallel.
+Downstream nodes wait for dependencies (topological sort).
 
 ## Open
 
-- Cache invalidation: skip nodes whose inputs haven't changed
+- Cache: skip nodes whose inputs haven't changed
 - Context window: chunking or RAG for large outputs
-- Error handling: retry on failure, or abort pipeline?
+- Error handling: retry or abort?
