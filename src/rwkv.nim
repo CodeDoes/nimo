@@ -86,6 +86,17 @@ template unsafePtr*[T](arr: openArray[T]): ptr T =
 template varPtr*[T](arr: var openArray[T]): ptr T =
   if arr.len == 0: nil else: addr(arr[0])
 
+# --- Model Property Getter Macro/Template ---
+template genModelGetter(name, cProc: untyped) =
+  proc name*(model: RwkvModel): int {.inline.} =
+    cProc(model.ctx).int
+
+genModelGetter(nVocab, rwkv_get_n_vocab)
+genModelGetter(nEmbed, rwkv_get_n_embed)
+genModelGetter(nLayer, rwkv_get_n_layer)
+genModelGetter(stateLen, rwkv_get_state_len)
+genModelGetter(logitsLen, rwkv_get_logits_len)
+
 proc `=destroy`*(model: var RwkvModelObj) =
   if model.ctx != nil and model.isOwner:
     rwkv_free(model.ctx)
@@ -149,12 +160,6 @@ proc clone*(model: RwkvModel, nThreads: uint32 = 4): RwkvModel =
     raise newException(RwkvException, "Failed to clone RWKV context: " & decodeError(err))
   RwkvModel(ctx: clonedCtx, isOwner: true)
 
-proc nVocab*(model: RwkvModel): int {.inline.} = rwkv_get_n_vocab(model.ctx).int
-proc nEmbed*(model: RwkvModel): int {.inline.} = rwkv_get_n_embed(model.ctx).int
-proc nLayer*(model: RwkvModel): int {.inline.} = rwkv_get_n_layer(model.ctx).int
-proc stateLen*(model: RwkvModel): int {.inline.} = rwkv_get_state_len(model.ctx).int
-proc logitsLen*(model: RwkvModel): int {.inline.} = rwkv_get_logits_len(model.ctx).int
-
 proc newState*(model: RwkvModel): seq[float32] =
   ## Allocates and initializes a new state buffer for inference.
   result = newSeq[float32](model.stateLen)
@@ -180,34 +185,41 @@ proc getPrintErrors*(model: RwkvModel = nil): bool =
 proc getLastError*(model: RwkvModel = nil): uint32 =
   rwkv_get_last_error(if model != nil: model.ctx else: nil)
 
-# --- High-Level Model Evaluation Overloads ---
+# --- Metaprogrammed High-Level Model Evaluation Overloads ---
 
-proc eval*(model: RwkvModel, token: uint32, stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
-  rwkv_eval(model.ctx, token, stateIn, stateOut, logitsOut)
+template genSingleEvalOverloads() =
+  proc eval*(model: RwkvModel, token: uint32, stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
+    rwkv_eval(model.ctx, token, stateIn, stateOut, logitsOut)
 
-proc eval*(model: RwkvModel, token: uint32, stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
-  rwkv_eval(model.ctx, token, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
+  proc eval*(model: RwkvModel, token: uint32, stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
+    rwkv_eval(model.ctx, token, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
 
-proc eval*(model: RwkvModel, token: uint32, stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
-  rwkv_eval(model.ctx, token, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
+  proc eval*(model: RwkvModel, token: uint32, stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
+    rwkv_eval(model.ctx, token, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
 
-proc evalSequence*(model: RwkvModel, tokens: openArray[uint32], stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
-  rwkv_eval_sequence(model.ctx, unsafePtr(tokens), tokens.len.csize_t, stateIn, stateOut, logitsOut)
+template genSeqEvalOverloads() =
+  proc evalSequence*(model: RwkvModel, tokens: openArray[uint32], stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
+    rwkv_eval_sequence(model.ctx, unsafePtr(tokens), tokens.len.csize_t, stateIn, stateOut, logitsOut)
 
-proc evalSequence*(model: RwkvModel, tokens: openArray[uint32], stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
-  rwkv_eval_sequence(model.ctx, unsafePtr(tokens), tokens.len.csize_t, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
+  proc evalSequence*(model: RwkvModel, tokens: openArray[uint32], stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
+    rwkv_eval_sequence(model.ctx, unsafePtr(tokens), tokens.len.csize_t, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
 
-proc evalSequence*(model: RwkvModel, tokens: openArray[uint32], stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
-  rwkv_eval_sequence(model.ctx, unsafePtr(tokens), tokens.len.csize_t, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
+  proc evalSequence*(model: RwkvModel, tokens: openArray[uint32], stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
+    rwkv_eval_sequence(model.ctx, unsafePtr(tokens), tokens.len.csize_t, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
 
-proc evalSequenceInChunks*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int = 16; stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
-  rwkv_eval_sequence_in_chunks(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, stateIn, stateOut, logitsOut)
+template genChunkedSeqEvalOverloads() =
+  proc evalSequenceInChunks*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int = 16; stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
+    rwkv_eval_sequence_in_chunks(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, stateIn, stateOut, logitsOut)
 
-proc evalSequenceInChunks*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int, stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
-  rwkv_eval_sequence_in_chunks(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
+  proc evalSequenceInChunks*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int, stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
+    rwkv_eval_sequence_in_chunks(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
 
-proc evalSequenceInChunks*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int, stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
-  rwkv_eval_sequence_in_chunks(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
+  proc evalSequenceInChunks*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int, stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
+    rwkv_eval_sequence_in_chunks(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
+
+genSingleEvalOverloads()
+genSeqEvalOverloads()
+genChunkedSeqEvalOverloads()
 
 proc quantizeModelFile*(modelFilePathIn, modelFilePathOut: string, formatName: string): bool =
   rwkv_quantize_model_file(modelFilePathIn.cstring, modelFilePathOut.cstring, formatName.cstring)
