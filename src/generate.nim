@@ -1,90 +1,5 @@
-import std/[os, strutils, strformat, math, random, times, algorithm]
-import ./rwkv, ./config, ./tokenizer, ./logger, ./macros
-
-proc softmax(logits: openArray[float32]): seq[float32] =
-  result = newSeq[float32](logits.len)
-  if logits.len == 0: return
-
-  var maxVal = logits[0]
-  for v in logits:
-    if v > maxVal: maxVal = v
-
-  var sumExp = 0.0f
-  for i, v in logits:
-    let e = exp(v - maxVal)
-    result[i] = e
-    sumExp += e
-
-  if sumExp > 0.0f:
-    for i in 0 ..< result.len:
-      result[i] /= sumExp
-
-type Pair = object
-  prob: float32
-  idx: int
-
-proc sampleLogits(logits: openArray[float32], temperature: float32 = 0.8f, topP: float32 = 0.8f, rng: var Rand): int =
-  if logits.len == 0: return 0
-
-  if temperature <= 0.001f:
-    var maxIdx = 0
-    var maxVal = logits[0]
-    for i, v in logits:
-      if v > maxVal:
-        maxVal = v
-        maxIdx = i
-    return maxIdx
-
-  var probs = softmax(logits)
-
-  if topP < 1.0f and topP > 0.0f:
-    var pairs = newSeq[Pair](probs.len)
-    for i in 0 ..< probs.len:
-      pairs[i] = Pair(prob: probs[i], idx: i)
-
-    # Sort descending by probability
-    pairs.sort(proc(a, b: Pair): int = cmp(b.prob, a.prob))
-
-    var cumSum = 0.0f
-    var cutoffIdx = pairs.len - 1
-    for i, p in pairs:
-      cumSum += p.prob
-      if cumSum >= topP:
-        cutoffIdx = i
-        break
-
-    # Zero out elements past cutoff
-    var keptSum = 0.0f
-    var keptProbs = newSeq[float32](probs.len)
-    for i in 0 .. cutoffIdx:
-      var p = pairs[i].prob
-      if temperature != 1.0f:
-        p = pow(p, 1.0f / temperature)
-      keptProbs[pairs[i].idx] = p
-      keptSum += p
-
-    if keptSum > 0.0f:
-      for i in 0 ..< probs.len:
-        probs[i] = keptProbs[i] / keptSum
-
-  elif temperature != 1.0f:
-    var sumP = 0.0f
-    for i in 0 ..< probs.len:
-      probs[i] = pow(probs[i], 1.0f / temperature)
-      sumP += probs[i]
-    if sumP > 0.0f:
-      for i in 0 ..< probs.len:
-        probs[i] /= sumP
-
-  # Weighted random sampling
-  let r = rng.rand(1.0f)
-  var accum = 0.0f
-  for i, p in probs:
-    accum += p
-    if r <= accum:
-      return i
-
-  return probs.len - 1
+import std/[os, strutils, strformat, random, times]
+import ./rwkv, ./config, ./tokenizer, ./logger, ./sampling, ./macros
 
 proc generateText() =
   var modelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
@@ -118,7 +33,7 @@ proc generateText() =
   let tok = loadWorldTokenizer(vocabPath)
   echo "Vocab loaded successfully!"
 
-  withModel(modelPath, DefaultThreads, model):
+  withModel(modelPath, DefaultThreads, DefaultGpuLayers, model):
     echo &"Model loaded successfully! (nVocab={model.nVocab}, nLayer={model.nLayer})"
 
     var promptTokens = tok.encode(promptText)
@@ -134,7 +49,6 @@ proc generateText() =
     var stepCount = 0
 
     timeBlock(elapsed):
-      # Benchmark macro instrumenting sequence evaluation
       benchmarkStep("prompt_chunk_eval"):
         checkOk(model.evalSequenceInChunks(promptTokens, chunkSize = DefaultChunkSize, state, logits),
                 "Failed to evaluate prompt sequence")
@@ -146,18 +60,16 @@ proc generateText() =
       stdout.flushFile()
 
       for step in 0 ..< genLength:
-        let nextToken = sampleLogits(logits, temperature = temp, topP = topP, rng = rng)
-        let tokenStr = tok.decodeToken(nextToken.uint32)
+        streamToken(model, state, logits, tok, temp, topP, rng, nextToken, tokenStr):
+          fullGenerated.add(tokenStr)
+          inc stepCount
 
-        fullGenerated.add(tokenStr)
-        inc stepCount
+          stdout.write(tokenStr)
+          stdout.flushFile()
 
-        stdout.write(tokenStr)
-        stdout.flushFile()
-
-        if not model.eval(nextToken.uint32, state, logits):
-          echo "\nError during evaluation step ", step
-          break
+          if not model.eval(nextToken.uint32, state, logits):
+            echo "\nError during evaluation step ", step
+            break
 
     echo "\n\n----------------------------------------------------------"
     echo &"Generated {stepCount} tokens in {elapsed:.3f} s ({elapsed / stepCount.float * 1000.0:.2f} ms/token)"
