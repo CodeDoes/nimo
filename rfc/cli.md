@@ -11,25 +11,24 @@ nimo generate <prompt>  # One-shot
 nimo bake <prompt>      # Pre-bake state
 nimo dashboard          # Full-screen TUI
 nimo run pipeline.nim   # Execute a pipeline script
+nimo workspace create --set-default
 ```
 
 ## Workspace
 
-```nimo
+```
 nimo workspace create --set-default
 # → creates ~/.ws/YYYYMMddHHmmss_<random_slug>/
 # → sets it as default for current dir
 
 nimo chat
-# → uses default workspace (cwd-relative in release,
-#   last workspace in dev)
+# → uses default workspace
+#   release: cwd (.)
+#   dev:     last workspace from previous session
 
 nimo chat -w ~/.ws/myproject
 # → explicit workspace override
 ```
-
-**Release:** `default_workspace = .` (cwd)
-**Dev:** `default_workspace = <last_workspace>` (from previous session)
 
 ## Intent → DSL
 
@@ -54,7 +53,7 @@ The generated `pipeline.nim` is saved to the workspace so the user can inspect/e
 1. **Capture** — user types intent in chat
 2. **Extract** — LLM analyzes intent, produces a `pipeline.nim` script
 3. **Save** — script written to workspace
-4. **Execute** — `nim script` runs the pipeline, DAG scheduler handles parallelism
+4. **Execute** — `nim script` runs the pipeline, DAG scheduler handles dependencies
 5. **Return** — artifacts served back to user
 
 See `rfc/pipeline.md` for the DSL spec.
