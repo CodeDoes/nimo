@@ -83,6 +83,32 @@ proc sampleLogits(logits: openArray[float32], temperature: float32 = 0.7f, topP:
 
   return probs.len - 1
 
+const StopSequences = [
+  "\n\nUser:",
+  "\nUser:",
+  "\n\nUser",
+  "\nUser",
+  "\n\nHuman:",
+  "\nHuman:",
+  "<|endoftext|>"
+]
+
+proc endsWithStopSequence(s: string): bool =
+  for stopSeq in StopSequences:
+    if s.endsWith(stopSeq):
+      return true
+  return false
+
+proc maxStopPrefixLen(s: string): int =
+  ## Returns length of longest suffix of `s` that is a prefix of any stop sequence
+  result = 0
+  for stopSeq in StopSequences:
+    for prefixLen in 1 .. stopSeq.len:
+      let prefix = stopSeq[0 ..< prefixLen]
+      if s.endsWith(prefix):
+        if prefixLen > result:
+          result = prefixLen
+
 proc startTuiChat() =
   var modelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
   let vocabPath = if paramCount() > 1: paramStr(2) else: DefaultVocabPath
@@ -116,18 +142,24 @@ proc startTuiChat() =
   # Use Nim template `withModel` for automatic lifetime management
   withModel(modelPath, DefaultThreads, model):
     styledEcho(fgGreen, &"Model loaded! (nVocab={model.nVocab}, nLayer={model.nLayer})")
+    echo ""
 
     var state = model.newState()
     var logits = model.newLogits()
     var rng = initRand(cpuTime().int64)
 
     # Initial prompt / system setup
-    let sysPrompt = "User: Hi!\n\nBot: Hello! How can I help you today?\n\n"
+    let initialUserMsg = "hi"
+    let initialBotMsg = "Hello! How can I help you today?"
+    let sysPrompt = "User: " & initialUserMsg & "\n\nBot: " & initialBotMsg & "\n\n"
     var sysTokens = tok.encode(sysPrompt)
 
     if sysTokens.len > 0:
       checkOk(model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits),
               "Failed to evaluate system prompt")
+
+    styledEcho(fgCyan, "User: ", initialUserMsg)
+    styledEcho(fgGreen, "Bot:  ", initialBotMsg)
 
     while true:
       stdout.write("\nUser: ")
@@ -152,6 +184,8 @@ proc startTuiChat() =
         if sysTokens.len > 0:
           discard model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits)
         styledEcho(fgYellow, "Chat session reset.")
+        styledEcho(fgCyan, "User: ", initialUserMsg)
+        styledEcho(fgGreen, "Bot:  ", initialBotMsg)
         appendToEternalLog("Chat session reset by user.")
         continue
 
@@ -165,23 +199,38 @@ proc startTuiChat() =
             appendToEternalLog("Error evaluating prompt: " & inputLine)
             continue
 
-      stdout.write("Bot: ")
+      stdout.write("Bot:  ")
       stdout.flushFile()
 
       var botReply = ""
+      var buffer = ""
+      var validState = state
+
       for step in 0 ..< 200:
         let nextToken = sampleLogits(logits, temperature = temp, topP = topP, rng = rng)
         let tokenStr = tok.decodeToken(nextToken.uint32)
 
         botReply.add(tokenStr)
-        stdout.write(tokenStr)
-        stdout.flushFile()
+        buffer.add(tokenStr)
 
-        if botReply.endsWith("\n\nUser:") or botReply.endsWith("\nUser:"):
+        if endsWithStopSequence(botReply):
+          state = validState
           break
 
         if not model.eval(nextToken.uint32, state, logits):
           break
+
+        let prefixLen = maxStopPrefixLen(buffer)
+        let safeLen = buffer.len - prefixLen
+        if safeLen > 0:
+          stdout.write(buffer[0 ..< safeLen])
+          stdout.flushFile()
+          buffer = buffer[safeLen .. ^1]
+          validState = state
+
+      if buffer.len > 0 and not endsWithStopSequence(botReply):
+        stdout.write(buffer)
+        stdout.flushFile()
 
       echo ""
       logChatInteraction(inputLine, botReply.strip())

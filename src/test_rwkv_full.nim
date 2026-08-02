@@ -97,7 +97,7 @@ proc runFullTestSuite() =
   echo &"  Quantization successful! Output file size: {getFileSize(quantOutPath)} bytes"
 
   # Load quantized model to verify it works
-  let quantModel = initRwkvModel(quantOutPath, nThreads = 2)
+  let quantModel = initRwkvModel(quantOutPath, nThreads = 2, nGpuLayers = 0)
   var qState = quantModel.newState()
   var qLogits = quantModel.newLogits()
   doAssert quantModel.eval(100.uint32, qState, qLogits)
