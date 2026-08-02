@@ -15,13 +15,21 @@ nimo run pipeline.nim   # Execute a pipeline script
 
 ## Workspace
 
+```nimo
+nimo workspace create --set-default
+# → creates ~/.ws/YYYYMMddHHmmss_<random_slug>/
+# → sets it as default for current dir
+
+nimo chat
+# → uses default workspace (cwd-relative in release,
+#   last workspace in dev)
+
+nimo chat -w ~/.ws/myproject
+# → explicit workspace override
 ```
-~/.ws/myproject/
-├── wiki/
-├── chapters/
-├── outline.md
-└── decisions.md
-```
+
+**Release:** `default_workspace = .` (cwd)
+**Dev:** `default_workspace = <last_workspace>` (from previous session)
 
 ## Intent → DSL
 
