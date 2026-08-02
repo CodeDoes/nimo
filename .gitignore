@@ -1,2 +1,11 @@
 models/
 rwkv.cpp/
+build/
+chat
+generate
+main
+test_rwkv_full
+src/chat
+src/generate
+src/main
+src/test_rwkv_full

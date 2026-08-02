@@ -1,7 +1,17 @@
 ## Nim wrapper for rwkv.cpp
 ## High-performance C/C++ implementation of RWKV language model inference.
 
-const libRwkv* {.strdefine.} = (when defined(windows): "rwkv.dll" elif defined(macosx): "librwkv.dylib" else: "librwkv.so")
+when defined(linux):
+  {.passL: "-lstdc++ -fopenmp -Wl,-rpath,$ORIGIN/rwkv.cpp -Wl,-rpath,$ORIGIN/rwkv.cpp/ggml/src -Wl,-rpath,rwkv.cpp -Wl,-rpath,rwkv.cpp/ggml/src".}
+
+const libRwkv* {.strdefine.} = (
+  when defined(windows):
+    "(rwkv.dll|./rwkv.dll|rwkv.cpp/rwkv.dll)"
+  elif defined(macosx):
+    "(librwkv.dylib|./librwkv.dylib|rwkv.cpp/librwkv.dylib)"
+  else:
+    "(librwkv.so|./librwkv.so|rwkv.cpp/librwkv.so)"
+)
 
 const
   RWKV_FILE_MAGIC* = 0x67676d66
@@ -103,7 +113,7 @@ proc decodeError*(flags: uint32): string =
   of 3: detail = "File stat failed"
   of 4: detail = "File read failed"
   of 5: detail = "File write failed"
-  of 6: detail = "Invalid file magic"
+  of 6: detail = "Invalid file magic (expected GGML format model .bin file; PyTorch .pth files must be converted using convert_pytorch_to_ggml.py)"
   of 7: detail = "Unsupported file version"
   of 8: detail = "Unsupported data type"
   of 9: detail = "Unsupported feature"
