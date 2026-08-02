@@ -43,10 +43,22 @@ $ nimo chat
 > Wiki for 3 chars + world. First 3 chapters. Outline to chapter 10.
 > Max defeats Ghastone by chapter 10.
 
-[nimo] Extracting intent...
-[nimo] Generated: ~/.ws/myproject/pipeline.nim
-[nimo] Running pipeline (wiki → extract → ch1 → ch2+outline → ch3 → finalize)...
-[nimo] Done. Artifacts in ~/.ws/myproject/
+[nimo] Creating plan...
+[nimo] Plan:
+  1. Generate wiki entries (Max, Rob, Ghastone, City)
+  2. Extract context buffers
+  3. Write Chapter 1
+  4. Write Chapter 2 + draft outline
+  5. Write Chapter 3
+  6. Finalize outline
+
+[nimo] ▶ 1/6 Generating wiki entries...
+[nimo] ✔ 1/6 Generating wiki entries... (3.2s)
+[nimo] ▶ 2/6 Extracting context buffers...
+[nimo] ✔ 2/6 Extracting context buffers... (0.8s)
+[nimo] ▶ 3/6 Writing Chapter 1...
+[nimo] ✔ 3/6 Writing Chapter 1... (12.4s)
+...
 ```
 
 The generated `pipeline.nim` is saved to the workspace so the user can inspect/edit it.
