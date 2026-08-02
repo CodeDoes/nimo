@@ -82,10 +82,27 @@ High-tech neon cyberpunk city. 200+ stories of vertical sprawl. The rich live in
 [nimo] ✔ 4/10 Generating wiki: Neo-Kuroba... (0.8s)
 [nimo] ▶ 5/10 Extracting context buffers...
 
-Max context: [precision strikes, mono-filament wire, adaptive camo, stoic, dry wit]
-Rob context: [rotary cannon, suppressive fire, boisterous, loyal]
-Ghastone context: [silver gasmask, Neon District, synthetic memory monopoly]
-Neo-Kuroba context: [vertical sprawl, Undercity, acidic rain, corporate banners]
+=== Max ===
+Combat: precision strikes, mono-filament wire whips, subdermal blade arrays
+Defense: adaptive camouflage plating, light-bending stealth
+Personality: stoic, observant, dry wit with trusted allies
+
+=== Rob ===
+Combat: rotary cannon, suppressive fire tactics
+Personality: boisterous, loyal, treats combat like contact sport
+Role: tactical partner, backup cover
+
+=== Ghastone ===
+Identity: cybernetic syndicate crime boss
+Control: Neon District via augmented enforcers
+Signature: silver gasmask shaped like weeping face
+Motive: monopolize synthetic memory trading
+
+=== Neo-Kuroba ===
+Setting: 200+ story vertical sprawl, neon-lit cyberpunk city
+Classes: rich in spires above clouds, poor in Undercity below
+Atmosphere: constant acidic rain, holographic advertising
+Power: corporate banners replace national flags
 
 [nimo] ✔ 5/10 Extracting context buffers... (0.5s)
 [nimo] ▶ 6/10 Writing Chapter 1...
