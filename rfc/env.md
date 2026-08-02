@@ -1,0 +1,12 @@
+- CUDA
+- Vulkan
+- (Something for CPUs)
+
+- RAM
+- VRAM
+
+- SSD
+
+- MODEL ORIGIN URL
+- DOWNLOAD FOLDER PATH
+- QUANTIZE FOLDER PATH

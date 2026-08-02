@@ -1,0 +1,27 @@
+# What to include in config
+- default workspace path (defaults to `.` but can be overwritten so that the workspace is in a constant directory)
+- model path
+- model inference engine
+- vocab path
+- state baking paths
+- personas
+  - user intent
+  - writer
+  - manager
+  - reader
+  - critique
+  - editor
+  - planner
+  - coder
+- default model parameters
+  - temprature
+  - max tokens
+  - top p
+  - frequency penalty
+  - presence penalty
+  - stop sequences
+- bnf settings
+- logging settings
+- eval settings
+- test settings
+- web app settings

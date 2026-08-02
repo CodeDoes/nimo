@@ -1,66 +1,49 @@
 ## What is this file for?
 
-Analysis of the recent refactor that collapsed 10+ modules into `cli.nim`.
+Status of the refactor — what was done and what's next.
 
-## What Changed
+## Phase 1: Shared Session Module (DONE)
 
-**Before** (14 source files):
+Created `src/session.nim` that encapsulates:
+- `initSession(modelPath, vocabPath)` — loads model + tokenizer, allocates state/logits
+- `generateTurn(session, userMsg)` — encodes prompt, runs inference loop, returns reply
+
+All 4 app binaries now use `session.nim` instead of duplicating initialization and generation logic.
+
+### Before vs After (line counts)
+
+| File | Before | After | Change |
+|------|--------|-------|--------|
+| `chat.nim` | 137 | 66 | -71 |
+| `generate.nim` | 81 | 54 | -27 |
+| `bake_state.nim` | 65 | 53 | -12 |
+| `nimwave_app.nim` | 267 | 163 | -104 |
+| `session.nim` | — | 55 | +55 (new) |
+| **Net** | **550** | **391** | **-159** |
+
+### Key Design Decisions
+
+1. **`session.nim` inlines sampling** instead of using `streamToken` template — the template can't handle field accesses like `s.rng` as `var` parameters through Nim's template expansion.
+
+2. **Apps import sub-modules directly** — Nim doesn't re-export symbols transitively, so each app imports `./tokenizer`, `./rwkv`, etc. explicitly in addition to `./session`.
+
+3. **`generateTurn` is generic** — accepts `temp` and `topP` params with defaults, so apps can override if needed.
+
+## Phase 2: Subdirectory Structure (TODO)
+
+Proposed layout:
 ```
 src/
-├── rwkv.nim      # C FFI bindings (~260 lines)
-├── config.nim    # Constants + resolveModelPath
-├── tokenizer.nim # WorldTokenizer trie (~181 lines)
-├── sampling.nim  # softmax + topP sampling (~120 lines)
-├── macros.nim    # templates + macros (~53 lines)
-├── logger.nim    # eternal logging (~48 lines)
-├── engine.nim    # (empty stub)
-├── agent.nim     # (empty stub)
-├── main.nim
-├── generate.nim
-├── chat.nim
-├── bake_state.nim
-├── test_rwkv_full.nim
-├── test_tokenizer.nim
-└── nimwave_app.nim
+├── engine/   config, model (rwkv), tokenizer, sampler, session
+├── ui/       cli, logger, macros
+├── apps/     main, generate, chat, bake_state, dashboard
+└── tests/    test_model, test_tokenizer
 ```
 
-**After** (6 source files):
-```
-src/
-├── cli.nim       # merged banner/print helpers from logger + config
-├── main.nim
-├── generate.nim
-├── chat.nim
-├── bake_state.nim
-└── nimwave_app.nim
-```
+Import paths would change from `./rwkv` to `../engine/model`, etc. Not done yet — flat structure works fine for now.
 
-## What Was Consolidated
+## Phase 3: Further DRY (TODO)
 
-| Old Module    | Merged Into           | What It Provided                          |
-|---------------|-----------------------|-------------------------------------------|
-| `config.nim`  | (deleted)             | Default constants (model path, temp, etc) |
-| `logger.nim`  | (deleted)             | `appendToEternalLog`, `logSessionStart`   |
-| `macros.nim`  | (deleted)             | `withModel`, `streamToken`, `benchmarkStep` |
-| `cli.nim`     | (new)                 | `printBanner`, `printError`, `styledEcho` |
-
-## What Was Deleted Entirely
-
-- `rwkv.nim` — the C FFI bindings (critical, needed for all binaries)
-- `tokenizer.nim` — WorldTokenizer (critical, needed for all binaries)
-- `sampling.nim` — sampling functions (critical, needed by generate/chat/nimwave_app)
-- `engine.nim` — empty stub
-- `agent.nim` — empty stub
-- `test_rwkv_full.nim` — test binary
-- `test_tokenizer.nim` — test binary
-- `devenv.*`, `flake.nix`, `shell.nix` — Nix dev environment
-- `docs/`, `plan/`, `rfc/` — documentation (restored afterward)
-
-## Status: BROKEN
-
-All binaries in `src/` import modules that no longer exist:
-- `import rwkv, config, tokenizer, logger, sampling, macros`
-
-The project **will not compile** until the deleted core modules (`rwkv.nim`, `tokenizer.nim`, `sampling.nim`, `macros.nim`, `config.nim`, `logger.nim`) are restored or their functionality is inlined into the remaining source files.
-
-`cli.nim` is the only self-contained module — it only uses `std/terminal` and `std/strutils`.
+- Extract `loadSystemPrompt(model, tok)` helper to avoid duplicating the "hi" setup in chat + dashboard
+- Consider making `main.nim` also use `session.nim`
+- `test_rwkv_full.nim` still uses old patterns — could be updated
