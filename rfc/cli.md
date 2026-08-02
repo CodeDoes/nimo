@@ -57,6 +57,7 @@ $ nimo chat
   10. Finalize outline
 
 [nimo] ▶ 1/10 Generating wiki: Max...
+→ wiki/max.md
 
 ## Max
 Robot ninja. Stealth specialist. Built for covert ops in dense urban environments. Wears adaptive camouflage plating that bends light around his frame. Primary weapons: mono-filament wire whips and subdermal blade arrays. Personality: stoic, observant, dry wit surfaces only with trusted allies.
