@@ -79,9 +79,7 @@ generate(
 ## Execution
 
 Parallel execution of independent nodes is optional (nice-to-have).
-Downstream nodes wait for dependencies (topological sort).
 Parallel execution of independent nodes is optional (nice-to-have).
-
 ## Open
 
 - Cache: skip nodes whose inputs haven't changed
