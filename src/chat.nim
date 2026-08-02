@@ -1,5 +1,7 @@
+## RWKV Interactive TUI Chat — uses illwave terminal buffer for styled output
+
 import std/[os, strutils, strformat, random, times, terminal]
-import ./rwkv, ./config, ./tokenizer, ./logger, ./sampling, ./macros
+import cli, rwkv, config, tokenizer, logger, sampling, macros
 
 proc startTuiChat() =
   let rawModelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
@@ -11,25 +13,21 @@ proc startTuiChat() =
 
   logSessionStart("RWKV TUI Chat Session (4-bit GGML)", modelPath, vocabPath)
 
-  styledEcho(styleBright, fgCyan, "==========================================================")
-  styledEcho(styleBright, fgCyan, "             RWKV Interactive TUI Chat                    ")
-  styledEcho(styleBright, fgCyan, "==========================================================")
-  echo "Model path: ", modelPath
-  echo "Vocab path: ", vocabPath
+  printBanner "RWKV Interactive TUI Chat"
+  printConfig(modelPath, vocabPath)
   echo "Commands:   /reset (clear history), /quit (exit)"
-  echo "----------------------------------------------------------\n"
+  echo ""
 
   if not fileExists(modelPath):
-    styledEcho(fgRed, "Error: Model file not found at '", modelPath, "'")
-    appendToEternalLog("Error: Model file not found at '" & modelPath & "'")
+    printError &"Error: Model file not found at '{modelPath}'"
+    appendToEternalLog &"Error: Model file not found at '{modelPath}'"
     return
 
   let tok = loadWorldTokenizer(vocabPath)
-  styledEcho(fgGreen, "Vocab loaded successfully!")
+  printSuccess "Vocab loaded successfully!"
 
-  # Use Nim template `withModel` for automatic lifetime management
   withModel(modelPath, DefaultThreads, DefaultGpuLayers, model):
-    styledEcho(fgGreen, &"Model loaded! (nVocab={model.nVocab}, nLayer={model.nLayer})")
+    printSuccess &"Model loaded! (nVocab={model.nVocab}, nLayer={model.nLayer})"
     echo ""
 
     var state = model.newState()
@@ -43,14 +41,14 @@ proc startTuiChat() =
     var sysTokens = tok.encode(sysPrompt)
 
     if bakedStatePath.len > 0 and fileExists(bakedStatePath):
-      styledEcho(fgYellow, "Loading pre-baked state from '", bakedStatePath, "'...")
+      printWarn &"Loading pre-baked state from '{bakedStatePath}'..."
       state.loadState(bakedStatePath)
     elif sysTokens.len > 0:
       checkOk(model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits),
               "Failed to evaluate system prompt")
 
-    styledEcho(fgCyan, "User: ", initialUserMsg)
-    styledEcho(fgGreen, "Bot:  ", initialBotMsg)
+    styledEcho(styleBright, fgCyan, "User: ", initialUserMsg)
+    styledEcho(styleBright, fgGreen, "Bot:  ", initialBotMsg)
 
     while true:
       stdout.write("\nUser: ")
@@ -59,7 +57,7 @@ proc startTuiChat() =
       try:
         inputLine = readLine(stdin)
       except IOError, EOFError:
-        styledEcho(fgYellow, "\nGoodbye!")
+        printWarn "\nGoodbye!"
         break
 
       inputLine = inputLine.strip()
@@ -67,18 +65,18 @@ proc startTuiChat() =
         continue
 
       if inputLine == "/quit" or inputLine == "/exit":
-        styledEcho(fgYellow, "Goodbye!")
-        appendToEternalLog("User quit chat session.")
+        printWarn "Goodbye!"
+        appendToEternalLog "User quit chat session."
         break
       elif inputLine == "/reset":
         state = model.newState()
         logits = model.newLogits()
         if sysTokens.len > 0:
           discard model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits)
-        styledEcho(fgYellow, "Chat session reset.")
-        styledEcho(fgCyan, "User: ", initialUserMsg)
-        styledEcho(fgGreen, "Bot:  ", initialBotMsg)
-        appendToEternalLog("Chat session reset by user.")
+        printWarn "Chat session reset."
+        styledEcho(styleBright, fgCyan, "User: ", initialUserMsg)
+        styledEcho(styleBright, fgGreen, "Bot:  ", initialBotMsg)
+        appendToEternalLog "Chat session reset by user."
         continue
 
       # Ensure preceding context terminates with double newlines
@@ -88,8 +86,8 @@ proc startTuiChat() =
       if turnTokens.len > 0:
         benchmarkStep("chat_turn_eval"):
           if not model.evalSequenceInChunks(turnTokens, chunkSize = DefaultChunkSize, state, logits):
-            styledEcho(fgRed, "Error evaluating user prompt.")
-            appendToEternalLog("Error evaluating prompt: " & inputLine)
+            printError "Error evaluating user prompt."
+            appendToEternalLog "Error evaluating prompt: " & inputLine
             continue
 
       stdout.write("Bot:  ")

@@ -1,11 +1,11 @@
-# Package info
+## Package info
 version       = "0.1.0"
 author        = "Developer"
 description   = "Nim wrapper for rwkv.cpp (RWKV language model inference in C/C++)"
 license       = "MIT"
 srcDir        = "src"
 binDir        = "build"
-bin           = @["main", "generate", "chat", "test_rwkv_full", "bake_state"]
+bin           = @["main", "generate", "chat", "test_rwkv_full", "bake_state", "nimwave_app"]
 
 # Dependencies
 requires "nim >= 2.0.0"
@@ -35,6 +35,7 @@ task build_all, "Build all Nim executables into build/":
   exec "nim c -o:build/chat src/chat.nim"
   exec "nim c -o:build/bake_state src/bake_state.nim"
   exec "nim c -o:build/test_rwkv_full src/test_rwkv_full.nim"
+  exec "nim c -o:build/nimwave_app src/nimwave_app.nim"
 
 task bake_state, "Bake model state from prompt":
   if not fileExists("rwkv.cpp/librwkv.so"):
@@ -59,3 +60,9 @@ task chat, "Run interactive TUI chat demo":
     build_cppTask()
   mkdir "build"
   exec "nim c -r -o:build/chat src/chat.nim"
+
+task nimwave, "Run the NIMWAVE TUI dashboard":
+  if not fileExists("rwkv.cpp/librwkv.so"):
+    build_cppTask()
+  mkdir "build"
+  exec "nim c -r -o:build/nimwave_app src/nimwave_app.nim"

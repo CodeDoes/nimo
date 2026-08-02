@@ -1,5 +1,7 @@
-import std/[os, strformat]
-import ./rwkv, ./config, ./tokenizer, ./logger
+## Nim wrapper for rwkv.cpp — CLI-frontend wrapper combining illwave + std/terminal output
+
+import std/[os, strformat, times, terminal]
+import cli, rwkv, config, tokenizer, logger, sampling, macros
 
 proc main() =
   echo "=== RWKV Nim Binding Test ==="
@@ -11,35 +13,36 @@ proc main() =
   logSessionStart("RWKV Main Test", modelPath, vocabPath)
 
   if not fileExists(modelPath):
-    echo &"Model file '{modelPath}' not found. Nim bindings compiled successfully!"
-    appendToEternalLog(&"Model file '{modelPath}' not found.")
+    printError &"Model file '{modelPath}' not found. Nim bindings compiled successfully!"
+    appendToEternalLog &"Model file '{modelPath}' not found."
     return
 
-  echo &"Loading model from {modelPath}..."
-  let model = initRwkvModel(modelPath, nThreads = DefaultThreads, nGpuLayers = 0)
-  echo &"Vocab size: {model.nVocab}"
-  echo &"Embed size: {model.nEmbed}"
-  echo &"Layer count: {model.nLayer}"
-  echo &"State length: {model.stateLen}"
-  echo &"Logits length: {model.logitsLen}"
+  printInfo &"Loading model from {modelPath}..."
+  let model = initRwkvModel(modelPath, nThreads = DefaultThreads, nGpuLayers = DefaultGpuLayers)
+  printSuccess &"Vocab size: {model.nVocab}"
+  printInfo      &"Embed size: {model.nEmbed}"
+  printInfo      &"Layer count: {model.nLayer}"
+  printInfo      &"State length: {model.stateLen}"
+  printInfo      &"Logits length: {model.logitsLen}"
 
   if fileExists(vocabPath):
-    echo &"Loading tokenizer from {vocabPath}..."
+    printInfo &"Loading tokenizer from {vocabPath}..."
     let tok = loadWorldTokenizer(vocabPath)
     let samplePrompt = "Hello World! RWKV v7 model test."
     let tokens = tok.encode(samplePrompt)
-    echo &"Encoded prompt '{samplePrompt}' -> {tokens.len} tokens"
-    echo &"Decoded prompt -> '{tok.decode(tokens)}'"
+    printSuccess &"Encoded prompt '{samplePrompt}' -> {tokens.len} tokens"
+    printSuccess &"Decoded prompt -> '{tok.decode(tokens)}'"
 
   var state = model.newState()
   var logits = model.newLogits()
 
   # Evaluate first token (token 0)
   if model.eval(0.uint32, state, logits):
-    echo "First token evaluation succeeded!"
-    appendToEternalLog("First token evaluation succeeded.")
+    printSuccess "First token evaluation succeeded!"
+    appendToEternalLog "First token evaluation succeeded."
   else:
-    echo "Evaluation failed. Last error code: ", model.getLastError()
-    appendToEternalLog("Evaluation failed. Error code: " & $model.getLastError())
+    printError "Evaluation failed. Last error code: " & $model.getLastError()
+    appendToEternalLog "Evaluation failed. Error code: " & $model.getLastError()
 
-main()
+when isMainModule:
+  main()

@@ -1,5 +1,7 @@
+## RWKV Text Generation — CLI with illwave / nimwave styled output
+
 import std/[os, strutils, strformat, random, times]
-import ./rwkv, ./config, ./tokenizer, ./logger, ./sampling, ./macros
+import cli, rwkv, config, tokenizer, logger, sampling, macros
 
 proc generateText() =
   let rawModelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
@@ -12,28 +14,26 @@ proc generateText() =
 
   logSessionStart("RWKV Text Generation (4-bit GGML)", modelPath, vocabPath)
 
-  echo "=========================================================="
-  echo "         RWKV Text Generation Demo in Nim                 "
-  echo "=========================================================="
-  echo "Model path: ", modelPath
-  echo "Vocab path: ", vocabPath
+  printBanner "RWKV Text Generation Demo in Nim"
+  printConfig(modelPath, vocabPath)
   echo "Prompt:     \"", promptText, "\""
   echo "Temp:       ", temp, " | Top-P: ", topP
+  echo SepThin
 
   if not fileExists(modelPath):
-    echo "Error: Model file not found at '", modelPath, "'"
-    appendToEternalLog("Error: Model file not found at '" & modelPath & "'")
+    printError &"Error: Model file not found at '{modelPath}'"
+    appendToEternalLog &"Error: Model file not found at '{modelPath}'"
     return
 
   let tok = loadWorldTokenizer(vocabPath)
-  echo "Vocab loaded successfully!"
+  printSuccess "Vocab loaded successfully!"
 
   withModel(modelPath, DefaultThreads, DefaultGpuLayers, model):
-    echo &"Model loaded successfully! (nVocab={model.nVocab}, nLayer={model.nLayer})"
+    printSuccess &"Model loaded successfully! (nVocab={model.nVocab}, nLayer={model.nLayer})"
 
     var promptTokens = tok.encode(promptText)
     if promptTokens.len == 0:
-      echo "Error: Empty prompt token sequence."
+      printError "Error: Empty prompt token sequence."
       return
 
     var state = model.newState()
@@ -50,7 +50,8 @@ proc generateText() =
 
       var rng = initRand(12345)
 
-      echo "\nGenerated completion:\n"
+      echo ""
+      printInfo "Generated completion:"
       stdout.write(promptText)
       stdout.flushFile()
 
@@ -66,12 +67,13 @@ proc generateText() =
           stdout.flushFile()
 
           if not model.eval(nextToken.uint32, state, logits):
-            echo "\nError during evaluation step ", step
+            printError &"Error during evaluation step {step}"
             break
 
-    echo "\n\n----------------------------------------------------------"
-    echo &"Generated {stepCount} tokens in {elapsed:.3f} s ({elapsed / stepCount.float * 1000.0:.2f} ms/token)"
-    echo "=========================================================="
+    echo ""
+    echo SepThin
+    printSuccess &"Generated {stepCount} tokens in {elapsed:.3f} s ({elapsed / stepCount.float * 1000.0:.2f} ms/token)"
+    echo BannerSep
 
     logGenerationRun(promptText, fullGenerated, elapsed, stepCount)
 
