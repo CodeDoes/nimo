@@ -53,12 +53,28 @@ $ nimo chat
   6. Finalize outline
 
 [nimo] ▶ 1/6 Generating wiki entries...
+
+## Max
+Robot ninja. Stealth specialist. ...
+
+## Rob
+Heavy ordnance. Tactical partner. ...
+
+## Ghastone
+Cybernetic syndicate crime boss. ...
+
+## Neo-Kuroba
+High-tech neon cyberpunk city. ...
+
 [nimo] ✔ 1/6 Generating wiki entries... (3.2s)
 [nimo] ▶ 2/6 Extracting context buffers...
+
+Max context: combat abilities: precision strikes, ... (0.8s)
 [nimo] ✔ 2/6 Extracting context buffers... (0.8s)
 [nimo] ▶ 3/6 Writing Chapter 1...
+
+Chapter 1: The neon rain fell like static ... (12.4s)
 [nimo] ✔ 3/6 Writing Chapter 1... (12.4s)
-...
 [nimo] Done. Artifacts in ~/.ws/myproject/
 ```
 
