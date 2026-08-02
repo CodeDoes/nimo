@@ -1,53 +1,41 @@
-## CLI Interface
+## What is this file for?
 
-### Commands
+CLI interface and user workflow.
+
+## Commands
 
 ```
-nimo chat                  # Interactive TUI chat (default workspace: cwd)
-nimo chat -w ~/.ws/myproject   # Chat in specific workspace
-nimo generate <prompt>     # One-shot text generation
-nimo bake <prompt>         # Pre-bake model state
-nimo dashboard             # Full-screen TUI dashboard
+nimo chat               # Interactive TUI chat (default workspace: cwd)
+nimo chat -w ~/.ws/myproject
+nimo generate <prompt>  # One-shot generation
+nimo bake <prompt>      # Pre-bake state
+nimo dashboard          # Full-screen TUI
+nimo run pipeline.nim   # Execute a pipeline DSL script
 ```
 
-### Workspace Concept
+## Workspace
 
-Workspaces are directories containing story/state artifacts:
 ```
 ~/.ws/myproject/
-├── wiki/           # Character and world entries
+├── wiki/           # Character/world entries
 ├── chapters/       # Generated chapters
 ├── outline.md      # Story outline
-└── decisions.md    # High-level creative decisions
+└── decisions.md    # Creative decisions
 ```
 
-### User Intent Flow
-
-1. **Vague intent** → "Write a story about a robot ninja"
-2. **Clarification** → System asks about tone, setting, scope
-3. **Codification** → Intent becomes a structured pipeline (see `rfc/pipeline.md`)
-4. **Execution** → Pipeline runs, artifacts are saved to workspace
-5. **Iteration** → User can refine ("make it darker", "continue the next chapter")
-
-### Example Interaction
+## User Flow
 
 ```
 $ nimo chat
-> Write a story about a robot ninja named Max.
-> He has a partner called Rob introduced in chapter 2.
-> Create a wiki for 3 characters and the world.
-> Write the first 3 chapters and outline to chapter 10.
+> Write a cyberpunk story. Robot ninja Max. Partner Rob in chapter 2.
+> Wiki for 3 chars + world. First 3 chapters. Outline to chapter 10.
 
-[nimo] I'll create a cyberpunk narrative pipeline.
-[nimo] Generating wiki entries in parallel...
-[nimo] Writing chapters with targeted context...
-[nimo] Done! Artifacts saved to ./workspace/
+[nimo] Building pipeline...
+[nimo] Running: wiki (4 parallel) → extract → ch1 → ch2, outline (parallel) → ch3 → finalize
+[nimo] Done. Artifacts in ./workspace/
 ```
 
-### Pipeline Integration
+## Pipeline Integration
 
-The pipeline DSL (see `rfc/pipeline.md`) is the execution layer behind complex `nimo chat` requests. When the user gives a multi-step request, nimo:
-1. Parses the intent
-2. Builds a DAG of `generate`/`extract`/`summarize` nodes
-3. Executes with topological scheduling
-4. Saves artifacts to the workspace
+`nimo run pipeline.nim` executes a NimScript DSL (see `rfc/pipeline.md`).
+Complex `nimo chat` requests auto-generate and run a pipeline behind the scenes.
