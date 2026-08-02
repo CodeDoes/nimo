@@ -1,3 +1,3 @@
 ## What is this file for?
 
-Analysis of the NIMO project architecture, dependencies, and current state.
+Analysis of the NIMO source tree: purpose, repetition, and simplification opportunities.
