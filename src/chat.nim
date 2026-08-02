@@ -1,5 +1,5 @@
 import std/[os, strutils, strformat, math, random, times, algorithm, terminal]
-import ./rwkv, ./config
+import ./rwkv, ./config, ./tokenizer, ./logger
 
 proc softmax(logits: openArray[float32]): seq[float32] =
   result = newSeq[float32](logits.len)
@@ -85,6 +85,7 @@ proc sampleLogits(logits: openArray[float32], temperature: float32 = 0.7f, topP:
 
 proc startTuiChat() =
   var modelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
+  let vocabPath = if paramCount() > 1: paramStr(2) else: DefaultVocabPath
   let temp = DefaultTemp
   let topP = DefaultTopP
 
@@ -94,18 +95,25 @@ proc startTuiChat() =
     if fileExists(binCandidate):
       modelPath = binCandidate
 
+  logSessionStart("RWKV TUI Chat Session", modelPath, vocabPath)
+
   styledEcho(styleBright, fgCyan, "==========================================================")
   styledEcho(styleBright, fgCyan, "             RWKV Interactive TUI Chat                    ")
   styledEcho(styleBright, fgCyan, "==========================================================")
   echo "Model path: ", modelPath
+  echo "Vocab path: ", vocabPath
   echo "Commands:   /reset (clear history), /quit (exit)"
   echo "----------------------------------------------------------\n"
 
   if not fileExists(modelPath):
     styledEcho(fgRed, "Error: Model file not found at '", modelPath, "'")
+    appendToEternalLog("Error: Model file not found at '" & modelPath & "'")
     return
 
-  let model = initRwkvModel(modelPath, nThreads = 4)
+  let tok = loadWorldTokenizer(vocabPath)
+  styledEcho(fgGreen, "Vocab loaded successfully!")
+
+  let model = initRwkvModel(modelPath, nThreads = DefaultThreads)
   styledEcho(fgGreen, &"Model loaded! (nVocab={model.nVocab}, nLayer={model.nLayer})")
 
   var state = model.newState()
@@ -114,11 +122,10 @@ proc startTuiChat() =
 
   # Initial prompt / system setup
   let sysPrompt = "User: Hi!\n\nBot: Hello! How can I help you today?\n\n"
-  var sysTokens = newSeq[uint32](sysPrompt.len)
-  for i, c in sysPrompt:
-    sysTokens[i] = uint32(ord(c)) mod model.nVocab.uint32
+  var sysTokens = tok.encode(sysPrompt)
 
-  discard model.evalSequenceInChunks(sysTokens, chunkSize = 16, state, logits)
+  if sysTokens.len > 0:
+    discard model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits)
 
   while true:
     stdout.write("\nUser: ")
@@ -135,21 +142,23 @@ proc startTuiChat() =
 
     if inputLine == "/quit" or inputLine == "/exit":
       styledEcho(fgYellow, "Goodbye!")
+      appendToEternalLog("User quit chat session.")
       break
     elif inputLine == "/reset":
       state = model.newState()
       logits = model.newLogits()
-      discard model.evalSequenceInChunks(sysTokens, chunkSize = 16, state, logits)
+      if sysTokens.len > 0:
+        discard model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits)
       styledEcho(fgYellow, "Chat session reset.")
+      appendToEternalLog("Chat session reset by user.")
       continue
 
     let turnPrompt = "User: " & inputLine & "\n\nBot:"
-    var turnTokens = newSeq[uint32](turnPrompt.len)
-    for i, c in turnPrompt:
-      turnTokens[i] = uint32(ord(c)) mod model.nVocab.uint32
+    var turnTokens = tok.encode(turnPrompt)
 
-    if not model.evalSequenceInChunks(turnTokens, chunkSize = 16, state, logits):
+    if turnTokens.len > 0 and not model.evalSequenceInChunks(turnTokens, chunkSize = DefaultChunkSize, state, logits):
       styledEcho(fgRed, "Error evaluating user prompt.")
+      appendToEternalLog("Error evaluating prompt: " & inputLine)
       continue
 
     stdout.write("Bot: ")
@@ -158,26 +167,20 @@ proc startTuiChat() =
     var botReply = ""
     for step in 0 ..< 200:
       let nextToken = sampleLogits(logits, temperature = temp, topP = topP, rng = rng)
-      let b = byte(nextToken mod 256)
-      let ch = char(b)
+      let tokenStr = tok.decodeToken(nextToken.uint32)
 
-      botReply.add(ch)
+      botReply.add(tokenStr)
+      stdout.write(tokenStr)
+      stdout.flushFile()
 
       if botReply.endsWith("\n\nUser:") or botReply.endsWith("\nUser:"):
         break
-
-      if b >= 32.byte and b <= 126.byte:
-        stdout.write(ch)
-      elif b == 10.byte:
-        stdout.write('\n')
-      else:
-        stdout.write('.')
-      stdout.flushFile()
 
       if not model.eval(nextToken.uint32, state, logits):
         break
 
     echo ""
+    logChatInteraction(inputLine, botReply.strip())
 
 when isMainModule:
   startTuiChat()

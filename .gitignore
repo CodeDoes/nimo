@@ -1,6 +1,7 @@
 models/
 rwkv.cpp/
 build/
+logs/
 chat
 generate
 main

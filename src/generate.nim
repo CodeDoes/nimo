@@ -1,5 +1,5 @@
 import std/[os, strutils, strformat, math, random, times, algorithm]
-import ./rwkv, ./config
+import ./rwkv, ./config, ./tokenizer, ./logger
 
 proc softmax(logits: openArray[float32]): seq[float32] =
   result = newSeq[float32](logits.len)
@@ -89,9 +89,10 @@ proc sampleLogits(logits: openArray[float32], temperature: float32 = 0.8f, topP:
 proc generateText() =
   var modelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
   let promptText = if paramCount() > 1: paramStr(2) else: DefaultPrompt
+  let vocabPath = if paramCount() > 2: paramStr(3) else: DefaultVocabPath
   let genLength = DefaultGenLength
-  let temp = 0.0f
-  let topP = 0.5f
+  let temp = DefaultTemp
+  let topP = DefaultTopP
 
   if modelPath.endsWith(".st") or modelPath.endsWith(".pth") or modelPath.endsWith(".safetensors"):
     let lastDot = modelPath.rfind('.')
@@ -99,24 +100,32 @@ proc generateText() =
     if fileExists(binCandidate):
       modelPath = binCandidate
 
+  logSessionStart("RWKV Text Generation", modelPath, vocabPath)
+
   echo "=========================================================="
   echo "         RWKV Text Generation Demo in Nim                 "
   echo "=========================================================="
   echo "Model path: ", modelPath
+  echo "Vocab path: ", vocabPath
   echo "Prompt:     \"", promptText, "\""
   echo "Temp:       ", temp, " | Top-P: ", topP
 
   if not fileExists(modelPath):
     echo "Error: Model file not found at '", modelPath, "'"
+    appendToEternalLog("Error: Model file not found at '" & modelPath & "'")
     return
 
-  let model = initRwkvModel(modelPath, nThreads = 4)
+  let tok = loadWorldTokenizer(vocabPath)
+  echo "Vocab loaded successfully!"
+
+  let model = initRwkvModel(modelPath, nThreads = DefaultThreads)
   echo &"Model loaded successfully! (nVocab={model.nVocab}, nLayer={model.nLayer})"
 
-  # Convert prompt string bytes to uint32 tokens
-  var promptTokens = newSeq[uint32](promptText.len)
-  for i, c in promptText:
-    promptTokens[i] = uint32(ord(c)) mod model.nVocab.uint32
+  # Encode prompt string to tokens using RWKV v20230424 World Tokenizer
+  var promptTokens = tok.encode(promptText)
+  if promptTokens.len == 0:
+    echo "Error: Empty prompt token sequence."
+    return
 
   var state = model.newState()
   var logits = model.newLogits()
@@ -124,8 +133,9 @@ proc generateText() =
   let startTime = cpuTime()
 
   # Process prompt in chunks
-  if not model.evalSequenceInChunks(promptTokens, chunkSize = 16, state, logits):
+  if not model.evalSequenceInChunks(promptTokens, chunkSize = DefaultChunkSize, state, logits):
     echo "Failed to evaluate prompt sequence!"
+    appendToEternalLog("Error: Failed to evaluate prompt sequence!")
     return
 
   var rng = initRand(12345)
@@ -134,13 +144,17 @@ proc generateText() =
   stdout.write(promptText)
   stdout.flushFile()
 
+  var fullGenerated = ""
+  var stepCount = 0
+
   for step in 0 ..< genLength:
     let nextToken = sampleLogits(logits, temperature = temp, topP = topP, rng = rng)
+    let tokenStr = tok.decodeToken(nextToken.uint32)
 
-    # Decode token: for byte-tokenizer / tiny-rwkv, convert byte to printable char
-    let b = byte(nextToken mod 256)
-    let ch = if b >= 32.byte and b <= 126.byte: char(b) elif b == 10.byte: '\n' else: '.'
-    stdout.write(ch)
+    fullGenerated.add(tokenStr)
+    inc stepCount
+
+    stdout.write(tokenStr)
     stdout.flushFile()
 
     # Feed next token back into RWKV autoregressively
@@ -152,6 +166,8 @@ proc generateText() =
   echo "\n\n----------------------------------------------------------"
   echo &"Generated {genLength} tokens in {elapsed:.3f} s ({elapsed / genLength.float * 1000.0:.2f} ms/token)"
   echo "=========================================================="
+
+  logGenerationRun(promptText, fullGenerated, elapsed, stepCount)
 
 when isMainModule:
   generateText()
