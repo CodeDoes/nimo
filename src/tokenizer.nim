@@ -164,6 +164,12 @@ proc encode*(tokenizer: WorldTokenizer, text: string): seq[uint32] =
     else:
       inc idx
 
+  # RWKV Chat standard: normalize trailing double EOL token (535 -> [187, 187])
+  if result.len > 0 and result[^1] == 535u32:
+    result.setLen(result.len - 1)
+    result.add(187u32)
+    result.add(187u32)
+
 proc decodeToken*(tokenizer: WorldTokenizer, token: uint32): string =
   if token.int < tokenizer.indexToToken.len:
     return tokenizer.indexToToken[token.int]

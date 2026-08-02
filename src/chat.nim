@@ -101,6 +101,10 @@ proc startTuiChat() =
 
       for step in 0 ..< 200:
         streamToken(model, state, logits, tok, temp, topP, rng, nextToken, tokenStr):
+          if nextToken == 0: # Token 0 = End of Text (EOS)
+            state = validState
+            break
+
           botReply.add(tokenStr)
           buffer.add(tokenStr)
 

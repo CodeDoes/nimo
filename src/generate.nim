@@ -56,6 +56,9 @@ proc generateText() =
 
       for step in 0 ..< genLength:
         streamToken(model, state, logits, tok, temp, topP, rng, nextToken, tokenStr):
+          if nextToken == 0: # Token 0 = End of Text (EOS)
+            break
+
           fullGenerated.add(tokenStr)
           inc stepCount
 
