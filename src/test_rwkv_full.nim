@@ -77,6 +77,17 @@ proc runFullTestSuite() =
     quantModel.close()
     if fileExists(quantOutPath): removeFile(quantOutPath)
 
+  testStep("State Baking (Serialization & Deserialization)"):
+    let stateDumpPath = "test_state_dump.bin"
+    if fileExists(stateDumpPath): removeFile(stateDumpPath)
+    state.saveState(stateDumpPath)
+    doAssert fileExists(stateDumpPath), "State file not created"
+    var loadedState = model.loadState(stateDumpPath)
+    doAssert loadedState.len == state.len
+    for i in 0 ..< state.len:
+      doAssert loadedState[i] == state[i], "State element mismatch after deserialization"
+    if fileExists(stateDumpPath): removeFile(stateDumpPath)
+
   model.close()
 
   echo "============================================================"

@@ -5,6 +5,7 @@ proc startTuiChat() =
   let rawModelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
   let modelPath = resolveModelPath(rawModelPath)
   let vocabPath = if paramCount() > 1: paramStr(2) else: DefaultVocabPath
+  let bakedStatePath = if paramCount() > 2: paramStr(3) else: ""
   let temp = DefaultTemp
   let topP = DefaultTopP
 
@@ -41,7 +42,10 @@ proc startTuiChat() =
     let sysPrompt = "User: " & initialUserMsg & "\n\nBot: " & initialBotMsg & "\n\n"
     var sysTokens = tok.encode(sysPrompt)
 
-    if sysTokens.len > 0:
+    if bakedStatePath.len > 0 and fileExists(bakedStatePath):
+      styledEcho(fgYellow, "Loading pre-baked state from '", bakedStatePath, "'...")
+      state.loadState(bakedStatePath)
+    elif sysTokens.len > 0:
       checkOk(model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits),
               "Failed to evaluate system prompt")
 

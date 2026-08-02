@@ -166,6 +166,29 @@ proc newState*(model: RwkvModel): seq[float32] =
   if result.len > 0:
     rwkv_init_state(model.ctx, varPtr(result))
 
+proc saveState*(state: openArray[float32], filePath: string) =
+  ## Serializes raw model state float32 vector to a binary file.
+  let f = open(filePath, fmWrite)
+  defer: f.close()
+  if state.len > 0:
+    let written = f.writeBuffer(unsafeAddr state[0], state.len * sizeof(float32))
+    if written != state.len * sizeof(float32):
+      raise newException(IOError, "Failed to write complete state file to: " & filePath)
+
+proc loadState*(state: var openArray[float32], filePath: string) =
+  ## Deserializes binary state float32 vector into existing state array.
+  let f = open(filePath, fmRead)
+  defer: f.close()
+  if state.len > 0:
+    let bytesRead = f.readBuffer(addr state[0], state.len * sizeof(float32))
+    if bytesRead != state.len * sizeof(float32):
+      raise newException(IOError, "State file size mismatch: " & filePath)
+
+proc loadState*(model: RwkvModel, filePath: string): seq[float32] =
+  ## Allocates state buffer for model and deserializes binary state file.
+  result = newSeq[float32](model.stateLen)
+  result.loadState(filePath)
+
 proc initState*(model: RwkvModel, state: var openArray[float32]) =
   ## Initializes an existing state array.
   if state.len != model.stateLen:

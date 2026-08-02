@@ -5,7 +5,7 @@ description   = "Nim wrapper for rwkv.cpp (RWKV language model inference in C/C+
 license       = "MIT"
 srcDir        = "src"
 binDir        = "build"
-bin           = @["main", "generate", "chat", "test_rwkv_full"]
+bin           = @["main", "generate", "chat", "test_rwkv_full", "bake_state"]
 
 # Dependencies
 requires "nim >= 2.0.0"
@@ -31,7 +31,14 @@ task build_all, "Build all Nim executables into build/":
   exec "nim c -o:build/main src/main.nim"
   exec "nim c -o:build/generate src/generate.nim"
   exec "nim c -o:build/chat src/chat.nim"
+  exec "nim c -o:build/bake_state src/bake_state.nim"
   exec "nim c -o:build/test_rwkv_full src/test_rwkv_full.nim"
+
+task bake_state, "Bake model state from prompt":
+  if not fileExists("rwkv.cpp/librwkv.so"):
+    build_cppTask()
+  mkdir "build"
+  exec "nim c -r -o:build/bake_state src/bake_state.nim"
 
 task test, "Run the test suite":
   if not fileExists("rwkv.cpp/librwkv.so"):
