@@ -64,24 +64,28 @@ Robot ninja. Stealth specialist. Built for covert ops in dense urban environment
 
 [nimo] ✔ 1/10 Generating wiki: Max... (0.8s)
 [nimo] ▶ 2/10 Generating wiki: Rob...
+→ wiki/rob.md
 
 ## Rob
 Heavy ordnance specialist. Tactical partner assigned after Max's solo incidents escalated. Carries a rotary cannon mounted to his left shoulder. Personality: boisterous, loyal, treats combat like a contact sport. Frequently cracks jokes while laying down suppressive fire.
 
 [nimo] ✔ 2/10 Generating wiki: Rob... (0.7s)
 [nimo] ▶ 3/10 Generating wiki: Ghastone...
+→ wiki/boss.md
 
 ## Ghastone
 Cybernetic syndicate crime boss. Controls the Neon District through a network of augmented enforcers. Known for his signature — a silver gasmask shaped like a weeping face. Motive: wants to monopolize synthetic memory trading, which requires eliminating independent operators like Max.
 
 [nimo] ✔ 3/10 Generating wiki: Ghastone... (0.9s)
 [nimo] ▶ 4/10 Generating wiki: Neo-Kuroba...
+→ wiki/city.md
 
 ## Neo-Kuroba
 High-tech neon cyberpunk city. 200+ stories of vertical sprawl. The rich live in the spires above the cloud layer. The poor navigate the Undercity — a labyrinth of repurposed infrastructure lit by holographic advertising. Rain is constant; the atmosphere processors leak acidic mist. Corporate banners replace flags.
 
 [nimo] ✔ 4/10 Generating wiki: Neo-Kuroba... (0.8s)
 [nimo] ▶ 5/10 Extracting context buffers...
+→ .nimo/context.json
 
 === Max ===
 Combat: precision strikes, mono-filament wire whips, subdermal blade arrays
@@ -107,6 +111,7 @@ Power: corporate banners replace national flags
 
 [nimo] ✔ 5/10 Extracting context buffers... (0.5s)
 [nimo] ▶ 6/10 Writing Chapter 1...
+→ chapters/01.md
 
 Chapter 1: The neon rain fell like static across Max's visor as he moved through the Undercity's lower levels. His adaptive plating shifted from black to the exact shade of the rusted bulkhead he pressed against — near perfect. Below him, three Ghastone enforcers patrolled the corridor, their cybernetic optics scanning for anything that didn't belong.
 
@@ -130,6 +135,7 @@ Max didn't answer. He never did over open channels. But something almost like am
 
 [nimo] ✔ 6/10 Writing Chapter 1... (12.4s)
 [nimo] ▶ 7/10 Writing Chapter 2...
+→ chapters/02.md
 
 Chapter 2: Rob found Max in the same spot three nights later — same rusted bulkhead, same posture, same silence. "You know," he announced, rotating his rotary cannon to a comfortable resting position, "most people make friends. You make dead bodies. It's a whole thing."
 
@@ -143,6 +149,7 @@ Max almost smiled. Almost. "They'll have enforcers. You need cover."
 
 [nimo] ✔ 7/10 Writing Chapter 2... (9.2s)
 [nimo] ▶ 8/10 Drafting outline...
+→ draft_outline.md
 
 Chapter 4: First contact with Ghastone's inner circle. Max and Rob infiltrate a synthetic memory auction.
 Chapter 5: Discovery — Ghastone's monopoly requires eliminating all independent memory traders.
@@ -154,6 +161,7 @@ Chapter 10: Ghastone defeated. Max and Rob stand atop the Neon District, looking
 
 [nimo] ✔ 8/10 Drafting outline... (4.1s)
 [nimo] ▶ 9/10 Writing Chapter 3...
+→ chapters/03.md
 
 Chapter 3: The filtration plant was a tomb of corroded pipes and stagnant water. Max moved through it like a shadow, his adaptive plating rendering him invisible to thermal and visual sensors. Rob hung back on the upper levels, his rotary cannon a low rumble of suppressive fire whenever enforcers surged forward.
 
@@ -167,6 +175,7 @@ Ghastone.
 
 [nimo] ✔ 9/10 Writing Chapter 3... (11.8s)
 [nimo] ▶ 10/10 Finalizing outline...
+→ outline.md
 
 Final Outline (Chapters 4–10):
 - Ch4: Infiltrate synthetic memory auction
