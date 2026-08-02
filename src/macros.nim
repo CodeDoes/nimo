@@ -4,7 +4,7 @@ import ./rwkv, ./logger
 template withModel*(path: string, threads: int, modelVar, body: untyped): untyped =
   ## Nim Template: Safely instantiates an RWKV model and guarantees cleanup via defer.
   block:
-    let modelVar = initRwkvModel(path, nThreads = threads.uint32)
+    let modelVar = initRwkvModel(path, nThreads = threads.uint32, nGpuLayers = DefaultGpuLayers.uint32)
     defer:
       if modelVar != nil:
         modelVar.close()

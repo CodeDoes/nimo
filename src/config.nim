@@ -9,3 +9,4 @@ const
   DefaultTopP* = 0.7f
   DefaultChunkSize* = 16
   DefaultThreads* = 4
+  DefaultGpuLayers* = 99  # Offload all layers to GPU VRAM by default

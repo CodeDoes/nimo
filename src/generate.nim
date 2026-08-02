@@ -118,7 +118,6 @@ proc generateText() =
   let tok = loadWorldTokenizer(vocabPath)
   echo "Vocab loaded successfully!"
 
-  # Use Nim template `withModel` for automatic lifetime management
   withModel(modelPath, DefaultThreads, model):
     echo &"Model loaded successfully! (nVocab={model.nVocab}, nLayer={model.nLayer})"
 

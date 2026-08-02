@@ -131,8 +131,8 @@ proc decodeError*(flags: uint32): string =
   else:
     return detail
 
-proc initRwkvModel*(modelPath: string, nThreads: uint32 = 4, nGpuLayers: uint32 = 0): RwkvModel =
-  ## Loads the model from a GGML format file.
+proc initRwkvModel*(modelPath: string, nThreads: uint32 = 4, nGpuLayers: uint32 = 99): RwkvModel =
+  ## Loads the model from a GGML format file, offloading up to nGpuLayers to GPU VRAM.
   ## Raises RwkvException on failure.
   let ctx = rwkv_init_from_file(modelPath.cstring, nThreads, nGpuLayers)
   if ctx == nil:
