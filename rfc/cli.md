@@ -1,41 +1,52 @@
 ## What is this file for?
 
-CLI interface and user workflow.
+CLI interface, user workflow, and intent-to-DSL extraction.
 
 ## Commands
 
 ```
-nimo chat               # Interactive TUI chat (default workspace: cwd)
+nimo chat               # Interactive TUI chat
 nimo chat -w ~/.ws/myproject
-nimo generate <prompt>  # One-shot generation
+nimo generate <prompt>  # One-shot
 nimo bake <prompt>      # Pre-bake state
 nimo dashboard          # Full-screen TUI
-nimo run pipeline.nim   # Execute a pipeline DSL script
+nimo run pipeline.nim   # Execute a pipeline script
 ```
 
 ## Workspace
 
 ```
 ~/.ws/myproject/
-├── wiki/           # Character/world entries
-├── chapters/       # Generated chapters
-├── outline.md      # Story outline
-└── decisions.md    # Creative decisions
+├── wiki/
+├── chapters/
+├── outline.md
+└── decisions.md
 ```
 
-## User Flow
+## Intent → DSL
+
+User gives vague intent. System extracts it into a pipeline script, then runs it.
 
 ```
 $ nimo chat
 > Write a cyberpunk story. Robot ninja Max. Partner Rob in chapter 2.
 > Wiki for 3 chars + world. First 3 chapters. Outline to chapter 10.
+> Max defeats Ghastone by chapter 10.
 
-[nimo] Building pipeline...
-[nimo] Running: wiki (4 parallel) → extract → ch1 → ch2, outline (parallel) → ch3 → finalize
-[nimo] Done. Artifacts in ./workspace/
+[nimo] Extracting intent...
+[nimo] Generated: ~/.ws/myproject/pipeline.nim
+[nimo] Running pipeline (4 parallel wiki → extract → ch1 → ch2+outline → ch3 → finalize)...
+[nimo] Done. Artifacts in ~/.ws/myproject/
 ```
 
-## Pipeline Integration
+The generated `pipeline.nim` is saved to the workspace so the user can inspect/edit it.
 
-`nimo run pipeline.nim` executes a NimScript DSL (see `rfc/pipeline.md`).
-Complex `nimo chat` requests auto-generate and run a pipeline behind the scenes.
+## Flow
+
+1. **Capture** — user types intent in chat
+2. **Extract** — LLM analyzes intent, produces a `pipeline.nim` script
+3. **Save** — script written to workspace
+4. **Execute** — `nim script` runs the pipeline, DAG scheduler handles parallelism
+5. **Return** — artifacts served back to user
+
+See `rfc/pipeline.md` for the DSL spec.
