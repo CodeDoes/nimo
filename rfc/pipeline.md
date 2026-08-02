@@ -78,8 +78,9 @@ generate(
 
 ## Execution
 
-Independent calls at the same scope run in parallel.
+Parallel execution of independent nodes is optional (nice-to-have).
 Downstream nodes wait for dependencies (topological sort).
+Parallel execution of independent nodes is optional (nice-to-have).
 
 ## Open
 
