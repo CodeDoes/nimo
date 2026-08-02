@@ -30,12 +30,12 @@
     pkgs.vulkan-loader
     pkgs.clblast
     pkgs.ocl-icd
-  ]}:$PRJ_ROOT/rwkv.cpp:$PRJ_ROOT/rwkv.cpp/ggml/src:.";
+  ]}:$DEVENV_ROOT/rwkv.cpp:$DEVENV_ROOT/rwkv.cpp/ggml/src:.";
 
   # GPU-enabled build scripts
   scripts.build-cuda.exec = ''
     echo "Building rwkv.cpp with NVIDIA CUDA GPU acceleration..."
-    cd $PRJ_ROOT/rwkv.cpp
+    cd $DEVENV_ROOT/rwkv.cpp
     rm -rf CMakeCache.txt CMakeFiles
     cmake . -DRWKV_CUBLAS=ON -DCMAKE_CUDA_ARCHITECTURES="86;80;75;89" -DCMAKE_BUILD_TYPE=Release
     make -j$(nproc)
@@ -44,7 +44,7 @@
 
   scripts.build-vulkan.exec = ''
     echo "Building rwkv.cpp with Vulkan GPU acceleration..."
-    cd $PRJ_ROOT/rwkv.cpp
+    cd $DEVENV_ROOT/rwkv.cpp
     rm -rf CMakeCache.txt CMakeFiles
     cmake . -DRWKV_CLBLAST=ON -DCMAKE_BUILD_TYPE=Release
     make -j$(nproc)
@@ -53,7 +53,7 @@
 
   scripts.build-hip.exec = ''
     echo "Building rwkv.cpp with AMD ROCm/HIP GPU acceleration..."
-    cd $PRJ_ROOT/rwkv.cpp
+    cd $DEVENV_ROOT/rwkv.cpp
     rm -rf CMakeCache.txt CMakeFiles
     cmake . -DRWKV_HIPBLAS=ON -DCMAKE_BUILD_TYPE=Release
     make -j$(nproc)
@@ -62,30 +62,30 @@
 
   scripts.convert-st-to-bin.exec = ''
     echo "Converting RWKV v7 safetensors model to GGML format..."
-    python3 $PRJ_ROOT/rwkv.cpp/python/convert_pytorch_to_ggml.py \
-      $PRJ_ROOT/models/rwkv7-g1h-2.9b-20260710-ctx10240-f16.st \
-      $PRJ_ROOT/models/rwkv7-g1h-2.9b-20260710-ctx10240-f16.bin FP16
+    python3 $DEVENV_ROOT/rwkv.cpp/python/convert_pytorch_to_ggml.py \
+      $DEVENV_ROOT/models/rwkv7-g1h-2.9b-20260710-ctx10240-f16.st \
+      $DEVENV_ROOT/models/rwkv7-g1h-2.9b-20260710-ctx10240-f16.bin FP16
   '';
 
   scripts.quantize-4bit.exec = ''
     echo "Quantizing RWKV v7 GGML model to 4-bit (Q4_0)..."
-    python3 $PRJ_ROOT/rwkv.cpp/python/quantize.py \
-      $PRJ_ROOT/models/rwkv7-g1h-2.9b-20260710-ctx10240-f16.bin \
-      $PRJ_ROOT/models/rwkv7-g1h-2.9b-20260710-ctx10240-q4_0.bin Q4_0
+    python3 $DEVENV_ROOT/rwkv.cpp/python/quantize.py \
+      $DEVENV_ROOT/models/rwkv7-g1h-2.9b-20260710-ctx10240-f16.bin \
+      $DEVENV_ROOT/models/rwkv7-g1h-2.9b-20260710-ctx10240-q4_0.bin Q4_0
   '';
 
   scripts.build-all.exec = ''
-    cd $PRJ_ROOT
+    cd $DEVENV_ROOT
     nimble build
   '';
 
   scripts.run-generate.exec = ''
-    cd $PRJ_ROOT
-    ./build/generate
+    cd $DEVENV_ROOT
+    $DEVENV_ROOT/build/generate
   '';
 
   scripts.run-chat.exec = ''
-    cd $PRJ_ROOT
-    ./build/chat
+    cd $DEVENV_ROOT
+    $DEVENV_ROOT/build/chat
   '';
 }
