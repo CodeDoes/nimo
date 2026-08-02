@@ -9,6 +9,8 @@ bin           = @["main", "generate", "chat", "test_rwkv_full", "bake_state"]
 
 # Dependencies
 requires "nim >= 2.0.0"
+requires "illwave"
+requires "nimwave"
 
 # --- Global Compiler Switches ---
 switch("passL", "-Lrwkv.cpp -Lrwkv.cpp/ggml/src")
