@@ -1,6 +1,8 @@
 ## Nim wrapper for rwkv.cpp
 ## High-performance C/C++ implementation of RWKV language model inference.
 
+import std/[strformat]
+
 when defined(linux):
   {.passL: "-lstdc++ -fopenmp -Wl,-rpath,/usr/lib/x86_64-linux-gnu -Wl,-rpath,/run/opengl-driver/lib -Wl,-rpath,$ORIGIN/rwkv.cpp -Wl,-rpath,$ORIGIN/rwkv.cpp/ggml/src -Wl,-rpath,rwkv.cpp -Wl,-rpath,rwkv.cpp/ggml/src".}
 
@@ -24,7 +26,6 @@ const
 type
   RwkvErrorFlag* {.size: sizeof(uint32).} = enum
     rwkvErrorNone = 0,
-
     rwkvErrorAlloc = 1,
     rwkvErrorFileOpen = 2,
     rwkvErrorFileStat = 3,
@@ -39,7 +40,6 @@ type
     rwkvErrorKey = 12,
     rwkvErrorData = 13,
     rwkvErrorParamMissing = 14,
-
     rwkvErrorArgs = 1 shl 8,
     rwkvErrorFile = 2 shl 8,
     rwkvErrorModel = 3 shl 8,
@@ -79,6 +79,13 @@ proc rwkv_quantize_model_file*(modelFilePathIn: cstring, modelFilePathOut: cstri
 proc rwkv_get_system_info_string*(): cstring {.importc: "rwkv_get_system_info_string".}
 {.pop.}
 
+# --- Nim Pointer Conversion Helper Templates ---
+template unsafePtr*[T](arr: openArray[T]): ptr T =
+  if arr.len == 0: nil else: unsafeAddr(arr[0])
+
+template varPtr*[T](arr: var openArray[T]): ptr T =
+  if arr.len == 0: nil else: addr(arr[0])
+
 proc `=destroy`*(model: var RwkvModelObj) =
   if model.ctx != nil and model.isOwner:
     rwkv_free(model.ctx)
@@ -92,225 +99,119 @@ proc close*(model: RwkvModel) =
 
 proc decodeError*(flags: uint32): string =
   ## Translates rwkv_error_flags bitmask into a descriptive string.
-  if flags == 0:
-    return "No error"
-  var category = ""
-  var detail = ""
-  let catBits = flags and 0xFF00u32
-  let detailBits = flags and 0x00FFu32
-  case catBits
-  of 1u32 shl 8: category = "Args error"
-  of 2u32 shl 8: category = "File error"
-  of 3u32 shl 8: category = "Model error"
-  of 4u32 shl 8: category = "Model params error"
-  of 5u32 shl 8: category = "Graph error"
-  of 6u32 shl 8: category = "Context error"
-  else: category = if catBits != 0: "Unknown category (" & $catBits & ")" else: ""
+  if flags == 0: return "No error"
 
-  case detailBits
-  of 1: detail = "Allocation failed"
-  of 2: detail = "Failed to open file"
-  of 3: detail = "File stat failed"
-  of 4: detail = "File read failed"
-  of 5: detail = "File write failed"
-  of 6: detail = "Invalid file magic (expected GGML format model .bin file; PyTorch .pth files must be converted using convert_pytorch_to_ggml.py)"
-  of 7: detail = "Unsupported file version"
-  of 8: detail = "Unsupported data type"
-  of 9: detail = "Unsupported feature"
-  of 10: detail = "Invalid shape"
-  of 11: detail = "Invalid dimension"
-  of 12: detail = "Key error"
-  of 13: detail = "Data error"
-  of 14: detail = "Missing parameter"
-  else: detail = if detailBits != 0: "Unknown detail code (" & $detailBits & ")" else: ""
+  let category = case flags and 0xFF00u32
+    of 1u32 shl 8: "Args error"
+    of 2u32 shl 8: "File error"
+    of 3u32 shl 8: "Model error"
+    of 4u32 shl 8: "Model params error"
+    of 5u32 shl 8: "Graph error"
+    of 6u32 shl 8: "Context error"
+    else: ""
 
-  if category.len > 0 and detail.len > 0:
-    return category & ": " & detail
-  elif category.len > 0:
-    return category
-  else:
-    return detail
+  let detail = case flags and 0x00FFu32
+    of 1: "Allocation failed"
+    of 2: "Failed to open file"
+    of 3: "File stat failed"
+    of 4: "File read failed"
+    of 5: "File write failed"
+    of 6: "Invalid file magic (expected GGML format model .bin file; PyTorch .pth files must be converted using convert_pytorch_to_ggml.py)"
+    of 7: "Unsupported file version"
+    of 8: "Unsupported data type"
+    of 9: "Unsupported feature"
+    of 10: "Invalid shape"
+    of 11: "Invalid dimension"
+    of 12: "Key error"
+    of 13: "Data error"
+    of 14: "Missing parameter"
+    else: ""
+
+  if category.len > 0 and detail.len > 0: category & ": " & detail
+  elif category.len > 0: category
+  else: detail
 
 proc initRwkvModel*(modelPath: string, nThreads: uint32 = 4, nGpuLayers: uint32 = 99): RwkvModel =
-  ## Loads the model from a GGML format file, offloading up to nGpuLayers to GPU VRAM.
-  ## Raises RwkvException on failure.
+  ## Loads model from GGML format file, offloading up to nGpuLayers to GPU VRAM.
   let ctx = rwkv_init_from_file(modelPath.cstring, nThreads, nGpuLayers)
   if ctx == nil:
     let err = rwkv_get_last_error(nil)
     raise newException(RwkvException, "Failed to load RWKV model from '" & modelPath & "': " & decodeError(err))
-  result = RwkvModel(ctx: ctx, isOwner: true)
+  RwkvModel(ctx: ctx, isOwner: true)
 
 proc clone*(model: RwkvModel, nThreads: uint32 = 4): RwkvModel =
-  ## Clones a context for parallel inference (each clone can run an eval in parallel).
+  ## Clones a context for parallel inference execution.
   if model == nil or model.ctx == nil:
     raise newException(RwkvException, "Cannot clone uninitialized RwkvModel")
   let clonedCtx = rwkv_clone_context(model.ctx, nThreads)
   if clonedCtx == nil:
     let err = rwkv_get_last_error(model.ctx)
     raise newException(RwkvException, "Failed to clone RWKV context: " & decodeError(err))
-  result = RwkvModel(ctx: clonedCtx, isOwner: true)
+  RwkvModel(ctx: clonedCtx, isOwner: true)
 
-proc nVocab*(model: RwkvModel): int {.inline.} =
-  rwkv_get_n_vocab(model.ctx).int
-
-proc nEmbed*(model: RwkvModel): int {.inline.} =
-  rwkv_get_n_embed(model.ctx).int
-
-proc nLayer*(model: RwkvModel): int {.inline.} =
-  rwkv_get_n_layer(model.ctx).int
-
-proc stateLen*(model: RwkvModel): int {.inline.} =
-  rwkv_get_state_len(model.ctx).int
-
-proc logitsLen*(model: RwkvModel): int {.inline.} =
-  rwkv_get_logits_len(model.ctx).int
+proc nVocab*(model: RwkvModel): int {.inline.} = rwkv_get_n_vocab(model.ctx).int
+proc nEmbed*(model: RwkvModel): int {.inline.} = rwkv_get_n_embed(model.ctx).int
+proc nLayer*(model: RwkvModel): int {.inline.} = rwkv_get_n_layer(model.ctx).int
+proc stateLen*(model: RwkvModel): int {.inline.} = rwkv_get_state_len(model.ctx).int
+proc logitsLen*(model: RwkvModel): int {.inline.} = rwkv_get_logits_len(model.ctx).int
 
 proc newState*(model: RwkvModel): seq[float32] =
   ## Allocates and initializes a new state buffer for inference.
-  let size = model.stateLen
-  result = newSeq[float32](size)
-  if size > 0:
-    rwkv_init_state(model.ctx, addr result[0])
+  result = newSeq[float32](model.stateLen)
+  if result.len > 0:
+    rwkv_init_state(model.ctx, varPtr(result))
 
 proc initState*(model: RwkvModel, state: var openArray[float32]) =
   ## Initializes an existing state array.
   if state.len != model.stateLen:
-    raise newException(ValueError, "State length mismatch: expected " & $model.stateLen & ", got " & $state.len)
+    raise newException(ValueError, &"State length mismatch: expected {model.stateLen}, got {state.len}")
   if state.len > 0:
-    rwkv_init_state(model.ctx, addr state[0])
+    rwkv_init_state(model.ctx, varPtr(state))
 
 proc newLogits*(model: RwkvModel): seq[float32] =
-  ## Allocates a new logits buffer.
   newSeq[float32](model.logitsLen)
 
 proc setPrintErrors*(model: RwkvModel = nil, printErrors: bool) =
-  let ctx = if model != nil: model.ctx else: nil
-  rwkv_set_print_errors(ctx, printErrors)
+  rwkv_set_print_errors(if model != nil: model.ctx else: nil, printErrors)
 
 proc getPrintErrors*(model: RwkvModel = nil): bool =
-  let ctx = if model != nil: model.ctx else: nil
-  rwkv_get_print_errors(ctx)
+  rwkv_get_print_errors(if model != nil: model.ctx else: nil)
 
 proc getLastError*(model: RwkvModel = nil): uint32 =
-  let ctx = if model != nil: model.ctx else: nil
-  rwkv_get_last_error(ctx)
+  rwkv_get_last_error(if model != nil: model.ctx else: nil)
 
-proc eval*(
-  model: RwkvModel,
-  token: uint32,
-  stateIn: ptr float32 = nil,
-  stateOut: ptr float32 = nil,
-  logitsOut: ptr float32 = nil
-): bool {.inline.} =
-  ## Evaluates model for a single token using raw pointers.
+# --- High-Level Model Evaluation Overloads ---
+
+proc eval*(model: RwkvModel, token: uint32, stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
   rwkv_eval(model.ctx, token, stateIn, stateOut, logitsOut)
 
-proc eval*(
-  model: RwkvModel,
-  token: uint32,
-  stateIn: openArray[float32],
-  stateOut: var openArray[float32],
-  logitsOut: var openArray[float32]
-): bool =
-  ## Evaluates model for a single token using Nim slices/openArrays.
-  let pIn = if stateIn.len == 0: nil else: unsafeAddr(stateIn[0])
-  let pOut = if stateOut.len == 0: nil else: addr(stateOut[0])
-  let pLogits = if logitsOut.len == 0: nil else: addr(logitsOut[0])
-  rwkv_eval(model.ctx, token, pIn, pOut, pLogits)
+proc eval*(model: RwkvModel, token: uint32, stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
+  rwkv_eval(model.ctx, token, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
 
-proc eval*(
-  model: RwkvModel,
-  token: uint32,
-  stateInOut: var openArray[float32],
-  logitsOut: var openArray[float32]
-): bool =
-  ## Evaluates model for a single token updating stateInOut in-place.
-  let pState = if stateInOut.len == 0: nil else: addr(stateInOut[0])
-  let pLogits = if logitsOut.len == 0: nil else: addr(logitsOut[0])
-  rwkv_eval(model.ctx, token, pState, pState, pLogits)
+proc eval*(model: RwkvModel, token: uint32, stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
+  rwkv_eval(model.ctx, token, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
 
-proc evalSequence*(
-  model: RwkvModel,
-  tokens: openArray[uint32],
-  stateIn: ptr float32 = nil,
-  stateOut: ptr float32 = nil,
-  logitsOut: ptr float32 = nil
-): bool {.inline.} =
-  ## Evaluates model for a sequence of tokens using raw pointers.
-  let pTokens = if tokens.len == 0: nil else: unsafeAddr(tokens[0])
-  rwkv_eval_sequence(model.ctx, pTokens, tokens.len.csize_t, stateIn, stateOut, logitsOut)
+proc evalSequence*(model: RwkvModel, tokens: openArray[uint32], stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
+  rwkv_eval_sequence(model.ctx, unsafePtr(tokens), tokens.len.csize_t, stateIn, stateOut, logitsOut)
 
-proc evalSequence*(
-  model: RwkvModel,
-  tokens: openArray[uint32],
-  stateIn: openArray[float32],
-  stateOut: var openArray[float32],
-  logitsOut: var openArray[float32]
-): bool =
-  ## Evaluates model for a sequence of tokens using Nim openArrays.
-  let pTokens = if tokens.len == 0: nil else: unsafeAddr(tokens[0])
-  let pIn = if stateIn.len == 0: nil else: unsafeAddr(stateIn[0])
-  let pOut = if stateOut.len == 0: nil else: addr(stateOut[0])
-  let pLogits = if logitsOut.len == 0: nil else: addr(logitsOut[0])
-  rwkv_eval_sequence(model.ctx, pTokens, tokens.len.csize_t, pIn, pOut, pLogits)
+proc evalSequence*(model: RwkvModel, tokens: openArray[uint32], stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
+  rwkv_eval_sequence(model.ctx, unsafePtr(tokens), tokens.len.csize_t, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
 
-proc evalSequence*(
-  model: RwkvModel,
-  tokens: openArray[uint32],
-  stateInOut: var openArray[float32],
-  logitsOut: var openArray[float32]
-): bool =
-  ## Evaluates model for a sequence of tokens updating stateInOut in-place.
-  let pTokens = if tokens.len == 0: nil else: unsafeAddr(tokens[0])
-  let pState = if stateInOut.len == 0: nil else: addr(stateInOut[0])
-  let pLogits = if logitsOut.len == 0: nil else: addr(logitsOut[0])
-  rwkv_eval_sequence(model.ctx, pTokens, tokens.len.csize_t, pState, pState, pLogits)
+proc evalSequence*(model: RwkvModel, tokens: openArray[uint32], stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
+  rwkv_eval_sequence(model.ctx, unsafePtr(tokens), tokens.len.csize_t, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
 
-proc evalSequenceInChunks*(
-  model: RwkvModel,
-  tokens: openArray[uint32],
-  chunkSize: int = 16,
-  stateIn: ptr float32 = nil,
-  stateOut: ptr float32 = nil,
-  logitsOut: ptr float32 = nil
-): bool {.inline.} =
-  ## Evaluates sequence splitting into chunks using raw pointers.
-  let pTokens = if tokens.len == 0: nil else: unsafeAddr(tokens[0])
-  rwkv_eval_sequence_in_chunks(model.ctx, pTokens, tokens.len.csize_t, chunkSize.csize_t, stateIn, stateOut, logitsOut)
+proc evalSequenceInChunks*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int = 16; stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
+  rwkv_eval_sequence_in_chunks(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, stateIn, stateOut, logitsOut)
 
-proc evalSequenceInChunks*(
-  model: RwkvModel,
-  tokens: openArray[uint32],
-  chunkSize: int,
-  stateIn: openArray[float32],
-  stateOut: var openArray[float32],
-  logitsOut: var openArray[float32]
-): bool =
-  ## Evaluates sequence splitting into chunks using Nim openArrays.
-  let pTokens = if tokens.len == 0: nil else: unsafeAddr(tokens[0])
-  let pIn = if stateIn.len == 0: nil else: unsafeAddr(stateIn[0])
-  let pOut = if stateOut.len == 0: nil else: addr(stateOut[0])
-  let pLogits = if logitsOut.len == 0: nil else: addr(logitsOut[0])
-  rwkv_eval_sequence_in_chunks(model.ctx, pTokens, tokens.len.csize_t, chunkSize.csize_t, pIn, pOut, pLogits)
+proc evalSequenceInChunks*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int, stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
+  rwkv_eval_sequence_in_chunks(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
 
-proc evalSequenceInChunks*(
-  model: RwkvModel,
-  tokens: openArray[uint32],
-  chunkSize: int,
-  stateInOut: var openArray[float32],
-  logitsOut: var openArray[float32]
-): bool =
-  ## Evaluates sequence splitting into chunks updating stateInOut in-place.
-  let pTokens = if tokens.len == 0: nil else: unsafeAddr(tokens[0])
-  let pState = if stateInOut.len == 0: nil else: addr(stateInOut[0])
-  let pLogits = if logitsOut.len == 0: nil else: addr(logitsOut[0])
-  rwkv_eval_sequence_in_chunks(model.ctx, pTokens, tokens.len.csize_t, chunkSize.csize_t, pState, pState, pLogits)
+proc evalSequenceInChunks*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int, stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
+  rwkv_eval_sequence_in_chunks(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
 
 proc quantizeModelFile*(modelFilePathIn, modelFilePathOut: string, formatName: string): bool =
-  ## Quantizes FP32 or FP16 model file to quantized format (Q4_0, Q4_1, Q5_0, Q5_1, Q8_0).
   rwkv_quantize_model_file(modelFilePathIn.cstring, modelFilePathOut.cstring, formatName.cstring)
 
 proc getSystemInfo*(): string =
-  ## Returns system information string.
   let p = rwkv_get_system_info_string()
   if p != nil: $p else: ""
