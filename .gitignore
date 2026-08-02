@@ -2,6 +2,7 @@ models/
 rwkv.cpp/
 build/
 logs/
+.devenv/
 chat
 generate
 main

@@ -2,7 +2,7 @@
 ## High-performance C/C++ implementation of RWKV language model inference.
 
 when defined(linux):
-  {.passL: "-lstdc++ -fopenmp -Wl,-rpath,$ORIGIN/rwkv.cpp -Wl,-rpath,$ORIGIN/rwkv.cpp/ggml/src -Wl,-rpath,rwkv.cpp -Wl,-rpath,rwkv.cpp/ggml/src".}
+  {.passL: "-lstdc++ -fopenmp -Wl,-rpath,/usr/lib/x86_64-linux-gnu -Wl,-rpath,/run/opengl-driver/lib -Wl,-rpath,$ORIGIN/rwkv.cpp -Wl,-rpath,$ORIGIN/rwkv.cpp/ggml/src -Wl,-rpath,rwkv.cpp -Wl,-rpath,rwkv.cpp/ggml/src".}
 
 const libRwkv* {.strdefine.} = (
   when defined(windows):
