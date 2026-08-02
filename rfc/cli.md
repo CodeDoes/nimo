@@ -25,7 +25,7 @@ nimo run pipeline.nim   # Execute a pipeline script
 
 ## Intent → DSL
 
-User gives vague intent. System extracts it into a pipeline script, then runs it.
+User gives vague intent. System extracts it into a `pipeline.nim`, then runs it.
 
 ```
 $ nimo chat
