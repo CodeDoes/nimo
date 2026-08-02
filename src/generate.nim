@@ -2,18 +2,13 @@ import std/[os, strutils, strformat, random, times]
 import ./rwkv, ./config, ./tokenizer, ./logger, ./sampling, ./macros
 
 proc generateText() =
-  var modelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
+  let rawModelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
+  let modelPath = resolveModelPath(rawModelPath)
   let promptText = if paramCount() > 1: paramStr(2) else: DefaultPrompt
   let vocabPath = if paramCount() > 2: paramStr(3) else: DefaultVocabPath
   let genLength = DefaultGenLength
   let temp = DefaultTemp
   let topP = DefaultTopP
-
-  if modelPath.endsWith(".st") or modelPath.endsWith(".pth") or modelPath.endsWith(".safetensors"):
-    let lastDot = modelPath.rfind('.')
-    let binCandidate = modelPath[0 ..< lastDot] & ".bin"
-    if fileExists(binCandidate):
-      modelPath = binCandidate
 
   logSessionStart("RWKV Text Generation (4-bit GGML)", modelPath, vocabPath)
 

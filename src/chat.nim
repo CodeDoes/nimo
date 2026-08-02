@@ -2,16 +2,11 @@ import std/[os, strutils, strformat, random, times, terminal]
 import ./rwkv, ./config, ./tokenizer, ./logger, ./sampling, ./macros
 
 proc startTuiChat() =
-  var modelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
+  let rawModelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
+  let modelPath = resolveModelPath(rawModelPath)
   let vocabPath = if paramCount() > 1: paramStr(2) else: DefaultVocabPath
   let temp = DefaultTemp
   let topP = DefaultTopP
-
-  if modelPath.endsWith(".st") or modelPath.endsWith(".pth") or modelPath.endsWith(".safetensors"):
-    let lastDot = modelPath.rfind('.')
-    let binCandidate = modelPath[0 ..< lastDot] & ".bin"
-    if fileExists(binCandidate):
-      modelPath = binCandidate
 
   logSessionStart("RWKV TUI Chat Session (4-bit GGML)", modelPath, vocabPath)
 

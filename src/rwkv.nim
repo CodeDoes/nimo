@@ -1,7 +1,7 @@
 ## Nim wrapper for rwkv.cpp
 ## High-performance C/C++ implementation of RWKV language model inference.
 
-import std/[strformat]
+import std/[macros, strformat]
 
 when defined(linux):
   {.passL: "-lstdc++ -fopenmp -Wl,-rpath,/usr/lib/x86_64-linux-gnu -Wl,-rpath,/run/opengl-driver/lib -Wl,-rpath,$ORIGIN/rwkv.cpp -Wl,-rpath,$ORIGIN/rwkv.cpp/ggml/src -Wl,-rpath,rwkv.cpp -Wl,-rpath,rwkv.cpp/ggml/src".}
@@ -79,14 +79,14 @@ proc rwkv_quantize_model_file*(modelFilePathIn: cstring, modelFilePathOut: cstri
 proc rwkv_get_system_info_string*(): cstring {.importc: "rwkv_get_system_info_string".}
 {.pop.}
 
-# --- Nim Pointer Conversion Helper Templates ---
+# --- Pointer Conversion Helper Templates ---
 template unsafePtr*[T](arr: openArray[T]): ptr T =
   if arr.len == 0: nil else: unsafeAddr(arr[0])
 
 template varPtr*[T](arr: var openArray[T]): ptr T =
   if arr.len == 0: nil else: addr(arr[0])
 
-# --- Model Property Getter Macro/Template ---
+# --- Model Property Getter Generator Template ---
 template genModelGetter(name, cProc: untyped) =
   proc name*(model: RwkvModel): int {.inline.} =
     cProc(model.ctx).int
@@ -103,7 +103,7 @@ proc `=destroy`*(model: var RwkvModelObj) =
     model.ctx = nil
 
 proc close*(model: RwkvModel) =
-  ## Explicitly frees the underlying context before garbage collection.
+  ## Explicitly frees underlying context before garbage collection.
   if model != nil and model.ctx != nil and model.isOwner:
     rwkv_free(model.ctx)
     model.ctx = nil
@@ -151,7 +151,7 @@ proc initRwkvModel*(modelPath: string, nThreads: uint32 = 4, nGpuLayers: uint32 
   RwkvModel(ctx: ctx, isOwner: true)
 
 proc clone*(model: RwkvModel, nThreads: uint32 = 4): RwkvModel =
-  ## Clones a context for parallel inference execution.
+  ## Clones context for parallel inference execution.
   if model == nil or model.ctx == nil:
     raise newException(RwkvException, "Cannot clone uninitialized RwkvModel")
   let clonedCtx = rwkv_clone_context(model.ctx, nThreads)
@@ -185,41 +185,49 @@ proc getPrintErrors*(model: RwkvModel = nil): bool =
 proc getLastError*(model: RwkvModel = nil): uint32 =
   rwkv_get_last_error(if model != nil: model.ctx else: nil)
 
-# --- Metaprogrammed High-Level Model Evaluation Overloads ---
+# --- DRY Metaprogrammed Model Evaluation Overloads ---
 
-template genSingleEvalOverloads() =
-  proc eval*(model: RwkvModel, token: uint32, stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
-    rwkv_eval(model.ctx, token, stateIn, stateOut, logitsOut)
+macro genEvalOverloads(nimProc, cProc: untyped, kind: static string): untyped =
+  ## Macro: Metaprogrammatically generates raw-ptr, openArray slice, and in-place state overloads.
+  case kind
+  of "single":
+    quote do:
+      proc `nimProc`*(model: RwkvModel, token: uint32, stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
+        `cProc`(model.ctx, token, stateIn, stateOut, logitsOut)
 
-  proc eval*(model: RwkvModel, token: uint32, stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
-    rwkv_eval(model.ctx, token, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
+      proc `nimProc`*(model: RwkvModel, token: uint32, stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
+        `cProc`(model.ctx, token, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
 
-  proc eval*(model: RwkvModel, token: uint32, stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
-    rwkv_eval(model.ctx, token, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
+      proc `nimProc`*(model: RwkvModel, token: uint32, stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
+        `cProc`(model.ctx, token, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
 
-template genSeqEvalOverloads() =
-  proc evalSequence*(model: RwkvModel, tokens: openArray[uint32], stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
-    rwkv_eval_sequence(model.ctx, unsafePtr(tokens), tokens.len.csize_t, stateIn, stateOut, logitsOut)
+  of "sequence":
+    quote do:
+      proc `nimProc`*(model: RwkvModel, tokens: openArray[uint32], stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
+        `cProc`(model.ctx, unsafePtr(tokens), tokens.len.csize_t, stateIn, stateOut, logitsOut)
 
-  proc evalSequence*(model: RwkvModel, tokens: openArray[uint32], stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
-    rwkv_eval_sequence(model.ctx, unsafePtr(tokens), tokens.len.csize_t, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
+      proc `nimProc`*(model: RwkvModel, tokens: openArray[uint32], stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
+        `cProc`(model.ctx, unsafePtr(tokens), tokens.len.csize_t, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
 
-  proc evalSequence*(model: RwkvModel, tokens: openArray[uint32], stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
-    rwkv_eval_sequence(model.ctx, unsafePtr(tokens), tokens.len.csize_t, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
+      proc `nimProc`*(model: RwkvModel, tokens: openArray[uint32], stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
+        `cProc`(model.ctx, unsafePtr(tokens), tokens.len.csize_t, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
 
-template genChunkedSeqEvalOverloads() =
-  proc evalSequenceInChunks*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int = 16; stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
-    rwkv_eval_sequence_in_chunks(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, stateIn, stateOut, logitsOut)
+  of "chunked":
+    quote do:
+      proc `nimProc`*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int = 16; stateIn: ptr float32 = nil; stateOut: ptr float32 = nil; logitsOut: ptr float32 = nil): bool {.inline.} =
+        `cProc`(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, stateIn, stateOut, logitsOut)
 
-  proc evalSequenceInChunks*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int, stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
-    rwkv_eval_sequence_in_chunks(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
+      proc `nimProc`*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int, stateIn: openArray[float32], stateOut, logitsOut: var openArray[float32]): bool {.inline.} =
+        `cProc`(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, unsafePtr(stateIn), varPtr(stateOut), varPtr(logitsOut))
 
-  proc evalSequenceInChunks*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int, stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
-    rwkv_eval_sequence_in_chunks(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
+      proc `nimProc`*(model: RwkvModel, tokens: openArray[uint32], chunkSize: int, stateInOut, logitsOut: var openArray[float32]): bool {.inline.} =
+        `cProc`(model.ctx, unsafePtr(tokens), tokens.len.csize_t, chunkSize.csize_t, varPtr(stateInOut), varPtr(stateInOut), varPtr(logitsOut))
+  else:
+    error("Unknown eval overload kind: " & kind)
 
-genSingleEvalOverloads()
-genSeqEvalOverloads()
-genChunkedSeqEvalOverloads()
+genEvalOverloads(eval, rwkv_eval, "single")
+genEvalOverloads(evalSequence, rwkv_eval_sequence, "sequence")
+genEvalOverloads(evalSequenceInChunks, rwkv_eval_sequence_in_chunks, "chunked")
 
 proc quantizeModelFile*(modelFilePathIn, modelFilePathOut: string, formatName: string): bool =
   rwkv_quantize_model_file(modelFilePathIn.cstring, modelFilePathOut.cstring, formatName.cstring)
