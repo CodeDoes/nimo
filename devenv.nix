@@ -1,7 +1,7 @@
 { pkgs, ... }:
 
 {
-  # Development tools and dependencies using Nix
+  # Development tools and dependencies
   packages = with pkgs; [
     nim
     cmake
@@ -12,24 +12,52 @@
     python3Packages.safetensors
     python3Packages.torch
     python3Packages.numpy
+
+    # GPU Driver & Toolkit Dependencies
+    vulkan-loader
+    vulkan-headers
+    vulkan-tools
+    clblast
+    ocl-icd
   ];
 
   languages.nim.enable = true;
 
-  # Set up LD_LIBRARY_PATH so librwkv.so and C/C++ dependencies are found automatically
-  env.LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath [
+  # LD_LIBRARY_PATH includes host GPU driver paths before stub libraries
+  env.LD_LIBRARY_PATH = "/usr/lib/x86_64-linux-gnu:/run/opengl-driver/lib:${pkgs.lib.makeLibraryPath [
     pkgs.stdenv.cc.cc.lib
     pkgs.gcc.cc.lib
+    pkgs.vulkan-loader
+    pkgs.clblast
+    pkgs.ocl-icd
   ]}:$PRJ_ROOT/rwkv.cpp:$PRJ_ROOT/rwkv.cpp/ggml/src:.";
 
-  # Nix-powered executable scripts
-  scripts.build-rwkv.exec = ''
-    echo "Building rwkv.cpp C++ shared library..."
+  # GPU-enabled build scripts
+  scripts.build-cuda.exec = ''
+    echo "Building rwkv.cpp with NVIDIA CUDA GPU acceleration..."
     cd $PRJ_ROOT/rwkv.cpp
-    cmake -B build
-    cmake --build build -j$(nproc)
-    cp build/librwkv.so . 2>/dev/null || true
-    echo "rwkv.cpp built successfully!"
+    rm -rf CMakeCache.txt CMakeFiles
+    cmake . -DRWKV_CUBLAS=ON -DCMAKE_CUDA_ARCHITECTURES="86;80;75;89" -DCMAKE_BUILD_TYPE=Release
+    make -j$(nproc)
+    echo "rwkv.cpp (CUDA GPU sm_86) built successfully!"
+  '';
+
+  scripts.build-vulkan.exec = ''
+    echo "Building rwkv.cpp with Vulkan GPU acceleration..."
+    cd $PRJ_ROOT/rwkv.cpp
+    rm -rf CMakeCache.txt CMakeFiles
+    cmake . -DRWKV_CLBLAST=ON -DCMAKE_BUILD_TYPE=Release
+    make -j$(nproc)
+    echo "rwkv.cpp (Vulkan/CLBlast GPU) built successfully!"
+  '';
+
+  scripts.build-hip.exec = ''
+    echo "Building rwkv.cpp with AMD ROCm/HIP GPU acceleration..."
+    cd $PRJ_ROOT/rwkv.cpp
+    rm -rf CMakeCache.txt CMakeFiles
+    cmake . -DRWKV_HIPBLAS=ON -DCMAKE_BUILD_TYPE=Release
+    make -j$(nproc)
+    echo "rwkv.cpp (AMD ROCm/HIP GPU) built successfully!"
   '';
 
   scripts.convert-st-to-bin.exec = ''
