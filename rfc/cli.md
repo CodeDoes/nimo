@@ -111,6 +111,55 @@ As he moved back toward the surface, his comms crackled. Rob's voice, loud and o
 Max didn't answer. He never did over open channels. But something almost like amusement touched the corner of his mouth as he melted into the neon-lit darkness above.
 
 [nimo] ✔ 6/10 Writing Chapter 1... (12.4s)
+[nimo] ▶ 7/10 Writing Chapter 2...
+
+Chapter 2: Rob found Max in the same spot three nights later — same rusted bulkhead, same posture, same silence. "You know," he announced, rotating his rotary cannon to a comfortable resting position, "most people make friends. You make dead bodies. It's a whole thing."
+
+Max didn't turn. He was listening to the city breathe — the hum of atmospheric processors, the distant wail of corporate enforcement drones, the whispered conversations of the Undercity's denizens. "They're moving synthetic memory through the old filtration plant. Sub-level three. Eight canisters per run."
+
+"Then let's go take them," Rob said, already moving. "Or, you know, let me go take them while you stand there looking broody. Your choice."
+
+Max almost smiled. Almost. "They'll have enforcers. You need cover."
+
+"I'm the cover," Rob said, patting his shoulder-mounted cannon. "You're the knife. We're a team."
+
+[nimo] ✔ 7/10 Writing Chapter 2... (9.2s)
+[nimo] ▶ 8/10 Drafting outline...
+
+Chapter 4: First contact with Ghastone's inner circle. Max and Rob infiltrate a synthetic memory auction.
+Chapter 5: Discovery — Ghastone's monopoly requires eliminating all independent memory traders.
+Chapter 6: Rob captured. Max must choose between rescue and the mission.
+Chapter 7: Max goes underground, uses his stealth to sabotage Ghastone's distribution network.
+Chapter 8: Rob escapes, reunites with Max. They devise a plan to strike at the source.
+Chapter 9: Assault on Ghastone's spire. Final confrontation.
+Chapter 10: Ghastone defeated. Max and Rob stand atop the Neon District, looking toward a freer city.
+
+[nimo] ✔ 8/10 Drafting outline... (4.1s)
+[nimo] ▶ 9/10 Writing Chapter 3...
+
+Chapter 3: The filtration plant was a tomb of corroded pipes and stagnant water. Max moved through it like a shadow, his adaptive plating rendering him invisible to thermal and visual sensors. Rob hung back on the upper levels, his rotary cannon a low rumble of suppressive fire whenever enforcers surged forward.
+
+Eight canisters. Eight lives worth of stolen memories — people's experiences, their loves, their losses, all bottled and sold to the highest bidder in the spires above.
+
+Max tagged the last canister and triggered the beacon. Then he heard it — a voice, distorted by a cybernetic vocoder, echoing through the plant's central chamber.
+
+"I know you're here, little ninja. I've been expecting you."
+
+Ghastone.
+
+[nimo] ✔ 9/10 Writing Chapter 3... (11.8s)
+[nimo] ▶ 10/10 Finalizing outline...
+
+Final Outline (Chapters 4–10):
+- Ch4: Infiltrate synthetic memory auction
+- Ch5: Discover Ghastone's elimination mandate
+- Ch6: Rob captured, Max's choice
+- Ch7: Max sabotages distribution network
+- Ch8: Rob escapes, plan devised
+- Ch9: Assault on Ghastone's spire
+- Ch10: Ghastone defeated, city freed
+
+[nimo] ✔ 10/10 Finalizing outline... (2.3s)
 [nimo] Done. Artifacts in ~/.ws/myproject/
 ```
 
