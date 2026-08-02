@@ -51,43 +51,44 @@ $ nimo chat
   4. Generate wiki: Neo-Kuroba
   5. Extract context buffers
   6. Write Chapter 1
-  7. Write Chapter 2 + draft outline
-  8. Write Chapter 3
-  9. Finalize outline
+  7. Write Chapter 2
+  8. Draft outline
+  9. Write Chapter 3
+  10. Finalize outline
 
-[nimo] ▶ 1/9 Generating wiki: Max...
+[nimo] ▶ 1/10 Generating wiki: Max...
 
 ## Max
 Robot ninja. Stealth specialist. Built for covert ops in dense urban environments. Wears adaptive camouflage plating that bends light around his frame. Primary weapons: mono-filament wire whips and subdermal blade arrays. Personality: stoic, observant, dry wit surfaces only with trusted allies.
 
-[nimo] ✔ 1/9 Generating wiki: Max... (0.8s)
-[nimo] ▶ 2/9 Generating wiki: Rob...
+[nimo] ✔ 1/10 Generating wiki: Max... (0.8s)
+[nimo] ▶ 2/10 Generating wiki: Rob...
 
 ## Rob
 Heavy ordnance specialist. Tactical partner assigned after Max's solo incidents escalated. Carries a rotary cannon mounted to his left shoulder. Personality: boisterous, loyal, treats combat like a contact sport. Frequently cracks jokes while laying down suppressive fire.
 
-[nimo] ✔ 2/9 Generating wiki: Rob... (0.7s)
-[nimo] ▶ 3/9 Generating wiki: Ghastone...
+[nimo] ✔ 2/10 Generating wiki: Rob... (0.7s)
+[nimo] ▶ 3/10 Generating wiki: Ghastone...
 
 ## Ghastone
 Cybernetic syndicate crime boss. Controls the Neon District through a network of augmented enforcers. Known for his signature — a silver gasmask shaped like a weeping face. Motive: wants to monopolize synthetic memory trading, which requires eliminating independent operators like Max.
 
-[nimo] ✔ 3/9 Generating wiki: Ghastone... (0.9s)
-[nimo] ▶ 4/9 Generating wiki: Neo-Kuroba...
+[nimo] ✔ 3/10 Generating wiki: Ghastone... (0.9s)
+[nimo] ▶ 4/10 Generating wiki: Neo-Kuroba...
 
 ## Neo-Kuroba
 High-tech neon cyberpunk city. 200+ stories of vertical sprawl. The rich live in the spires above the cloud layer. The poor navigate the Undercity — a labyrinth of repurposed infrastructure lit by holographic advertising. Rain is constant; the atmosphere processors leak acidic mist. Corporate banners replace flags.
 
-[nimo] ✔ 4/9 Generating wiki: Neo-Kuroba... (0.8s)
-[nimo] ▶ 5/9 Extracting context buffers...
+[nimo] ✔ 4/10 Generating wiki: Neo-Kuroba... (0.8s)
+[nimo] ▶ 5/10 Extracting context buffers...
 
 Max context: [precision strikes, mono-filament wire, adaptive camo, stoic, dry wit]
 Rob context: [rotary cannon, suppressive fire, boisterous, loyal]
 Ghastone context: [silver gasmask, Neon District, synthetic memory monopoly]
 Neo-Kuroba context: [vertical sprawl, Undercity, acidic rain, corporate banners]
 
-[nimo] ✔ 5/9 Extracting context buffers... (0.5s)
-[nimo] ▶ 6/9 Writing Chapter 1...
+[nimo] ✔ 5/10 Extracting context buffers... (0.5s)
+[nimo] ▶ 6/10 Writing Chapter 1...
 
 Chapter 1: The neon rain fell like static across Max's visor as he moved through the Undercity's lower levels. His adaptive plating shifted from black to the exact shade of the rusted bulkhead he pressed against — near perfect. Below him, three Ghastone enforcers patrolled the corridor, their cybernetic optics scanning for anything that didn't belong.
 
@@ -109,7 +110,7 @@ As he moved back toward the surface, his comms crackled. Rob's voice, loud and o
 
 Max didn't answer. He never did over open channels. But something almost like amusement touched the corner of his mouth as he melted into the neon-lit darkness above.
 
-[nimo] ✔ 6/9 Writing Chapter 1... (12.4s)
+[nimo] ✔ 6/10 Writing Chapter 1... (12.4s)
 [nimo] Done. Artifacts in ~/.ws/myproject/
 ```
 
