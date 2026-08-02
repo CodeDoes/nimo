@@ -1,9 +1,9 @@
 ## NIMWAVE / ILLWAVE Terminal Dashboard for NIMO (RWKV-7 LLM Inference)
 ## Uses the actual illwave TerminalBuffer API directly.
 
-import std/[os, strutils, strformat, times, random, terminal]
+import std/[os, strutils, strformat, times, random, terminal, unicode]
 import illwave as iw
-import cli, ./rwkv, ./config, ./tokenizer, ./logger, ./sampling, ./macros
+import cli, ./rwkv, ./config, ./tokenizer, ./logger, ./sampling
 
 # ── Box-drawing character constants ───────────────────────────────────────────
 const
@@ -252,7 +252,7 @@ proc main() =
     let key = iw.getKey()
 
     case key
-    of iw.Key.Escape, iw.Key.q:
+    of iw.Key.Escape, iw.Key.Q:
       break
     of iw.Key.Enter:
       app.processUserTurn()

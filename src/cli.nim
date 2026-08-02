@@ -1,13 +1,8 @@
 ## CLI TUI Helpers for NIMO
 ## Provides banner printing and common CLI output utilities.
-## styledEcho is re-exported from std/terminal.
 ## The nimwave_app module uses illwave directly for its full TUI dashboard.
 
-import std/[strutils, strformat, times, terminal]
-
-# Re-export styledEcho from std/terminal for convenience
-export terminal.[styledEcho, fgRed, fgGreen, fgYellow, fgCyan, fgMagenta,
-                styleBright, resetAttributes]
+import std/[times, terminal]
 
 # ── Banner / layout helpers ───────────────────────────────────────────────────
 

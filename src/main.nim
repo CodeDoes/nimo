@@ -1,7 +1,7 @@
 ## Nim wrapper for rwkv.cpp — CLI-frontend wrapper combining illwave + std/terminal output
 
 import std/[os, strformat, times, terminal]
-import cli, rwkv, config, tokenizer, logger, sampling, macros
+import cli, rwkv, config, tokenizer, logger
 
 proc main() =
   echo "=== RWKV Nim Binding Test ==="
