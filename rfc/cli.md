@@ -30,6 +30,9 @@ nimo chat -w ~/.ws/myproject
 # → explicit workspace override
 ```
 
+**Release:** `default_workspace = .` (cwd)
+**Dev:** `default_workspace = <last_workspace>` (from previous session)
+
 ## Intent → DSL
 
 User gives vague intent. System extracts it into a `pipeline.nim`, then runs it.
