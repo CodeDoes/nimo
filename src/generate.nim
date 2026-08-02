@@ -1,5 +1,5 @@
 import std/[os, strutils, strformat, math, random, times, algorithm]
-import ./rwkv, ./config, ./tokenizer, ./logger
+import ./rwkv, ./config, ./tokenizer, ./logger, ./macros
 
 proc softmax(logits: openArray[float32]): seq[float32] =
   result = newSeq[float32](logits.len)
@@ -100,7 +100,7 @@ proc generateText() =
     if fileExists(binCandidate):
       modelPath = binCandidate
 
-  logSessionStart("RWKV Text Generation", modelPath, vocabPath)
+  logSessionStart("RWKV Text Generation (4-bit GGML)", modelPath, vocabPath)
 
   echo "=========================================================="
   echo "         RWKV Text Generation Demo in Nim                 "
@@ -118,56 +118,53 @@ proc generateText() =
   let tok = loadWorldTokenizer(vocabPath)
   echo "Vocab loaded successfully!"
 
-  let model = initRwkvModel(modelPath, nThreads = DefaultThreads)
-  echo &"Model loaded successfully! (nVocab={model.nVocab}, nLayer={model.nLayer})"
+  # Use Nim template `withModel` for automatic lifetime management
+  withModel(modelPath, DefaultThreads, model):
+    echo &"Model loaded successfully! (nVocab={model.nVocab}, nLayer={model.nLayer})"
 
-  # Encode prompt string to tokens using RWKV v20230424 World Tokenizer
-  var promptTokens = tok.encode(promptText)
-  if promptTokens.len == 0:
-    echo "Error: Empty prompt token sequence."
-    return
+    var promptTokens = tok.encode(promptText)
+    if promptTokens.len == 0:
+      echo "Error: Empty prompt token sequence."
+      return
 
-  var state = model.newState()
-  var logits = model.newLogits()
+    var state = model.newState()
+    var logits = model.newLogits()
 
-  let startTime = cpuTime()
+    var elapsed = 0.0
+    var fullGenerated = ""
+    var stepCount = 0
 
-  # Process prompt in chunks
-  if not model.evalSequenceInChunks(promptTokens, chunkSize = DefaultChunkSize, state, logits):
-    echo "Failed to evaluate prompt sequence!"
-    appendToEternalLog("Error: Failed to evaluate prompt sequence!")
-    return
+    timeBlock(elapsed):
+      # Benchmark macro instrumenting sequence evaluation
+      benchmarkStep("prompt_chunk_eval"):
+        checkOk(model.evalSequenceInChunks(promptTokens, chunkSize = DefaultChunkSize, state, logits),
+                "Failed to evaluate prompt sequence")
 
-  var rng = initRand(12345)
+      var rng = initRand(12345)
 
-  echo "\nGenerated completion:\n"
-  stdout.write(promptText)
-  stdout.flushFile()
+      echo "\nGenerated completion:\n"
+      stdout.write(promptText)
+      stdout.flushFile()
 
-  var fullGenerated = ""
-  var stepCount = 0
+      for step in 0 ..< genLength:
+        let nextToken = sampleLogits(logits, temperature = temp, topP = topP, rng = rng)
+        let tokenStr = tok.decodeToken(nextToken.uint32)
 
-  for step in 0 ..< genLength:
-    let nextToken = sampleLogits(logits, temperature = temp, topP = topP, rng = rng)
-    let tokenStr = tok.decodeToken(nextToken.uint32)
+        fullGenerated.add(tokenStr)
+        inc stepCount
 
-    fullGenerated.add(tokenStr)
-    inc stepCount
+        stdout.write(tokenStr)
+        stdout.flushFile()
 
-    stdout.write(tokenStr)
-    stdout.flushFile()
+        if not model.eval(nextToken.uint32, state, logits):
+          echo "\nError during evaluation step ", step
+          break
 
-    # Feed next token back into RWKV autoregressively
-    if not model.eval(nextToken.uint32, state, logits):
-      echo "\nError during evaluation step ", step
-      break
+    echo "\n\n----------------------------------------------------------"
+    echo &"Generated {stepCount} tokens in {elapsed:.3f} s ({elapsed / stepCount.float * 1000.0:.2f} ms/token)"
+    echo "=========================================================="
 
-  let elapsed = cpuTime() - startTime
-  echo "\n\n----------------------------------------------------------"
-  echo &"Generated {genLength} tokens in {elapsed:.3f} s ({elapsed / genLength.float * 1000.0:.2f} ms/token)"
-  echo "=========================================================="
-
-  logGenerationRun(promptText, fullGenerated, elapsed, stepCount)
+    logGenerationRun(promptText, fullGenerated, elapsed, stepCount)
 
 when isMainModule:
   generateText()

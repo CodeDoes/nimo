@@ -1,5 +1,5 @@
 import std/[os, strutils, strformat, math, random, times, algorithm, terminal]
-import ./rwkv, ./config, ./tokenizer, ./logger
+import ./rwkv, ./config, ./tokenizer, ./logger, ./macros
 
 proc softmax(logits: openArray[float32]): seq[float32] =
   result = newSeq[float32](logits.len)
@@ -95,7 +95,7 @@ proc startTuiChat() =
     if fileExists(binCandidate):
       modelPath = binCandidate
 
-  logSessionStart("RWKV TUI Chat Session", modelPath, vocabPath)
+  logSessionStart("RWKV TUI Chat Session (4-bit GGML)", modelPath, vocabPath)
 
   styledEcho(styleBright, fgCyan, "==========================================================")
   styledEcho(styleBright, fgCyan, "             RWKV Interactive TUI Chat                    ")
@@ -113,74 +113,78 @@ proc startTuiChat() =
   let tok = loadWorldTokenizer(vocabPath)
   styledEcho(fgGreen, "Vocab loaded successfully!")
 
-  let model = initRwkvModel(modelPath, nThreads = DefaultThreads)
-  styledEcho(fgGreen, &"Model loaded! (nVocab={model.nVocab}, nLayer={model.nLayer})")
+  # Use Nim template `withModel` for automatic lifetime management
+  withModel(modelPath, DefaultThreads, model):
+    styledEcho(fgGreen, &"Model loaded! (nVocab={model.nVocab}, nLayer={model.nLayer})")
 
-  var state = model.newState()
-  var logits = model.newLogits()
-  var rng = initRand(cpuTime().int64)
+    var state = model.newState()
+    var logits = model.newLogits()
+    var rng = initRand(cpuTime().int64)
 
-  # Initial prompt / system setup
-  let sysPrompt = "User: Hi!\n\nBot: Hello! How can I help you today?\n\n"
-  var sysTokens = tok.encode(sysPrompt)
+    # Initial prompt / system setup
+    let sysPrompt = "User: Hi!\n\nBot: Hello! How can I help you today?\n\n"
+    var sysTokens = tok.encode(sysPrompt)
 
-  if sysTokens.len > 0:
-    discard model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits)
+    if sysTokens.len > 0:
+      checkOk(model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits),
+              "Failed to evaluate system prompt")
 
-  while true:
-    stdout.write("\nUser: ")
-    stdout.flushFile()
-    var inputLine: string
-    try:
-      inputLine = readLine(stdin)
-    except IOError, EOFError:
-      break
+    while true:
+      stdout.write("\nUser: ")
+      stdout.flushFile()
+      var inputLine: string
+      try:
+        inputLine = readLine(stdin)
+      except IOError, EOFError:
+        break
 
-    inputLine = inputLine.strip()
-    if inputLine.len == 0:
-      continue
+      inputLine = inputLine.strip()
+      if inputLine.len == 0:
+        continue
 
-    if inputLine == "/quit" or inputLine == "/exit":
-      styledEcho(fgYellow, "Goodbye!")
-      appendToEternalLog("User quit chat session.")
-      break
-    elif inputLine == "/reset":
-      state = model.newState()
-      logits = model.newLogits()
-      if sysTokens.len > 0:
-        discard model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits)
-      styledEcho(fgYellow, "Chat session reset.")
-      appendToEternalLog("Chat session reset by user.")
-      continue
+      if inputLine == "/quit" or inputLine == "/exit":
+        styledEcho(fgYellow, "Goodbye!")
+        appendToEternalLog("User quit chat session.")
+        break
+      elif inputLine == "/reset":
+        state = model.newState()
+        logits = model.newLogits()
+        if sysTokens.len > 0:
+          discard model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits)
+        styledEcho(fgYellow, "Chat session reset.")
+        appendToEternalLog("Chat session reset by user.")
+        continue
 
-    let turnPrompt = "User: " & inputLine & "\n\nBot:"
-    var turnTokens = tok.encode(turnPrompt)
+      let turnPrompt = "User: " & inputLine & "\n\nBot:"
+      var turnTokens = tok.encode(turnPrompt)
 
-    if turnTokens.len > 0 and not model.evalSequenceInChunks(turnTokens, chunkSize = DefaultChunkSize, state, logits):
-      styledEcho(fgRed, "Error evaluating user prompt.")
-      appendToEternalLog("Error evaluating prompt: " & inputLine)
-      continue
+      if turnTokens.len > 0:
+        benchmarkStep("chat_turn_eval"):
+          if not model.evalSequenceInChunks(turnTokens, chunkSize = DefaultChunkSize, state, logits):
+            styledEcho(fgRed, "Error evaluating user prompt.")
+            appendToEternalLog("Error evaluating prompt: " & inputLine)
+            continue
 
-    stdout.write("Bot: ")
-    stdout.flushFile()
-
-    var botReply = ""
-    for step in 0 ..< 200:
-      let nextToken = sampleLogits(logits, temperature = temp, topP = topP, rng = rng)
-      let tokenStr = tok.decodeToken(nextToken.uint32)
-
-      botReply.add(tokenStr)
-      stdout.write(tokenStr)
+      stdout.write("Bot: ")
       stdout.flushFile()
 
-      if botReply.endsWith("\n\nUser:") or botReply.endsWith("\nUser:"):
-        break
+      var botReply = ""
+      for step in 0 ..< 200:
+        let nextToken = sampleLogits(logits, temperature = temp, topP = topP, rng = rng)
+        let tokenStr = tok.decodeToken(nextToken.uint32)
 
-      if not model.eval(nextToken.uint32, state, logits):
-        break
+        botReply.add(tokenStr)
+        stdout.write(tokenStr)
+        stdout.flushFile()
 
-    echo ""
-    logChatInteraction(inputLine, botReply.strip())
+        if botReply.endsWith("\n\nUser:") or botReply.endsWith("\nUser:"):
+          break
+
+        if not model.eval(nextToken.uint32, state, logits):
+          break
+
+      echo ""
+      logChatInteraction(inputLine, botReply.strip())
 
 when isMainModule:
   startTuiChat()
