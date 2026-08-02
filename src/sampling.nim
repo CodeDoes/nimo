@@ -94,7 +94,12 @@ const StopSequences* = [
   "\nUser",
   "\n\nHuman:",
   "\nHuman:",
-  "<|endoftext|>"
+  "\n\nUs\ner:",
+  "\nUs\ner:",
+  "\nUser :",
+  "\n\nUser :",
+  "<|endoftext|>",
+  "</s>"
 ]
 
 proc endsWithStopSequence*(s: string): bool =

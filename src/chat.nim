@@ -59,6 +59,7 @@ proc startTuiChat() =
       try:
         inputLine = readLine(stdin)
       except IOError, EOFError:
+        styledEcho(fgYellow, "\nGoodbye!")
         break
 
       inputLine = inputLine.strip()
@@ -80,6 +81,7 @@ proc startTuiChat() =
         appendToEternalLog("Chat session reset by user.")
         continue
 
+      # Ensure preceding context terminates with double newlines
       let turnPrompt = "User: " & inputLine & "\n\nBot:"
       var turnTokens = tok.encode(turnPrompt)
 
@@ -123,6 +125,11 @@ proc startTuiChat() =
 
       echo ""
       logChatInteraction(inputLine, botReply.strip())
+
+      # Evaluate double newline into state to cleanly terminate the turn context for next turn
+      let endTurnTokens = tok.encode("\n\n")
+      if endTurnTokens.len > 0:
+        discard model.evalSequence(endTurnTokens, state, logits)
 
 when isMainModule:
   startTuiChat()
