@@ -1,6 +1,6 @@
 ## Nim wrapper for rwkv.cpp — CLI-frontend wrapper combining illwave + std/terminal output
 
-import std/[os, strformat, times, terminal]
+import std/[os, strformat]
 import cli, rwkv, config, tokenizer, logger
 
 proc main() =

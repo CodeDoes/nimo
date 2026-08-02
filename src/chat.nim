@@ -1,137 +1,65 @@
-## RWKV Interactive TUI Chat — uses illwave terminal buffer for styled output
+## RWKV Interactive Chat — CLI with session management
 
-import std/[os, strutils, strformat, random, times, terminal]
-import cli, rwkv, config, tokenizer, logger, sampling, macros
+import std/[os, strutils, strformat, terminal]
+import cli, ./session, ./config, ./tokenizer, ./rwkv, ./logger
 
-proc startTuiChat() =
-  let rawModelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
-  let modelPath = resolveModelPath(rawModelPath)
+proc main() =
+  let modelPath = resolveModelPath(if paramCount() > 0: paramStr(1) else: DefaultModelPath)
   let vocabPath = if paramCount() > 1: paramStr(2) else: DefaultVocabPath
   let bakedStatePath = if paramCount() > 2: paramStr(3) else: ""
-  let temp = DefaultTemp
-  let topP = DefaultTopP
 
-  logSessionStart("RWKV TUI Chat Session (4-bit GGML)", modelPath, vocabPath)
-
-  printBanner "RWKV Interactive TUI Chat"
+  logSessionStart("RWKV Chat", modelPath, vocabPath)
+  printBanner "RWKV Interactive Chat"
   printConfig(modelPath, vocabPath)
-  echo "Commands:   /reset (clear history), /quit (exit)"
+  echo "Commands: /reset, /quit"
   echo ""
 
   if not fileExists(modelPath):
-    printError &"Error: Model file not found at '{modelPath}'"
-    appendToEternalLog &"Error: Model file not found at '{modelPath}'"
+    printError &"Model not found: {modelPath}"
     return
 
-  let tok = loadWorldTokenizer(vocabPath)
-  printSuccess "Vocab loaded successfully!"
+  var s = initSession(modelPath, vocabPath)
 
-  withModel(modelPath, DefaultThreads, DefaultGpuLayers, model):
-    printSuccess &"Model loaded! (nVocab={model.nVocab}, nLayer={model.nLayer})"
-    echo ""
+  if bakedStatePath.len > 0 and fileExists(bakedStatePath):
+    printWarn &"Loading baked state from '{bakedStatePath}'"
+    s.state.loadState(bakedStatePath)
+  else:
+    let sysPrompt = "User: hi\n\nBot: Hello! How can I help you today?\n\n"
+    let sysTokens = s.tok.encode(sysPrompt)
+    if sysTokens.len > 0:
+      discard s.model.evalSequenceInChunks(sysTokens, DefaultChunkSize, s.state, s.logits)
+    styledEcho(styleBright, fgCyan, "User: hi")
+    styledEcho(styleBright, fgGreen, "Bot:  Hello! How can I help you today?")
 
-    var state = model.newState()
-    var logits = model.newLogits()
-    var rng = initRand(cpuTime().int64)
+  while true:
+    stdout.write("\nUser: ")
+    stdout.flushFile()
+    var inputLine: string
+    try:
+      inputLine = readLine(stdin)
+    except IOError, EOFError:
+      printWarn "\nGoodbye!"
+      break
 
-    # Initial prompt / system setup
-    let initialUserMsg = "hi"
-    let initialBotMsg = "Hello! How can I help you today?"
-    let sysPrompt = "User: " & initialUserMsg & "\n\nBot: " & initialBotMsg & "\n\n"
-    var sysTokens = tok.encode(sysPrompt)
+    inputLine = inputLine.strip()
+    if inputLine.len == 0: continue
 
-    if bakedStatePath.len > 0 and fileExists(bakedStatePath):
-      printWarn &"Loading pre-baked state from '{bakedStatePath}'..."
-      state.loadState(bakedStatePath)
-    elif sysTokens.len > 0:
-      checkOk(model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits),
-              "Failed to evaluate system prompt")
+    if inputLine == "/quit" or inputLine == "/exit":
+      printWarn "Goodbye!"
+      break
+    elif inputLine == "/reset":
+      s = initSession(modelPath, vocabPath)
+      let sysPrompt = "User: hi\n\nBot: Hello! How can I help you today?\n\n"
+      let sysTokens = s.tok.encode(sysPrompt)
+      if sysTokens.len > 0:
+        discard s.model.evalSequenceInChunks(sysTokens, DefaultChunkSize, s.state, s.logits)
+      styledEcho(styleBright, fgCyan, "User: hi")
+      styledEcho(styleBright, fgGreen, "Bot:  Hello! How can I help you today?")
+      continue
 
-    styledEcho(styleBright, fgCyan, "User: ", initialUserMsg)
-    styledEcho(styleBright, fgGreen, "Bot:  ", initialBotMsg)
-
-    while true:
-      stdout.write("\nUser: ")
-      stdout.flushFile()
-      var inputLine: string
-      try:
-        inputLine = readLine(stdin)
-      except IOError, EOFError:
-        printWarn "\nGoodbye!"
-        break
-
-      inputLine = inputLine.strip()
-      if inputLine.len == 0:
-        continue
-
-      if inputLine == "/quit" or inputLine == "/exit":
-        printWarn "Goodbye!"
-        appendToEternalLog "User quit chat session."
-        break
-      elif inputLine == "/reset":
-        state = model.newState()
-        logits = model.newLogits()
-        if sysTokens.len > 0:
-          discard model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, state, logits)
-        printWarn "Chat session reset."
-        styledEcho(styleBright, fgCyan, "User: ", initialUserMsg)
-        styledEcho(styleBright, fgGreen, "Bot:  ", initialBotMsg)
-        appendToEternalLog "Chat session reset by user."
-        continue
-
-      # Ensure preceding context terminates with double newlines
-      let turnPrompt = "User: " & inputLine & "\n\nBot:"
-      var turnTokens = tok.encode(turnPrompt)
-
-      if turnTokens.len > 0:
-        benchmarkStep("chat_turn_eval"):
-          if not model.evalSequenceInChunks(turnTokens, chunkSize = DefaultChunkSize, state, logits):
-            printError "Error evaluating user prompt."
-            appendToEternalLog "Error evaluating prompt: " & inputLine
-            continue
-
-      stdout.write("Bot:  ")
-      stdout.flushFile()
-
-      var botReply = ""
-      var buffer = ""
-      var validState = state
-
-      for step in 0 ..< 200:
-        streamToken(model, state, logits, tok, temp, topP, rng, nextToken, tokenStr):
-          if nextToken == 0: # Token 0 = End of Text (EOS)
-            state = validState
-            break
-
-          botReply.add(tokenStr)
-          buffer.add(tokenStr)
-
-          if endsWithStopSequence(botReply):
-            state = validState
-            break
-
-          if not model.eval(nextToken.uint32, state, logits):
-            break
-
-          let prefixLen = maxStopPrefixLen(buffer)
-          let safeLen = buffer.len - prefixLen
-          if safeLen > 0:
-            stdout.write(buffer[0 ..< safeLen])
-            stdout.flushFile()
-            buffer = buffer[safeLen .. ^1]
-            validState = state
-
-      if buffer.len > 0 and not endsWithStopSequence(botReply):
-        stdout.write(buffer)
-        stdout.flushFile()
-
-      echo ""
-      logChatInteraction(inputLine, botReply.strip())
-
-      # Evaluate double newline into state to cleanly terminate the turn context for next turn
-      let endTurnTokens = tok.encode("\n\n")
-      if endTurnTokens.len > 0:
-        discard model.evalSequence(endTurnTokens, state, logits)
+    let reply = s.generateTurn(inputLine)
+    echo "Bot:  ", reply
+    logChatInteraction(inputLine, reply)
 
 when isMainModule:
-  startTuiChat()
+  main()

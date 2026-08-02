@@ -1,36 +1,24 @@
 ## What is this file for?
 
-Current blockers and issues preventing the project from building.
+Current state of the project — what works, what's leftover.
 
-## Critical: Missing Core Modules
+## All Fixed
 
-Every binary imports these deleted modules. None will compile:
+The issues documented here were resolved in commit `7358a63`:
+- Core modules restored (`rwkv.nim`, `tokenizer.nim`, `sampling.nim`, `macros.nim`, `config.nim`, `logger.nim`)
+- Syntax errors fixed (`cli.nim` export syntax, `nimwave_app.nim` Key.Q, unicode import)
+- Unused imports cleaned up
+- All 14 source files compile clean
 
-```nim
-import cli, rwkv, config, tokenizer, logger, sampling, macros
-```
+## Remaining (Non-Blocking)
 
-### Required Restorations
+1. **`rwkv.cpp/` submodule** — still excluded from git. Must build `librwkv.so` manually before linking. This is by design.
+2. **No subdirectory structure** — all 14 files are flat in `src/`. See `analysis/refactor-plan.md` for the proposed reorganization.
+3. **DRY gaps** — chat turn generation logic is duplicated between `chat.nim` and `nimwave_app.nim`. See `analysis/dry.md`.
 
-1. **`src/rwkv.nim`** — C FFI wrapper for `librwkv.so`. Contains `RwkvModel`, `initRwkvModel`, `eval`, `evalSequenceInChunks`, `newState`, `newLogits`, error types. ~260 lines.
-2. **`src/tokenizer.nim`** — `WorldTokenizer` with trie-based encode/decode. ~181 lines.
-3. **`src/sampling.nim`** — `softmax`, `sampleLogits` (temperature + topP). ~120 lines.
-4. **`src/macros.nim`** — `withModel`, `streamToken`, `timeBlock`, `checkOk` templates + `benchmarkStep`, `testStep` macros. ~53 lines.
-5. **`src/config.nim`** — `DefaultModelPath`, `DefaultTemp`, `DefaultTopP`, `resolveModelPath`. ~23 lines.
-6. **`src/logger.nim`** — `appendToEternalLog`, `logSessionStart`, `logGenerationRun`, `logChatInteraction`. ~48 lines.
+## Next Steps
 
-## Secondary: Missing Submodule
-
-- **`rwkv.cpp/`** — excluded via `.gitignore`. The C++ shared library `librwkv.so` must be built manually via `nimble build_cpp`. Without it, no binary can link.
-
-## Secondary: Build Manifest Mismatch
-
-`nico.nimble` still references deleted binaries:
-```nim
-bin = @["main", "generate", "chat", "test_rwkv_full", "bake_state", "nimwave_app"]
-```
-`test_rwkv_full` no longer exists as a source file. Should be removed.
-
-## Non-Breaking: Stale Imports in nimwave_app.nim
-
-`nimwave_app.nim` imports `./rwkv, ./config, ./tokenizer, ./logger, ./sampling, ./macros` with `./` prefix (module-relative). All these paths are gone.
+See `analysis/refactor-plan.md` for the phased plan to:
+1. Extract `session.nim` to eliminate duplicated init and chat logic
+2. Reorganize into `engine/`, `ui/`, `apps/`, `tests/` subdirectories
+3. Clean up nimble manifest

@@ -1,7 +1,7 @@
-## RWKV State Baker Script — CLI with nimwave/illwave styled output
+## RWKV State Baker — CLI with session management
 
 import std/[os, strutils, strformat, times]
-import cli, rwkv, config, tokenizer, logger, macros
+import cli, ./session, ./config, ./tokenizer, ./rwkv, ./logger, ./macros
 
 proc main() =
   let modelPath = resolveModelPath(if paramCount() > 0: paramStr(1) else: DefaultModelPath)
@@ -11,55 +11,44 @@ proc main() =
 
   let promptText = if fileExists(promptArg): readFile(promptArg) else: promptArg
 
-  logSessionStart("RWKV State Baker", modelPath, vocabPath)
-
-  printBanner "RWKV State Baking Tool"
+  logSessionStart("RWKV Bake State", modelPath, vocabPath)
+  printBanner "RWKV State Baker"
   printConfig(modelPath, vocabPath)
-  echo "Output state:  ", outStatePath
-  echo "Prompt length: ", promptText.len, " chars"
+  echo "Output: ", outStatePath
+  echo "Prompt: ", promptText.len, " chars"
   echo SepThin
 
   if not fileExists(modelPath):
-    printError &"Error: Model file not found at '{modelPath}'"
-    appendToEternalLog &"Error: Model file not found at '{modelPath}'"
+    printError &"Model not found: {modelPath}"
     return
 
-  let tok = loadWorldTokenizer(vocabPath)
-  printSuccess "Vocab loaded successfully!"
+  var s = initSession(modelPath, vocabPath)
 
-  withModel(modelPath, DefaultThreads, DefaultGpuLayers, model):
-    printSuccess &"Model loaded! (nVocab={model.nVocab}, nLayer={model.nLayer}, stateLen={model.stateLen})"
+  var promptTokens = s.tok.encode(promptText)
+  if promptTokens.len == 0:
+    printError "Empty prompt."
+    return
 
-    var promptTokens = tok.encode(promptText)
-    if promptTokens.len == 0:
-      printError "Error: Prompt token sequence is empty."
-      return
+  printInfo &"Encoding prompt -> {promptTokens.len} tokens"
 
-    printInfo &"Encoding prompt -> {promptTokens.len} tokens"
+  var elapsed = 0.0
+  timeBlock(elapsed):
+    benchmarkStep("bake_eval"):
+      checkOk(s.model.evalSequenceInChunks(promptTokens, DefaultChunkSize, s.state, s.logits),
+              "Failed to evaluate prompt")
 
-    var state = model.newState()
-    var logits = model.newLogits()
-    var elapsed = 0.0
+  s.state.saveState(outStatePath)
 
-    timeBlock(elapsed):
-      benchmarkStep("bake_state_eval"):
-        checkOk(model.evalSequenceInChunks(promptTokens, chunkSize = DefaultChunkSize, state, logits),
-                "Failed to evaluate state prompt sequence")
+  let fileSize = getFileSize(outStatePath)
+  let msPerTok = elapsed / promptTokens.len.float * 1000.0
 
-    printInfo "Saving baked state to binary file..."
-    state.saveState(outStatePath)
-
-    let fileSize = getFileSize(outStatePath)
-    let msPerTok = elapsed / promptTokens.len.float * 1000.0
-
-    echo ""
-    echo BannerSep
-    printSuccess &"SUCCESS: Baked {promptTokens.len} tokens into '{outStatePath}'"
-    printSuccess &"State File Size: {fileSize} bytes ({fileSize.float / 1024.0:.2f} KB)"
-    printSuccess &"Evaluation Time: {elapsed:.3f} s ({msPerTok:.2f} ms/token)"
-    echo BannerSep
-
-    appendToEternalLog &"Baked state file '{outStatePath}' ({promptTokens.len} tokens, {fileSize} bytes) in {elapsed:.3f} s"
+  echo ""
+  echo BannerSep
+  printSuccess &"Baked {promptTokens.len} tokens into '{outStatePath}'"
+  printSuccess &"State size: {fileSize} bytes ({fileSize.float / 1024.0:.2f} KB)"
+  printSuccess &"Time: {elapsed:.3f}s ({msPerTok:.2f} ms/token)"
+  echo BannerSep
+  appendToEternalLog &"Baked state: {promptTokens.len} tokens, {fileSize} bytes, {elapsed:.3f}s"
 
 when isMainModule:
   main()

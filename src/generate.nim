@@ -1,81 +1,58 @@
-## RWKV Text Generation — CLI with illwave / nimwave styled output
+## RWKV Text Generation — CLI with session management
 
-import std/[os, strutils, strformat, random, times]
-import cli, rwkv, config, tokenizer, logger, sampling, macros
+import std/[os, strutils, strformat, times]
+import cli, ./session, ./config, ./tokenizer, ./rwkv, ./sampling, ./logger, ./macros
 
-proc generateText() =
-  let rawModelPath = if paramCount() > 0: paramStr(1) else: DefaultModelPath
-  let modelPath = resolveModelPath(rawModelPath)
+proc main() =
+  let modelPath = resolveModelPath(if paramCount() > 0: paramStr(1) else: DefaultModelPath)
   let promptText = if paramCount() > 1: paramStr(2) else: DefaultPrompt
   let vocabPath = if paramCount() > 2: paramStr(3) else: DefaultVocabPath
   let genLength = DefaultGenLength
-  let temp = DefaultTemp
-  let topP = DefaultTopP
 
-  logSessionStart("RWKV Text Generation (4-bit GGML)", modelPath, vocabPath)
-
-  printBanner "RWKV Text Generation Demo in Nim"
+  logSessionStart("RWKV Generate", modelPath, vocabPath)
+  printBanner "RWKV Text Generation"
   printConfig(modelPath, vocabPath)
-  echo "Prompt:     \"", promptText, "\""
-  echo "Temp:       ", temp, " | Top-P: ", topP
+  echo "Prompt:  ", promptText
+  echo "Length:  ", genLength, " tokens"
   echo SepThin
 
   if not fileExists(modelPath):
-    printError &"Error: Model file not found at '{modelPath}'"
-    appendToEternalLog &"Error: Model file not found at '{modelPath}'"
+    printError &"Model not found: {modelPath}"
     return
 
-  let tok = loadWorldTokenizer(vocabPath)
-  printSuccess "Vocab loaded successfully!"
+  var s = initSession(modelPath, vocabPath)
 
-  withModel(modelPath, DefaultThreads, DefaultGpuLayers, model):
-    printSuccess &"Model loaded successfully! (nVocab={model.nVocab}, nLayer={model.nLayer})"
+  var promptTokens = s.tok.encode(promptText)
+  if promptTokens.len == 0:
+    printError "Empty prompt."
+    return
 
-    var promptTokens = tok.encode(promptText)
-    if promptTokens.len == 0:
-      printError "Error: Empty prompt token sequence."
-      return
+  var elapsed = 0.0
+  var fullGenerated = ""
+  var stepCount = 0
 
-    var state = model.newState()
-    var logits = model.newLogits()
+  timeBlock(elapsed):
+    benchmarkStep("prompt_eval"):
+      checkOk(s.model.evalSequenceInChunks(promptTokens, DefaultChunkSize, s.state, s.logits),
+              "Failed to evaluate prompt")
 
-    var elapsed = 0.0
-    var fullGenerated = ""
-    var stepCount = 0
+    stdout.write(promptText)
+    stdout.flushFile()
 
-    timeBlock(elapsed):
-      benchmarkStep("prompt_chunk_eval"):
-        checkOk(model.evalSequenceInChunks(promptTokens, chunkSize = DefaultChunkSize, state, logits),
-                "Failed to evaluate prompt sequence")
-
-      var rng = initRand(12345)
-
-      echo ""
-      printInfo "Generated completion:"
-      stdout.write(promptText)
+    for step in 0 ..< genLength:
+      let token = sampleLogits(s.logits, temperature = DefaultTemp, topP = DefaultTopP, rng = s.rng)
+      if token == 0: break
+      let tokenStr = s.tok.decodeToken(token.uint32)
+      fullGenerated.add(tokenStr)
+      inc stepCount
+      stdout.write(tokenStr)
       stdout.flushFile()
+      if not s.model.eval(token.uint32, s.state, s.logits): break
 
-      for step in 0 ..< genLength:
-        streamToken(model, state, logits, tok, temp, topP, rng, nextToken, tokenStr):
-          if nextToken == 0: # Token 0 = End of Text (EOS)
-            break
-
-          fullGenerated.add(tokenStr)
-          inc stepCount
-
-          stdout.write(tokenStr)
-          stdout.flushFile()
-
-          if not model.eval(nextToken.uint32, state, logits):
-            printError &"Error during evaluation step {step}"
-            break
-
-    echo ""
-    echo SepThin
-    printSuccess &"Generated {stepCount} tokens in {elapsed:.3f} s ({elapsed / stepCount.float * 1000.0:.2f} ms/token)"
-    echo BannerSep
-
-    logGenerationRun(promptText, fullGenerated, elapsed, stepCount)
+  echo ""
+  echo SepThin
+  printSuccess &"Generated {stepCount} tokens in {elapsed:.3f}s ({elapsed / max(stepCount, 1).float * 1000.0:.2f} ms/token)"
+  logGenerationRun(promptText, fullGenerated, elapsed, stepCount)
 
 when isMainModule:
-  generateText()
+  main()

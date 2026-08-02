@@ -3,7 +3,7 @@
 
 import std/[os, strutils, strformat, times, random, terminal, unicode]
 import illwave as iw
-import cli, ./rwkv, ./config, ./tokenizer, ./logger, ./sampling
+import cli, ./session, ./config, ./tokenizer, ./rwkv, ./logger
 
 # ── Box-drawing character constants ───────────────────────────────────────────
 const
@@ -16,141 +16,54 @@ const
 
 type
   ChatMessage = object
-    role: string      # "User" or "Bot"
+    role: string
     text: string
     timestamp: string
 
-  AppState = object
-    modelPath: string
-    vocabPath: string
-    model: RwkvModel
-    tok: WorldTokenizer
-    stateBuf: seq[float32]
-    logitsBuf: seq[float32]
+  DashboardState = object
+    session: Session
     messages: seq[ChatMessage]
     inputBuffer: string
     statusText: string
-    tokensGenerated: int
-    elapsedSec: float
-    isGenerating: bool
-    rng: Rand
 
 proc formatTimeNow(): string = now().format("HH:mm:ss")
 
-proc initAppState(modelPath, vocabPath: string): AppState =
-  result.modelPath = modelPath
-  result.vocabPath = vocabPath
-  result.statusText = "Initializing RWKV Model..."
-  result.rng = initRand(cpuTime().int64)
+proc initDashboard(modelPath, vocabPath: string): DashboardState =
+  result.statusText = "Loading model..."
+  result.session = initSession(modelPath, vocabPath)
 
-  if fileExists(vocabPath):
-    result.tok = loadWorldTokenizer(vocabPath)
+  let sysPrompt = "User: hi\n\nBot: Hello! How can I help you today?\n\n"
+  let sysTokens = result.session.tok.encode(sysPrompt)
+  if sysTokens.len > 0:
+    discard result.session.model.evalSequenceInChunks(sysTokens, DefaultChunkSize, result.session.state, result.session.logits)
 
-  if fileExists(modelPath):
-    result.model = initRwkvModel(modelPath, nThreads = DefaultThreads, nGpuLayers = DefaultGpuLayers)
-    result.stateBuf = result.model.newState()
-    result.logitsBuf = result.model.newLogits()
+  result.messages.add(ChatMessage(role: "User", text: "hi", timestamp: formatTimeNow()))
+  result.messages.add(ChatMessage(role: "Bot", text: "Hello! How can I help you today?", timestamp: formatTimeNow()))
+  result.statusText = &"Ready (nVocab={result.session.model.nVocab}, nLayer={result.session.model.nLayer})"
 
-    # Pre-evaluate default system greeting
-    let sysPrompt = "User: hi\n\nBot: Hello! How can I help you today?\n\n"
-    let sysTokens = result.tok.encode(sysPrompt)
-    if sysTokens.len > 0:
-      discard result.model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, result.stateBuf, result.logitsBuf)
-
-    result.messages.add(ChatMessage(role: "User", text: "hi", timestamp: formatTimeNow()))
-    result.messages.add(ChatMessage(role: "Bot", text: "Hello! How can I help you today?", timestamp: formatTimeNow()))
-    result.statusText = &"Model Ready! (nVocab={result.model.nVocab}, nLayer={result.model.nLayer})"
-  else:
-    result.statusText = &"Error: Model file '{modelPath}' not found!"
-
-proc processUserTurn(app: var AppState) =
-  if app.model == nil or app.tok == nil: return
-  let prompt = app.inputBuffer.strip()
+proc handleTurn(app: var DashboardState) =
+  if app.inputBuffer.len == 0: return
+  let userMsg = app.inputBuffer
   app.inputBuffer = ""
-  if prompt.len == 0: return
-
-  if prompt == "/reset":
-    app.stateBuf = app.model.newState()
-    app.logitsBuf = app.model.newLogits()
-    let sysPrompt = "User: hi\n\nBot: Hello! How can I help you today?\n\n"
-    let sysTokens = app.tok.encode(sysPrompt)
-    if sysTokens.len > 0:
-      discard app.model.evalSequenceInChunks(sysTokens, chunkSize = DefaultChunkSize, app.stateBuf, app.logitsBuf)
-    app.messages.setLen(0)
-    app.messages.add(ChatMessage(role: "User", text: "hi", timestamp: formatTimeNow()))
-    app.messages.add(ChatMessage(role: "Bot", text: "Hello! How can I help you today?", timestamp: formatTimeNow()))
-    app.statusText = "Chat Session Reset."
-    return
-
-  app.messages.add(ChatMessage(role: "User", text: prompt, timestamp: formatTimeNow()))
-  app.statusText = "Evaluating Prompt..."
-
-  let turnPrompt = "User: " & prompt & "\n\nBot:"
-  let turnTokens = app.tok.encode(turnPrompt)
-
-  if turnTokens.len > 0:
-    discard app.model.evalSequenceInChunks(turnTokens, chunkSize = DefaultChunkSize, app.stateBuf, app.logitsBuf)
-
-  var botReply = ""
-  var validState = app.stateBuf
-  let t0 = cpuTime()
-  var genTokens = 0
-
-  for step in 0 ..< 200:
-    let nextToken = sampleLogits(app.logitsBuf, temperature = DefaultTemp, topP = DefaultTopP, rng = app.rng)
-    if nextToken == 0:
-      app.stateBuf = validState
-      break
-
-    let tokenStr = app.tok.decodeToken(nextToken.uint32)
-    botReply.add(tokenStr)
-    inc genTokens
-
-    if endsWithStopSequence(botReply):
-      app.stateBuf = validState
-      break
-
-    if not app.model.eval(nextToken.uint32, app.stateBuf, app.logitsBuf):
-      break
-    validState = app.stateBuf
-
-  app.elapsedSec = cpuTime() - t0
-  app.tokensGenerated = genTokens
-  app.messages.add(ChatMessage(role: "Bot", text: botReply.strip(), timestamp: formatTimeNow()))
-
-  # Terminate turn state cleanly with double newline
-  let endTurnTokens = app.tok.encode("\n\n")
-  if endTurnTokens.len > 0:
-    discard app.model.evalSequence(endTurnTokens, app.stateBuf, app.logitsBuf)
-
-  let msPerTok = if genTokens > 0: app.elapsedSec / genTokens.float * 1000.0 else: 0.0
-  app.statusText = &"Done! Generated {genTokens} tokens in {app.elapsedSec:.2f}s ({msPerTok:.1f} ms/token)"
+  app.messages.add(ChatMessage(role: "User", text: userMsg, timestamp: formatTimeNow()))
+  app.statusText = "Thinking..."
+  let reply = app.session.generateTurn(userMsg)
+  app.messages.add(ChatMessage(role: "Bot", text: reply, timestamp: formatTimeNow()))
+  app.statusText = "Ready"
 
 proc putCell(tb: var iw.TerminalBuffer, x, y: int, ch: string, fg: iw.ForegroundColor, bg: iw.BackgroundColor) =
   tb[x, y] = iw.TerminalChar(ch: ch.toRunes[0], fg: fg, bg: bg, style: {})
 
-proc renderDashboard(app: var AppState) =
+proc renderDashboard(app: var DashboardState) =
   let w = terminalWidth()
   let h = terminalHeight()
 
   if w < 40 or h < 10:
-    echo "Terminal window too small! Need at least 40x10."
+    echo "Terminal too small (need 40x10)"
     return
 
   var tb = iw.initTerminalBuffer(w, h)
   iw.init(fullScreen = true)
-
-  # ── Title Header Box (rows 0-2) ──────────────────────────────────────────
-  tb.setForegroundColor(iw.fgCyan)
-  tb.setBackgroundColor(iw.bgBlack)
-  tb.write(1, 0, " NIMO - NIM RWKV-7 TUI DASHBOARD (NIMWAVE / ILLWAVE) ")
-  tb.setForegroundColor(iw.fgYellow)
-  tb.write(w - 26, 0, "Status: Ready ")
-
-  # ── Left Messages Panel (x=0, y=3, width=70% of w) ──────────────────────
-  let leftW = max(20, (w.float * 0.70).int)
-  let rightW = w - leftW
-  let mainH = h - 6
 
   let cCyan = iw.fgCyan
   let cBlack = iw.bgBlack
@@ -159,75 +72,73 @@ proc renderDashboard(app: var AppState) =
   let cMagenta = iw.fgMagenta
   let cYellow = iw.fgYellow
 
-  # Left panel box
+  # Title
+  tb.setForegroundColor(cCyan)
+  tb.setBackgroundColor(cBlack)
+  tb.write(1, 0, " NIMO - RWKV-7 TUI ")
+  tb.setForegroundColor(cYellow)
+  tb.write(w - 20, 0, app.statusText)
+
+  # Panels
+  let leftW = max(20, (w.float * 0.70).int)
+  let rightW = w - leftW
+  let mainH = h - 4
+
+  # Left panel border
   for x in 1 ..< leftW - 1:
-    putCell(tb, x, 3,                HLine, cCyan, cBlack)
-    putCell(tb, x, 3 + mainH - 1,    HLine, cCyan, cBlack)
-  for y in 4 ..< 3 + mainH - 1:
-    putCell(tb, 0,        y,         VLine, cCyan, cBlack)
-    putCell(tb, leftW - 1, y,        VLine, cCyan, cBlack)
-  putCell(tb, 0,        3,          CornerTL, cCyan, cBlack)
-  putCell(tb, leftW - 1, 3,         CornerTR, cCyan, cBlack)
-  putCell(tb, 0,        3 + mainH - 1,  CornerBL, cCyan, cBlack)
-  putCell(tb, leftW - 1, 3 + mainH - 1, CornerBR, cCyan, cBlack)
+    putCell(tb, x, 2, HLine, cCyan, cBlack)
+    putCell(tb, x, 2 + mainH - 1, HLine, cCyan, cBlack)
+  for y in 3 ..< 2 + mainH - 1:
+    putCell(tb, 0, y, VLine, cCyan, cBlack)
+    putCell(tb, leftW - 1, y, VLine, cCyan, cBlack)
+  putCell(tb, 0, 2, CornerTL, cCyan, cBlack)
+  putCell(tb, leftW - 1, 2, CornerTR, cCyan, cBlack)
+  putCell(tb, 0, 2 + mainH - 1, CornerBL, cCyan, cBlack)
+  putCell(tb, leftW - 1, 2 + mainH - 1, CornerBR, cCyan, cBlack)
 
   tb.setForegroundColor(cGreen)
-  tb.setBackgroundColor(cBlack)
-  tb.write(2, 3, " Conversation History ")
+  tb.write(2, 2, " Conversation ")
 
-  var lineIdx = 4
+  var lineIdx = 3
   for msg in app.messages:
-    if lineIdx >= 3 + mainH - 2: break
+    if lineIdx >= 2 + mainH - 1: break
     let color = if msg.role == "User": cCyan else: cGreen
     tb.setForegroundColor(color)
-    tb.setBackgroundColor(cBlack)
     tb.write(2, lineIdx, &"[{msg.timestamp}] {msg.role}: ")
     tb.setForegroundColor(cWhite)
-    let indent = msg.role.len + 12
-    tb.write(indent, lineIdx, msg.text)
+    tb.write(msg.role.len + 12, lineIdx, msg.text)
     inc lineIdx
     inc lineIdx
 
-  # ── Right Telemetry Panel (x=leftW, y=3, width=rightW) ───────────────────
+  # Right panel border
   for x in 1 ..< rightW - 1:
-    putCell(tb, leftW + x, 3,                HLine, cCyan, cBlack)
-    putCell(tb, leftW + x, 3 + mainH - 1,    HLine, cCyan, cBlack)
-  for y in 4 ..< 3 + mainH - 1:
-    putCell(tb, leftW,         y,             VLine, cCyan, cBlack)
-    putCell(tb, leftW + rightW - 1, y,        VLine, cCyan, cBlack)
-  putCell(tb, leftW,         3,              CornerTL, cCyan, cBlack)
-  putCell(tb, leftW + rightW - 1, 3,         CornerTR, cCyan, cBlack)
-  putCell(tb, leftW,         3 + mainH - 1,  CornerBL, cCyan, cBlack)
-  putCell(tb, leftW + rightW - 1, 3 + mainH - 1, CornerBR, cCyan, cBlack)
+    putCell(tb, leftW + x, 2, HLine, cCyan, cBlack)
+    putCell(tb, leftW + x, 2 + mainH - 1, HLine, cCyan, cBlack)
+  for y in 3 ..< 2 + mainH - 1:
+    putCell(tb, leftW, y, VLine, cCyan, cBlack)
+    putCell(tb, leftW + rightW - 1, y, VLine, cCyan, cBlack)
+  putCell(tb, leftW, 2, CornerTL, cCyan, cBlack)
+  putCell(tb, leftW + rightW - 1, 2, CornerTR, cCyan, cBlack)
+  putCell(tb, leftW, 2 + mainH - 1, CornerBL, cCyan, cBlack)
+  putCell(tb, leftW + rightW - 1, 2 + mainH - 1, CornerBR, cCyan, cBlack)
 
   tb.setForegroundColor(cMagenta)
-  tb.setBackgroundColor(cBlack)
-  tb.write(leftW + 2, 3, " System & Model Telemetry ")
+  tb.write(leftW + 2, 2, " Info ")
 
-  var rightLine = 5
+  var r = 4
   tb.setForegroundColor(cWhite)
-  tb.setBackgroundColor(cBlack)
-  tb.write(leftW + 2, rightLine, &"Model: RWKV-7 2.9B"); inc rightLine
-  tb.write(leftW + 2, rightLine, &"Threads: {DefaultThreads}"); inc rightLine
-  tb.write(leftW + 2, rightLine, &"GPU Layers: {DefaultGpuLayers}"); inc rightLine
-  tb.write(leftW + 2, rightLine, &"Temp: {DefaultTemp:.1f} | Top-P: {DefaultTopP:.1f}"); inc rightLine
-  inc rightLine
+  tb.write(leftW + 2, r, &"Threads: {DefaultThreads}"); inc r
+  tb.write(leftW + 2, r, &"GPU: {DefaultGpuLayers} layers"); inc r
+  tb.write(leftW + 2, r, &"Temp: {DefaultTemp} | TopP: {DefaultTopP}"); inc r
+  inc r
   tb.setForegroundColor(cYellow)
-  tb.write(leftW + 2, rightLine, "Commands:"); inc rightLine
+  tb.write(leftW + 2, r, "Keys:"); inc r
   tb.setForegroundColor(cCyan)
-  tb.write(leftW + 2, rightLine, " /reset - Reset state"); inc rightLine
-  tb.write(leftW + 2, rightLine, " ESC/Ctrl+C - Exit"); inc rightLine
-  inc rightLine
-  if app.tokensGenerated > 0:
-    tb.setForegroundColor(cGreen)
-    tb.write(leftW + 2, rightLine, &"Last Gen: {app.tokensGenerated} tokens"); inc rightLine
-    tb.write(leftW + 2, rightLine, &"Time: {app.elapsedSec:.2f} s")
+  tb.write(leftW + 2, r, " Enter - send"); inc r
+  tb.write(leftW + 2, r, " ESC - exit"); inc r
 
-  # ── Bottom Status & Input Bar (rows h-3 to h-1) ─────────────────────────
+  # Input bar
   tb.setForegroundColor(cYellow)
-  tb.setBackgroundColor(cBlack)
-  tb.write(1, h - 3, &" {app.statusText} ")
-  tb.setForegroundColor(cCyan)
   tb.write(1, h - 2, "> " & app.inputBuffer)
 
   iw.display(tb)
@@ -237,13 +148,12 @@ proc main() =
   let modelPath = resolveModelPath(if paramCount() > 0: paramStr(1) else: DefaultModelPath)
   let vocabPath = if paramCount() > 1: paramStr(2) else: DefaultVocabPath
 
-  logSessionStart("RWKV NimWave TUI Dashboard", modelPath, vocabPath)
+  logSessionStart("NIMO Dashboard", modelPath, vocabPath)
 
-  var app = initAppState(modelPath, vocabPath)
+  var app = initDashboard(modelPath, vocabPath)
 
   setControlCHook(proc() {.noconv.} =
     iw.deinit()
-    echo "NIMO TUI session ended."
     quit(0))
   defer: iw.deinit()
 
@@ -255,7 +165,7 @@ proc main() =
     of iw.Key.Escape, iw.Key.Q:
       break
     of iw.Key.Enter:
-      app.processUserTurn()
+      app.handleTurn()
     of iw.Key.Backspace:
       if app.inputBuffer.len > 0:
         app.inputBuffer.setLen(app.inputBuffer.len - 1)
