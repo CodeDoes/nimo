@@ -59,7 +59,11 @@ $ nimo chat
 [nimo] ▶ 3/6 Writing Chapter 1...
 [nimo] ✔ 3/6 Writing Chapter 1... (12.4s)
 ...
+[nimo] Done. Artifacts in ~/.ws/myproject/
 ```
+
+The active item shows `▶`, completed items show `✔` with elapsed time.
+User always sees something progressing — no blank waits.
 
 The generated `pipeline.nim` is saved to the workspace so the user can inspect/edit it.
 
@@ -67,8 +71,8 @@ The generated `pipeline.nim` is saved to the workspace so the user can inspect/e
 
 1. **Capture** — user types intent in chat
 2. **Extract** — LLM analyzes intent, produces a `pipeline.nim` script
-3. **Save** — script written to workspace
-4. **Execute** — `nim script` runs the pipeline, DAG scheduler handles dependencies
+3. **Plan** — topological sort produces ordered steps with parallel groups
+4. **Execute** — `nim script` runs the pipeline, shows progress per step
 5. **Return** — artifacts served back to user
 
 See `rfc/pipeline.md` for the DSL spec.
