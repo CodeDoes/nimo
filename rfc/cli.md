@@ -55,31 +55,55 @@ $ nimo chat
 [nimo] ▶ 1/6 Generating wiki entries...
 
 ## Max
-Robot ninja. Stealth specialist. ...
+Robot ninja. Stealth specialist. Built for covert ops in dense urban environments. Wears adaptive camouflage plating that bends light around his frame. Primary weapons: mono-filament wire whips and subdermal blade arrays. Personality: stoic, observant, dry wit surfaces only with trusted allies.
 
 ## Rob
-Heavy ordnance. Tactical partner. ...
+Heavy ordnance specialist. Tactical partner assigned after Max's solo incidents escalated. Carries a rotary cannon mounted to his left shoulder. Personality: boisterous, loyal, treats combat like a contact sport. Frequently cracks jokes while laying down suppressive fire.
 
 ## Ghastone
-Cybernetic syndicate crime boss. ...
+Cybernetic syndicate crime boss. Controls the Neon District through a network of augmented enforcers. Known for his signature — a silver gasmask shaped like a weeping face. Motive: wants to monopolize synthetic memory trading, which requires eliminating independent operators like Max.
 
 ## Neo-Kuroba
-High-tech neon cyberpunk city. ...
+High-tech neon cyberpunk city. 200+ stories of vertical sprawl. The rich live in the spires above the cloud layer. The poor navigate the Undercity — a labyrinth of repurposed infrastructure lit by holographic advertising. Rain is constant; the atmosphere processors leak acidic mist. Corporate banners replace flags.
 
 [nimo] ✔ 1/6 Generating wiki entries... (3.2s)
 [nimo] ▶ 2/6 Extracting context buffers...
 
-Max context: combat abilities: precision strikes, ... (0.8s)
+Max context: [precision strikes, mono-filament wire, adaptive camo, stoic, dry wit]
+Rob context: [rotary cannon, suppressive fire, boisterous, loyal]
+Ghastone context: [silver gasmask, Neon District, synthetic memory monopoly]
+Neo-Kuroba context: [vertical sprawl, Undercity, acidic rain, corporate banners]
+
 [nimo] ✔ 2/6 Extracting context buffers... (0.8s)
 [nimo] ▶ 3/6 Writing Chapter 1...
 
-Chapter 1: The neon rain fell like static ... (12.4s)
+Chapter 1: The neon rain fell like static across Max's visor as he moved through the Undercity's lower levels. His adaptive plating shifted from black to the exact shade of the rusted bulkhead he pressed against — near perfect. Below him, three Ghastone enforcers patrolled the corridor, their cybernetic optics scanning for anything that didn't belong.
+
+Max didn't belong anywhere. That was the point.
+
+The target was a synthetic memory cache hidden in what used to be a water filtration plant. Ghastone's people had been moving product through here for months. Max's employer — an anonymous contact who communicated only through encrypted dead drops — wanted the route exposed.
+
+He counted breaths. One. Two. Three.
+
+The wire whips unspooled from his forearms, silent as falling dust. Two enforcers dropped before they registered the sound — or the lack thereof. The third turned, mouth opening to shout, and Max was already on him, mono-filament blade extended from his index finger, pressing against the gap between helmet and neck armor.
+
+"Where's the cache?" he whispered.
+
+The enforcer's optics flickered — he was sending a distress ping. Max applied pressure. The ping stopped.
+
+He found the route three levels down, behind a false wall of corroded piping. Eight canisters of synthetic memory, enough to buy a spire apartment for a year. He tagged them with a tracking beacon and uploaded the coordinates to his dead drop.
+
+As he moved back toward the surface, his comms crackled. Rob's voice, loud and obnoxious even through the static: "Hey shiny, you alive down there? I was starting to think you got eaten by rats again."
+
+Max didn't answer. He never did over open channels. But something almost like amusement touched the corner of his mouth as he melted into the neon-lit darkness above.
+
 [nimo] ✔ 3/6 Writing Chapter 1... (12.4s)
 [nimo] Done. Artifacts in ~/.ws/myproject/
 ```
 
-The active item shows `▶`, completed items show `✔` with elapsed time.
-User always sees something progressing — no blank waits.
+Active step shows `▶`, completed show `✔` with elapsed time.
+Generated content appears inline beneath each step — full output, not truncated.
+`Ctrl+O` folds large content blocks (optional).
 
 The generated `pipeline.nim` is saved to the workspace so the user can inspect/edit it.
 
