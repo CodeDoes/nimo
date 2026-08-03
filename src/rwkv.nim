@@ -3,14 +3,14 @@
 ##
 ## This is the BACKEND DISPATCHER (RFC 7500): it binds the rwkv.cpp C API at
 ## runtime to whichever backend librwkv.so is selected, in priority order
-##   config file > env vars > rwkv (compile-time default) > backend modules.
+##   config file > runtime flags > rwkv (compile-time default) > backend modules.
 ## Backend providers live in rwkv_cpu / rwkv_cuda / rwkv_vulkan; each only
 ## knows its own lib. The single controlled switch point is selectBackend() +
 ## bindBackend(path) — after that, every call below goes through the bound lib.
 
 import std/[macros, strformat, dynlib]
 import ./config
-import ./rwkv_cpu, ./rwkv_cuda, ./rwkv_vulkan
+import ./rwkv/backend/types, ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend, ./rwkv/backend/vulkan/vulkan_backend
 
 when defined(linux):
   {.passL: "-lstdc++ -fopenmp -Wl,-rpath,/usr/lib/x86_64-linux-gnu -Wl,-rpath,/run/opengl-driver/lib -Wl,-rpath,$ORIGIN/rwkv.cpp -Wl,-rpath,$ORIGIN/rwkv.cpp/ggml/src -Wl,-rpath,rwkv.cpp -Wl,-rpath,rwkv.cpp/ggml/src".}
@@ -99,16 +99,14 @@ proc backendFor*(kind: RwkvBackendKind): RwkvBackend =
   of bkVulkan: vulkanBackend()
 
 proc selectBackend*(cfg: NimoConfig): RwkvBackend =
-  ## Decides which backend to run, in priority order:
-  ##   config file > env vars > rwkv (compile-time default) > backend modules.
-  ## Returns the concrete RwkvBackend; hand it to bindBackend() (or let
-  ## initRwkvModel() -> ensureBackend() do it automatically).
-  # 1. explicit lib path (config/env) wins outright — overrides even the kind
+  ## Decides which backend to run: config file > compile-time default > backend modules.
+  ## Returns the concrete RwkvBackend; hand it to bindBackend().
+  # 1. explicit lib path (config) wins outright — overrides even the kind
   if cfg.libPath.len > 0:
     result = backendFor(cfg.backend)
     result.libPath = cfg.libPath
     return
-  # 2. explicit backend choice from config file or env var
+  # 2. explicit backend choice from config file
   if cfg.backendSet:
     return backendFor(cfg.backend)
   # 3. rwkv-level compile-time default (flag -d:rwkvDefaultBackend=...)

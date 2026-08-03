@@ -20,7 +20,7 @@ const
   DefaultBakeContext* = false        # RFC 8000: bake systemPrompt state once, then resume it
 
 # --- Backend selection (RFC 7500) ---
-# Priority: config file > env vars > rwkv (compile-time default) > backend modules.
+# Priority: config file > runtime flags > rwkv (compile-time default) > backend modules.
 # "backend" chooses the rwkv.cpp runtime lib; "lib" overrides the lib path itself.
 type
   RwkvBackendKind* = enum
@@ -41,7 +41,6 @@ type
     modelPath*: string
     vocabPath*: string
     gpuLayers*: int
-    allowCpuFallback*: bool  # run on CPU if the GPU is unusable
     backend*: RwkvBackendKind      # runtime backend: cpu | cuda | vulkan
     backendSet*: bool              # true when backend came from config/env (beats rwkv default)
     libPath*: string               # explicit librwkv.so path (overrides per-backend default)
@@ -60,7 +59,6 @@ proc defaultConfig*(): NimoConfig =
     modelPath: DefaultModelPath,
     vocabPath: DefaultVocabPath,
     gpuLayers: DefaultGpuLayers,
-    allowCpuFallback: false,  # GPU required by default; opt-in to CPU
     backend: bkCuda,
     backendSet: false,
     libPath: "",
@@ -87,8 +85,6 @@ proc loadConfig*(path: string = DefaultConfigFile): NimoConfig =
         result.vocabPath = j["vocab"].getStr(result.vocabPath)
       if j.hasKey("gpuLayers"):
         result.gpuLayers = j["gpuLayers"].getInt(result.gpuLayers)
-      if j.hasKey("allowCpuFallback"):
-        result.allowCpuFallback = j["allowCpuFallback"].getBool(result.allowCpuFallback)
       if j.hasKey("backend"):
         try:
           result.backend = parseBackendKind(j["backend"].getStr())
@@ -117,51 +113,6 @@ proc loadConfig*(path: string = DefaultConfigFile): NimoConfig =
         result.bakeContext = j["bakeContext"].getBool(result.bakeContext)
     except JsonParsingError, ValueError:
       discard
-
-  let envModel = getEnv("NIMO_MODEL", "")
-  if envModel.len > 0:
-    result.modelPath = envModel
-  let envVocab = getEnv("NIMO_VOCAB", "")
-  if envVocab.len > 0:
-    result.vocabPath = envVocab
-  if getEnv("NIMO_ALLOW_CPU_FALLBACK", "") in ["1", "true", "yes"]:
-    result.allowCpuFallback = true
-  let envBackend = getEnv("NIMO_BACKEND", "")
-  if envBackend.len > 0:
-    try:
-      result.backend = parseBackendKind(envBackend)
-      result.backendSet = true
-    except ValueError:
-      discard
-  let envLib = getEnv("NIMO_LIB", "")
-  if envLib.len > 0:
-    result.libPath = envLib
-  let envLayers = getEnv("NIMO_GPU_LAYERS", "")
-  if envLayers.len > 0:
-    try:
-      result.gpuLayers = parseInt(envLayers)
-    except ValueError:
-      discard
-  let envQuant = getEnv("NIMO_QUANT", "")
-  if envQuant.len > 0:
-    result.quantFormat = envQuant
-  let envMaxTokens = getEnv("NIMO_MAX_TOKENS", "")
-  if envMaxTokens.len > 0:
-    try:
-      result.maxTokens = parseInt(envMaxTokens)
-    except ValueError:
-      discard
-  if getEnv("NIMO_BAKE_CONTEXT", "") in ["1", "true", "yes"]:
-    result.bakeContext = true
-  let envSys = getEnv("NIMO_SYSTEM_PROMPT", "")
-  if envSys.len > 0:
-    result.systemPrompt = envSys
-  let envModelCache = getEnv("NIMO_MODEL_CACHE", "")
-  if envModelCache.len > 0:
-    result.modelCacheDir = envModelCache
-  let envStateCache = getEnv("NIMO_STATE_CACHE", "")
-  if envStateCache.len > 0:
-    result.stateCacheDir = envStateCache
 
 proc resolveModelPath*(path: string): string =
   ## Automatically resolves .st / .pth / .safetensors model path candidates to matching .bin GGML model file.

@@ -6,7 +6,7 @@
 ##   3. Session logging - is the JSONL message tree (user -> tool_call -> tool_result -> text) well-formed?
 
 import std/[strutils, os, times, json]
-import ./session_manager, ./pipeline, ./harness, ./gpu, ./model_cache, ./state_cache
+import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header
 
 type
   Check* = object
@@ -145,50 +145,26 @@ proc evalSessionLogging*(run: var seq[Check]) =
     run.add(Check(name: "session file written", passed: false, detail: "missing " & path))
 
 # ----------------------------------------------------------------------
-# Eval 4: GPU fallback policy (config-gated CPU fallback)
+# Eval 4: GPU policy (explicit only — no fallbacks)
 # ----------------------------------------------------------------------
 proc evalGpuPolicy*(run: var seq[Check]) =
-  # available GPU -> use it regardless
+  # available GPU -> use it
   let avail = GpuReport(status: gpuAvailable, deviceCount: 1, detail: "test")
   run.add(Check(name: "healthy GPU uses configured layers",
-                passed: decideGpu(avail, 99, false).decision == gdUseGpu))
+                passed: decideGpu(avail, 99).decision == gdUseGpu))
   run.add(Check(name: "healthy GPU preserves layer count",
-                passed: decideGpu(avail, 42, true).layers == 42))
+                passed: decideGpu(avail, 42).layers == 42))
 
-  # unusable GPU + fallback allowed -> CPU (layers 0)
+  # unusable GPU -> blocked (no fallback to CPU)
   let bad = GpuReport(status: gpuUnusable, deviceCount: 0, detail: "requires reset")
-  let fallback = decideGpu(bad, 99, allowCpuFallback = true)
-  run.add(Check(name: "unusable GPU + allowCpuFallback -> CPU",
-                passed: fallback.decision == gdCpuFallback and fallback.layers == 0,
-                detail: "decision=" & $fallback.decision & " layers=" & $fallback.layers))
+  run.add(Check(name: "unusable GPU -> blocked",
+                passed: decideGpu(bad, 99).decision == gdBlocked,
+                detail: "decision=" & $decideGpu(bad, 99).decision))
 
-  # unusable GPU + fallback NOT allowed -> blocked
-  let blocked = decideGpu(bad, 99, allowCpuFallback = false)
-  run.add(Check(name: "unusable GPU + no fallback -> blocked (refuse)",
-                passed: blocked.decision == gdBlocked,
-                detail: "decision=" & $blocked.decision))
-
-  # no driver found -> same as unusable for policy
+  # no driver found -> blocked
   let none = GpuReport(status: gpuUnknown, deviceCount: -1, detail: "no driver")
-  run.add(Check(name: "no CUDA driver + allowCpuFallback -> CPU",
-                passed: decideGpu(none, 99, true).decision == gdCpuFallback))
-  run.add(Check(name: "no CUDA driver + no fallback -> blocked",
-                passed: decideGpu(none, 99, false).decision == gdBlocked))
-
-  # safeGpuLayers: VRAM-headroom clamp reads model header (magic 'ggmf' = 0x67676d66)
-  let tmpHead = getTempDir() / "nimo_safe_layers_test.bin"
-  var blob = newString(2 * 1024 * 1024)  # 2 MiB fake model
-  blob[0] = 'f'; blob[1] = 'm'; blob[2] = 'g'; blob[3] = 'g'  # magic 0x67676d66, LE bytes
-  blob[16] = char(32)  # n_layer = 32 (little-endian byte 0)
-  writeFile(tmpHead, blob)
-
-  let ample = safeGpuLayers(tmpHead, requested = 32, freeVram = 2048)  # ample VRAM
-  run.add(Check(name: "ample VRAM keeps requested GPU layers",
-                passed: ample == 32, detail: "got " & $ample))
-  let tight = safeGpuLayers(tmpHead, requested = 32, freeVram = 1)      # 2MiB model, 1MiB vram
-  run.add(Check(name: "tight VRAM clamps GPU layers down",
-                passed: tight < 32, detail: "got " & $tight))
-  removeFile(tmpHead)
+  run.add(Check(name: "no CUDA driver -> blocked",
+                passed: decideGpu(none, 99).decision == gdBlocked))
 
 # ----------------------------------------------------------------------
 # Eval 5: raw -> quantize -> cache (model_cache)

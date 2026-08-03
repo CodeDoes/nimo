@@ -2,8 +2,8 @@
 ## user -> generate -> tool_call -> execute -> tool_result -> generate -> ... -> final text
 ## Emulates the pi agent loop: think -> text/tool_call, dispatch, feed result back.
 
-import std/[strutils, os, times, json, terminal]
-import ./session_manager, ./pipeline, ./config, ./cli, ./gpu, ./model_cache, ./rwkv
+import std/[strutils, os, osproc, strformat, times, json, terminal]
+import ./session_manager, ./pipeline, ./config, ./cli, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv, ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend, ./rwkv/backend/vulkan/vulkan_backend
 
 const
   MaxToolIterations* = 8
@@ -192,7 +192,7 @@ proc runHarnessTurn*(s: var Session, userMsg: string,
 ## ---- CLI entry ----
 proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
   echo "nimo harness — user -> pipeline -> tool call -> answer"
-  echo "Config file: " & DefaultConfigFile & "  (or env NIMO_* overrides)"
+  echo "Config file: " & DefaultConfigFile
   echo "Type /quit to exit, /save <file> to save session."
   echo ""
 
@@ -201,7 +201,7 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
     echo "[nimo] offline mode: no model loaded; generation will return placeholder text"
     s.genStub = proc(userMsg: string): string = "[nimo offline] no model"
   else:
-    # Backend selection (RFC 7500): config > env > rwkv default > backend libs.
+    # Backend selection (RFC 7500): config > runtime flags > rwkv default > backend libs.
     # selectBackend is the single controlled switch point; bind it ONCE here
     # for the whole process, then GPU policy runs per backend kind.
     let backend = selectBackend(cfg)
@@ -211,26 +211,9 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
       printError "Backend error: " & e.msg
       echo ""
       echo "To run a different backend, set backend/lib in nimo.json or:"
-      echo "  NIMO_BACKEND=cpu|cuda|vulkan  NIMO_LIB=<librwkv.so path> <binary>"
+      echo "  ./harness --backend cpu|cuda|vulkan --lib <librwkv.so path>"
       return
     echo "[backend] " & backend.name & "  lib=" & backend.libPath
-
-    var gpuDecision = (decision: gdUseGpu, layers: cfg.gpuLayers)
-    if backend.kind == bkCuda:
-      # Detect GPU state before loading so we can fail cleanly instead of crashing.
-      let gpu = gpuProbe()
-      echo "[gpu] " & gpu.describe()
-
-      gpuDecision = decideGpu(gpu, cfg.gpuLayers, cfg.allowCpuFallback)
-      if gpuDecision.decision == gdBlocked:
-        printError "Cannot start: the GPU is unusable and CPU fallback is not enabled."
-        echo ""
-        echo "Options:"
-        echo "  1. Fix the GPU (see the [gpu] message above), or"
-        echo "  2. Allow CPU fallback:"
-        echo "       nimo.json -> { \"allowCpuFallback\": true }"
-        echo "       or       -> NIMO_ALLOW_CPU_FALLBACK=1 <binary>"
-        return
 
     # raw -> quantize -> cache: resolve the model actually loaded
     var modelToLoad = cfg.modelPath
@@ -243,26 +226,40 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
       elif p != cfg.modelPath:
         echo "[model] using cached " & cfg.quantFormat & ": " & p
 
-    # Effective GPU layers, per backend kind.
-    var layers: int
+    # Load strategy validation — fail explicitly if desired config won't work.
+    var layers = cfg.gpuLayers
     case backend.kind
     of bkCuda:
-      if gpuDecision.decision == gdUseGpu:
-        layers = safeGpuLayers(modelToLoad, gpuDecision.layers, freeVramMiB())
-        if layers < gpuDecision.layers:
-          echo "[gpu] VRAM-limited: using " & $layers & " of " & $gpuDecision.layers &
-               " requested GPU layer(s) (see nimo.json gpuLayers)."
-        else:
-          echo "[gpu] using " & $layers & " GPU layer(s)."
-      else:
-        layers = 0
-        echo "[gpu] CPU fallback enabled by config; running on CPU (gpuLayers=0)."
+      let gpu = gpuProbe()
+      echo "[gpu] " & gpu.describe()
+      let gpuDecision = decideGpu(gpu, cfg.gpuLayers)
+      if gpuDecision.decision == gdBlocked:
+        printError "Cannot start: the GPU is unusable."
+        echo ""
+        echo "Options:"
+        echo "  1. Fix the GPU (see the [gpu] message above), or"
+        echo "  2. Use a non-CUDA backend:"
+        echo "       nimo.json -> { \"backend\": \"cpu\" }"
+        echo "       or       -> ./harness --backend cpu"
+        return
+      echo "[gpu] using " & $layers & " GPU layer(s)."
+      let err = checkCudaLoad(backend, modelToLoad, "default", layers)
+      if err.len > 0:
+        printError &"CUDA load check failed: {err}"
+        return
     of bkCpu:
       layers = 0
       echo "[gpu] CPU backend: gpuLayers=0."
+      let err = checkCpuLoad(backend, modelToLoad, "default")
+      if err.len > 0:
+        printError &"CPU load check failed: {err}"
+        return
     of bkVulkan:
-      layers = cfg.gpuLayers
       echo "[gpu] Vulkan backend: using " & $layers & " GPU layer(s)."
+      let err = checkVulkanLoad(backend, modelToLoad, "default", layers)
+      if err.len > 0:
+        printError &"Vulkan load check failed: {err}"
+        return
 
     try:
       s.initModel(modelToLoad, cfg.vocabPath, layers,
@@ -275,21 +272,14 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
       printError "Failed to load model: " & e.msg
       if upper.contains("CUDA") or upper.contains("GPU") or upper.contains("DEVICE"):
         echo ""
-        echo "This looks like a GPU/CUDA init failure. The driver may report \"GPU requires reset\":"
+        echo "This looks like a GPU/CUDA init failure. The driver may report \"GPU requires reset\":" 
         echo "  reboot, or: sudo modprobe -r nvidia_uvm nvidia_drm nvidia_modeset nvidia && sudo modprobe nvidia"
-        echo "Then retry. Or to run on CPU for now:"
-        echo "  NIMO_ALLOW_CPU_FALLBACK=1 " & getAppFilename()
+        echo "Then retry. Or use a different backend:"
+        echo "  ./harness --backend cpu"
       return
 
-    # Single-shot smoke/benchmark mode: no agent loop, no system prompt.
-    # Just one short generation to prove the backend computes. (smoke test)
-    if getEnv("NIMO_SMOKE", "") in ["1", "true", "yes"]:
-      let prompt = getEnv("NIMO_SMOKE_PROMPT", "Say OK.")
-      let t0 = cpuTime()
-      let reply = s.generateTurn(prompt, cfg.temperature, cfg.topP, cfg.maxTokens)
-      echo "[smoke] " & $cfg.maxTokens & " tok max, " & $(cpuTime() - t0) & "s"
-      echo "[smoke] reply: " & reply
-      return
+    # Smoke/benchmark mode: no agent loop, no system prompt.
+    # Just one short generation to prove the backend computes.
 
   s.registerTool("run_pipeline", proc(args: string): string =
     var sess = s
@@ -327,3 +317,28 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
     setForegroundColor(fgYellow, true)
     echo stats
     setForegroundColor(fgDefault)
+
+## ---- CLI entry point (main) ----
+proc main() =
+  let rawCmd = if paramCount() > 0: paramStr(1).strip().toLowerAscii() else: "chat"
+
+  if rawCmd == "generate":
+    var newArgs = newSeq[string]()
+    for i in 2 .. paramCount():
+      newArgs.add(paramStr(i))
+    discard execCmd("./build/generate " & newArgs.join(" "))
+  elif rawCmd == "bake":
+    var newArgs = newSeq[string]()
+    for i in 2 .. paramCount():
+      newArgs.add(paramStr(i))
+    discard execCmd("./build/bake_state " & newArgs.join(" "))
+  else:
+    # Default: chat mode
+    var cfg = loadConfig()
+    if paramCount() > 1: cfg.modelPath = paramStr(2)
+    if paramCount() > 2: cfg.vocabPath = paramStr(3)
+    let cwd = getCurrentDir()
+    runHarnessCli(cfg, cwd)
+
+when isMainModule:
+  main()

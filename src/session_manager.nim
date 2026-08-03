@@ -8,7 +8,7 @@
 import std/[json, times, strutils, os, random, tables]
 import ./config
 when not defined(harnessOffline):
-  import ./rwkv, ./tokenizer, ./sampling, ./macros, ./state_cache
+  import ./rwkv, ./tokenizer, ./sampling, ./macros, ./rwkv/state/cache
 
 type
   ContentKind* = enum

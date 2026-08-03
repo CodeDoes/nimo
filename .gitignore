@@ -17,3 +17,6 @@ src/test_rwkv_full
 .nimo/
 output.txt
 *.jsonl
+nimble.develop
+nimble.paths
+nimbledeps
