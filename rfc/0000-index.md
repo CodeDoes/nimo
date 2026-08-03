@@ -45,6 +45,7 @@ Recommendations for future features. Not implemented unless accepted.
 | # | RFC | Category | Purpose |
 |---|-----|----------|---------|
 | 0000 | [index.md](0000-index.md) | Meta | This file |
+| 0001 | [vision.md](0001-vision.md) | Meta | Product vision and examples |
 | 1000 | [session.md](1000-session.md) | Core | Conversation model: messages, branches, parts |
 | 1100 | [message-format.md](1100-message-format.md) | Core | Message format specs: tool calling, think blocks |
 | 2000 | [cli.md](2000-cli.md) | CLI | Commands, workspace flow, intent extraction |
