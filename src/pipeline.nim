@@ -65,19 +65,12 @@ proc failStep*(p: var Pipeline, stepId: string, error: string) =
 proc finishPipeline*(p: var Pipeline, status: string = "completed") =
   p.status = status
 
-proc generateStep*(pipeline: var Pipeline, session: var Session, name: string, prompt: string, target: string = "", temp: float32 = DefaultTemp, topP: float32 = DefaultTopP): string =
+proc generateStep*(pipeline: var Pipeline, session: var session_manager.Session, name: string, prompt: string, target: string = "", temp: float32 = DefaultTemp, topP: float32 = DefaultTopP): string =
   ## Generate content for a pipeline step
   let stepId = pipeline.addStep(name, target)
   pipeline.startStep(stepId)
   
   try:
-    # Build context from previous steps
-    var context = ""
-    for step in pipeline.steps:
-      if step.status == "completed" and step.target.len > 0 and step.target == target:
-        context = step.output
-    
-    # Generate content
     let reply = session.generateTurn(name & ": " & prompt, temp, topP)
     
     pipeline.completeStep(stepId, reply)
@@ -94,7 +87,7 @@ proc generateStep*(pipeline: var Pipeline, session: var Session, name: string, p
     pipeline.failStep(stepId, "Generation failed")
     return stepId
 
-proc summarizeStep*(pipeline: var Pipeline, session: var Session, name: string, input: string, length: string = "brief"): string =
+proc summarizeStep*(pipeline: var Pipeline, session: var session_manager.Session, name: string, input: string, length: string = "brief"): string =
   ## Summarize content for a pipeline step
   let stepId = pipeline.addStep(name)
   pipeline.startStep(stepId)
@@ -108,7 +101,7 @@ proc summarizeStep*(pipeline: var Pipeline, session: var Session, name: string, 
     pipeline.failStep(stepId, "Summarization failed")
     return stepId
 
-proc extractStep*(pipeline: var Pipeline, session: var Session, name: string, input: string, filter: string): string =
+proc extractStep*(pipeline: var Pipeline, session: var session_manager.Session, name: string, input: string, filter: string): string =
   ## Extract specific content from input
   let stepId = pipeline.addStep(name)
   pipeline.startStep(stepId)
@@ -122,7 +115,7 @@ proc extractStep*(pipeline: var Pipeline, session: var Session, name: string, in
     pipeline.failStep(stepId, "Extraction failed")
     return stepId
 
-proc pipelineTool*(session: var Session, arguments: string): string =
+proc pipelineTool*(session: var session_manager.Session, arguments: string): string =
   ## Tool handler for run_pipeline
   var args: JsonNode
   try:
@@ -136,7 +129,7 @@ proc pipelineTool*(session: var Session, arguments: string): string =
   var pipeline = newPipeline()
   
   # Add steps based on intent (simplified for MVP)
-  let step1 = pipeline.generateStep(session, "Generate", intent, target = "output.txt")
+  discard pipeline.generateStep(session, "Generate", intent, target = "output.txt")
   
   # Complete pipeline
   pipeline.finishPipeline()

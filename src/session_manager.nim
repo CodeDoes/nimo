@@ -1,7 +1,14 @@
 ## Session Manager for NIMO Harness
+## Manages messages, tools, and JSONL logging.
+##
+## Build with `-d:harnessOffline` to strip the RWKV model backend, letting the
+## harness (and evals) run without rwkv.cpp / a GPU model. In offline mode the
+## session uses a scripted generator (genStub) instead of real inference.
 
 import std/[json, times, strutils, os, random, tables]
-import ./rwkv, ./config, ./tokenizer, ./sampling, ./macros, ./logger
+import ./config
+when not defined(harnessOffline):
+  import ./rwkv, ./tokenizer, ./sampling, ./macros
 
 type
   ContentKind* = enum
@@ -27,6 +34,7 @@ type
     stopReason*: string
 
   ToolHandler* = proc(args: string): string
+  GenStub* = proc(userMsg: string): string
 
   Session* = ref object
     id*: string
@@ -35,16 +43,19 @@ type
     messages*: seq[Message]
     branches*: seq[string]
     activeBranch*: int
-    model*: RwkvModel
-    tok*: WorldTokenizer
-    state*: seq[float32]
-    logits*: seq[float32]
-    rng*: Rand
     tools*: Table[string, ToolHandler]
+    genStub*: GenStub  # scripted generator (evals/tests); nil = use real model
+    when not defined(harnessOffline):
+      model*: RwkvModel
+      tok*: WorldTokenizer
+      state*: seq[float32]
+      logits*: seq[float32]
+      rng*: Rand
 
 proc nowStr*(): string =
   let t = now()
-  return t.format("yyyy") & "-" & t.format("MM") & "-" & t.format("dd") & "T" & t.format("HH") & ":" & t.format("mm") & ":" & t.format("ss")
+  return t.format("yyyy") & "-" & t.format("MM") & "-" & t.format("dd") & "T" &
+         t.format("HH") & ":" & t.format("mm") & ":" & t.format("ss")
 
 proc newSession*(cwd: string = "."): Session =
   result = Session.new()
@@ -54,54 +65,74 @@ proc newSession*(cwd: string = "."): Session =
   result.activeBranch = 0
   result.tools = initTable[string, ToolHandler]()
 
-proc initModel*(s: var Session, modelPath, vocabPath: string) =
-  s.tok = loadWorldTokenizer(vocabPath)
-  s.model = initRwkvModel(modelPath, DefaultThreads, DefaultGpuLayers)
-  s.state = s.model.newState()
-  s.logits = s.model.newLogits()
-  s.rng = initRand(cpuTime().int64)
+when not defined(harnessOffline):
+  proc initModel*(s: var Session, modelPath, vocabPath: string) =
+    s.tok = loadWorldTokenizer(vocabPath)
+    s.model = initRwkvModel(modelPath, DefaultThreads, DefaultGpuLayers)
+    s.state = s.model.newState()
+    s.logits = s.model.newLogits()
+    s.rng = initRand(cpuTime().int64)
+
+proc generateTurn*(s: var Session, userMsg: string, temp: float32 = DefaultTemp, topP: float32 = DefaultTopP, maxTokens: int = 200): string =
+  ## Generates a reply. In offline mode (or with a genStub set) returns the
+  ## scripted output; otherwise runs the real RWKV model.
+  if s.genStub != nil:
+    return s.genStub(userMsg)
+  when not defined(harnessOffline):
+    if s.model == nil:
+      return "[nimo] Model not loaded"
+    let turnPrompt = "User: " & userMsg & "\n\nBot:"
+    let turnTokens = s.tok.encode(turnPrompt)
+    checkOk(s.model.evalSequenceInChunks(turnTokens, DefaultChunkSize, s.state, s.logits),
+            "Failed to evaluate prompt")
+
+    var reply = ""
+    var validState = s.state
+    for step in 0 ..< maxTokens:
+      let token = sampleLogits(s.logits, temperature = temp, topP = topP, rng = s.rng)
+      if token == 0:
+        s.state = validState
+        break
+      let tokenStr = s.tok.decodeToken(token.uint32)
+      reply.add(tokenStr)
+      if endsWithStopSequence(reply):
+        s.state = validState
+        break
+      if not s.model.eval(token.uint32, s.state, s.logits):
+        break
+      validState = s.state
+
+    # End-of-turn cleanup
+    let endTokens = s.tok.encode("\n\n")
+    if endTokens.len > 0:
+      discard s.model.evalSequence(endTokens, s.state, s.logits)
+
+    return reply.strip()
+  else:
+    return "[nimo] No model available (offline)"
 
 proc addMessage*(s: var Session, role: MessageRole, content: seq[ContentPart], parentId: string = ""): string =
   let msgId = "msg_" & $s.messages.len
   s.messages.add(Message(
-    id: msgId,
-    parentId: parentId,
-    timestamp: nowStr(),
-    role: role,
-    content: content,
-    stopReason: "stop"
+    id: msgId, parentId: parentId, timestamp: nowStr(), role: role,
+    content: content, stopReason: "stop"
   ))
   return msgId
 
 proc addToolCall*(s: var Session, toolName: string, arguments: string, parentId: string): string =
   let msgId = "msg_" & $s.messages.len
-  let content = @[ContentPart(
-    kind: ckToolCall,
-    toolName: toolName,
-    arguments: arguments
-  )]
   s.messages.add(Message(
-    id: msgId,
-    parentId: parentId,
-    timestamp: nowStr(),
-    role: mrAssistant,
-    content: content,
+    id: msgId, parentId: parentId, timestamp: nowStr(), role: mrAssistant,
+    content: @[ContentPart(kind: ckToolCall, toolName: toolName, arguments: arguments)],
     stopReason: "toolUse"
   ))
   return msgId
 
-proc addToolResult*(s: var Session, toolCallId: string, toolResult: string, isError: bool = false, parentId: string = ): string =
+proc addToolResult*(s: var Session, toolCallId: string, toolResult: string, isError: bool = false, parentId: string = ""): string =
   let msgId = "msg_" & $s.messages.len
-  let content = @[ContentPart(
-    kind: ckToolResult,
-    text: toolResult
-  )]
   s.messages.add(Message(
-    id: msgId,
-    parentId: parentId,
-    timestamp: nowStr(),
-    role: mrToolResult,
-    content: content,
+    id: msgId, parentId: parentId, timestamp: nowStr(), role: mrToolResult,
+    content: @[ContentPart(kind: ckToolResult, text: toolResult)],
     stopReason: "stop"
   ))
   return msgId
@@ -113,12 +144,9 @@ proc addText*(s: var Session, text: string, parentId: string, isThinking: bool =
     content.add(ContentPart(kind: ckThinking, text: text))
   content.add(ContentPart(kind: ckText, text: text))
   s.messages.add(Message(
-    id: msgId,
-    parentId: parentId,
-    timestamp: nowStr(),
+    id: msgId, parentId: parentId, timestamp: nowStr(),
     role: if parentId.len == 0: mrUser else: mrAssistant,
-    content: content,
-    stopReason: "stop"
+    content: content, stopReason: "stop"
   ))
   return msgId
 
@@ -152,15 +180,15 @@ proc saveSession*(s: Session, path: string) =
     createDir(dir)
   let f = open(path, fmWrite)
   defer: f.close()
-  
+
   var header = newJObject()
   header["type"] = % "session"
   header["version"] = %3
   header["id"] = %s.id
   header["timestamp"] = %s.timestamp
   header["cwd"] = %s.cwd
-  f.writeLine(header.pretty)
-  
+  f.writeLine($header)
+
   for msg in s.messages:
     var j = newJObject()
     j["type"] = % "message"
@@ -169,7 +197,7 @@ proc saveSession*(s: Session, path: string) =
       j["parentId"] = %msg.parentId
     j["timestamp"] = %msg.timestamp
     j["role"] = %roleToStr(msg.role)
-    
+
     var content = newJArray()
     for part in msg.content:
       var p = newJObject()
@@ -184,8 +212,8 @@ proc saveSession*(s: Session, path: string) =
         p["arguments"] = %part.arguments
       content.add(p)
     j["content"] = content
-    
+
     if msg.stopReason.len > 0:
       j["stopReason"] = %msg.stopReason
-    
-    f.writeLine(j.pretty)
+
+    f.writeLine($j)

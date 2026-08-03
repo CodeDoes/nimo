@@ -48,6 +48,8 @@ Recommendations for future features. Not implemented unless accepted.
 | 0001 | [vision.md](0001-vision.md) | Meta | Product vision and examples |
 | 1000 | [session.md](1000-session.md) | Core | Conversation model: messages, branches, parts |
 | 1100 | [message-format.md](1100-message-format.md) | Core | Message format specs: tool calling, think blocks |
+| 1200 | [chat.md](1200-chat.md) | Workload | Chat workflow (low temp, tool integration) |
+| 1300 | [story.md](1300-story.md) | Workload | Story workflow (high temp, memory retrieval) |
 | 2000 | [cli.md](2000-cli.md) | CLI | Commands, workspace flow, intent extraction |
 | 3000 | [pipeline.md](3000-pipeline.md) | Pipeline | Core DSL, execution model |
 | 3100 | [chat.md](3100-chat.md) | Pipeline | Chat pipeline (tool calls, think blocks) |

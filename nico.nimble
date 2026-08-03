@@ -5,7 +5,7 @@ description   = "Nim wrapper for rwkv.cpp (RWKV language model inference in C/C+
 license       = "MIT"
 srcDir        = "src"
 binDir        = "build"
-bin           = @["main", "generate", "chat", "test_rwkv_full", "bake_state", "nimwave_app"]
+bin           = @["main", "generate", "chat", "test_rwkv_full", "bake_state", "nimwave_app", "harness_main"]
 
 # Dependencies
 requires "nim >= 2.0.0"
@@ -36,6 +36,11 @@ task build_all, "Build all Nim executables into build/":
   exec "nim c -o:build/bake_state src/bake_state.nim"
   exec "nim c -o:build/test_rwkv_full src/test_rwkv_full.nim"
   exec "nim c -o:build/nimwave_app src/nimwave_app.nim"
+
+task eval, "Run harness evals (offline, no model needed)":
+  mkdir "build"
+  exec "nim c -d:harnessOffline -o:build/evals src/evals.nim"
+  exec "build/evals"
 
 task bake_state, "Bake model state from prompt":
   if not fileExists("rwkv.cpp/librwkv.so"):
