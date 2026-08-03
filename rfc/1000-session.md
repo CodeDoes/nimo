@@ -15,5 +15,5 @@ A message is a part type and part content.
 
 ## See Also
 
-- [1100-chat.md](1100-chat.md) — message format examples
+- [1100-message-format.md](1100-message-format.md) — message format examples
 - [6000-src.md](6000-src.md) — where this lives in `app/session.nim`

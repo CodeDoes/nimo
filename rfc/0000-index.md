@@ -23,7 +23,7 @@ Recommendations for future features. Not implemented unless accepted.
 |---|-----|----------|---------|
 | 0000 | [index.md](0000-index.md) | Meta | This file |
 | 1000 | [session.md](1000-session.md) | Session | Conversation model: messages, branches, parts |
-| 1100 | [chat.md](1100-chat.md) | Chat | Message format specs: tool calling, think blocks |
+| 1100 | [message-format.md](1100-message-format.md) | Message Format | Message format specs: tool calling, think blocks |
 | 2000 | [cli.md](2000-cli.md) | CLI | Commands, workspace flow, intent extraction |
 | 3000 | [pipeline.md](3000-pipeline.md) | Pipeline | NimScript DSL, DAG execution |
 | 4000 | [config.md](4000-config.md) | Config | Personas, model params, BNF settings |
