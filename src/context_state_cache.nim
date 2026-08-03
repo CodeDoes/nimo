@@ -2,7 +2,7 @@
 ## Combines context caching with state baking for optimal performance.
 
 import std/[strutils, os, times, json]
-import ./config, ./state_cache, ./model_cache, ./session_manager, ./rwkv, ./tokenizer
+import ./config, ./state_cache, ./model_cache, ./session_manager, ./tokenizer, ./rwkv
 
 type
   ContextStateCache* = ref object
@@ -25,7 +25,6 @@ proc newContextStateCache*(stateCacheDir: string = DefaultStateCacheDir,
 
 proc getOrBake*(c: var ContextStateCache, model: RwkvModel, tok: WorldTokenizer,
                 modelPath, vocabPath, context: string): seq[float32] =
-  ## Gets cached state or bakes new state.
   let cached = c.stateCache.loadCachedState(modelPath, vocabPath, context, model.stateLen)
   if cached.len > 0:
     inc c.hitCount
@@ -39,20 +38,15 @@ proc getOrBake*(c: var ContextStateCache, model: RwkvModel, tok: WorldTokenizer,
 proc getStats*(c: ContextStateCache): string =
   let total = c.hitCount + c.missCount
   let hitRate = if total > 0: float(c.hitCount) / float(total) * 100.0 else: 0.0
-  return &"Bakes: {c.bakeCount}, Hits: {c.hitCount}, Misses: {c.missCount}, Hit Rate: {hitRate:.1f}%"
+  return "Bakes: " & $c.bakeCount & ", Hits: " & $c.hitCount & ", Misses: " & $c.missCount & ", Hit Rate: " & $hitRate & "%"
 
 proc saveStats*(c: ContextStateCache, path: string) =
   let dir = parentDir(path)
   if dir.len > 0 and dir != ".":
     createDir(dir)
   
-  var j = newJObject()
-  j["bakeCount"] = %c.bakeCount
-  j["hitCount"] = %c.hitCount
-  j["missCount"] = %c.missCount
-  j["lastBakeTime"] = %c.lastBakeTime
-  
-  writeFile(path, $j)
+  let configContent = "{\"bakeCount\": " & $c.bakeCount & ", \"hitCount\": " & $c.hitCount & ", \"missCount\": " & $c.missCount & ", \"lastBakeTime\": " & $c.lastBakeTime & "}"
+  writeFile(path, configContent)
 
 proc loadStats*(c: var ContextStateCache, path: string): bool =
   if not fileExists(path):
@@ -69,5 +63,4 @@ proc loadStats*(c: var ContextStateCache, path: string): bool =
     return false
 
 proc ensureModelCached*(c: var ContextStateCache, rawPath: string, format: string): tuple[path: string, cached: bool] =
-  ## Ensures model is in cache, returns path and whether it was cached.
   return c.modelCache.ensureQuantized(rawPath, format)
