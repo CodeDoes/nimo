@@ -10,7 +10,7 @@ const
   DefaultTemp* = 0.7f
   DefaultTopP* = 0.7f
   DefaultChunkSize* = 16
-  DefaultThreads* = 4
+  DefaultThreads* = 8
   DefaultGpuLayers* = 99  # Offload all layers to GPU VRAM by default
   DefaultConfigFile* = "nimo.json"
   DefaultMaxTokens* = 200
@@ -104,6 +104,12 @@ proc loadConfig*(path: string = DefaultConfigFile): NimoConfig =
   let envQuant = getEnv("NIMO_QUANT", "")
   if envQuant.len > 0:
     result.quantFormat = envQuant
+  let envMaxTokens = getEnv("NIMO_MAX_TOKENS", "")
+  if envMaxTokens.len > 0:
+    try:
+      result.maxTokens = parseInt(envMaxTokens)
+    except ValueError:
+      discard
   if getEnv("NIMO_BAKE_CONTEXT", "") in ["1", "true", "yes"]:
     result.bakeContext = true
   let envSys = getEnv("NIMO_SYSTEM_PROMPT", "")

@@ -34,6 +34,17 @@ proc stubSession*(script: seq[string], registerPipeline: bool = true): Session =
 # Eval 1: Tool calling
 # ----------------------------------------------------------------------
 proc evalToolCalling*(run: var seq[Check]) =
+  # a second [tool] later in the reply (offset > 0) must not crash the parser
+  let multi = "[tool] run_pipeline {\"intent\": \"first\"}\nAssistant: OK\nBot: " &
+              "[tool] run_pipeline {\"intent\": \"write a short poem about\""
+  try:
+    let mCalls = parseToolCalls(multi)
+    run.add(Check(name: "multi [tool] lines parse without crash",
+                  passed: mCalls.len >= 1,
+                  detail: "got " & $mCalls.len & " calls"))
+  except CatchableError as e:
+    run.add(Check(name: "multi [tool] lines parse without crash",
+                  passed: false, detail: e.msg))
   var s = stubSession(@[
     "[tool] run_pipeline {\"intent\": \"write a poem about roses\"}",
     "pipeline: poem draft generated",

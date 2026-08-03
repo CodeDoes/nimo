@@ -20,12 +20,36 @@ Sessions follow the pi-agent JSONL message-tree format (parentId chains).
 ```bash
 devenv shell                 # enter dev env (nim, cmake, CUDA toolkit, python+torch)
 devenv shell build-cuda      # rebuild rwkv.cpp with CUDA (MULTI-ARCH: 86;80;75;89 — slow!)
-devenv shell build-vulkan    # rebuild rwkv.cpp with Vulkan/CLBlast
-devenv shell eval            # nimble task: run offline evals (no model needed)
+devenv shell build-vulkan    # rebuild rwkv.cpp with Vulkan/CLBlast (needs AMD OpenCL/CVu runtime)
+devenv shell eval            # nimble task / run ./build/evals (offline, no model needed)
 devenv shell build-all       # nimble build
 ```
 
 Builds go to `build/`. Example commands in `src/` are compiled with:
+
+```bash
+# online (real model):
+nim c --path:src -o:build/harness src/harness_main.nim
+# offline (stub generator, no rwkv.cpp):
+nim c --path:src -d:harnessOffline -o:build/evals src/evals.nim
+```
+
+## Smoke test (CPU / NVIDIA / AMD)
+
+Fast single-shot backend check (no agent loop): loads the model, generates a
+short reply, reports PASS/FAIL + wall time.
+
+```bash
+devenv shell scripts/smoke_test.sh
+# cpu     -> uses gpuLayers=0 (CPU)
+# nvidia  -> CUDA backend (this machine: PASS, ~4s)
+# amd     -> needs rwkv.cpp/build-amd/librwkv.so built for Vulkan
+#            (scripts/build/amd-vulkan.sh; requires glslang + a CMake patch —
+#            not yet done on this box; NV/CPU PASS, amd reports SKIP)
+```
+
+The harness's `NIMO_SMOKE=1 NIMO_SMOKE_PROMPT="..." NIMO_MAX_TOKENS=n` single-shot
+mode also benchmarks a backend directly: `env SMOKE_TOKENS=16 scripts/smoke_test.sh`.
 
 ```bash
 # online (real model):

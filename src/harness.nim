@@ -37,13 +37,16 @@ proc parseToolCalls*(text: string): seq[ToolCall] =
     if start < 0: break
     let lineEnd = text.find("\n", start)
     let line = if lineEnd < 0: text[start .. ^1] else: text[start ..< lineEnd]
-    let nameStart = start + "[tool]".len
-    let rest = line[nameStart .. ^1].strip()
-    let spaceIdx = rest.find({' ', '\t'})
-    if spaceIdx > 0:
-      let name = rest[0 ..< spaceIdx].strip()
-      let args = rest[spaceIdx .. ^1].strip()
-      result.add(ToolCall(name: name, args: args, raw: line))
+    # line is relative to `start`, so the marker sits at index 0 of the line.
+    # (Using an absolute offset here crashed on second/truncated [tool] lines.)
+    let nameStart = "[tool]".len
+    if line.len > nameStart:
+      let rest = line[nameStart .. ^1].strip()
+      let spaceIdx = rest.find({' ', '\t'})
+      if spaceIdx > 0:
+        let name = rest[0 ..< spaceIdx].strip()
+        let args = rest[spaceIdx .. ^1].strip()
+        result.add(ToolCall(name: name, args: args, raw: line))
     pos = if lineEnd < 0: text.len else: lineEnd + 1
 
   # Form 2: <tool_call>...</tool_call> with JSON
@@ -144,7 +147,9 @@ proc buildUserPrompt*(userMsg: string): string =
   result = HarnessSystemPrompt & "\n\nUser: " & userMsg
 
 ## ---- Core loop ----
-proc runHarnessTurn*(s: var Session, userMsg: string, maxIterations: int = MaxToolIterations): HarnessTurn =
+proc runHarnessTurn*(s: var Session, userMsg: string,
+                     maxIterations: int = MaxToolIterations,
+                     maxTokens: int = 200): HarnessTurn =
   ## Runs one full user turn through the harness loop.
   result.userInput = userMsg
 
@@ -155,7 +160,7 @@ proc runHarnessTurn*(s: var Session, userMsg: string, maxIterations: int = MaxTo
 
   for i in 1 .. maxIterations:
     result.iterations = i
-    let reply = s.generateTurn(context, DefaultTemp, DefaultTopP)
+    let reply = s.generateTurn(context, DefaultTemp, DefaultTopP, maxTokens)
     result.generated = reply
 
     let calls = parseToolCalls(reply)
@@ -251,6 +256,16 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
         echo "  NIMO_ALLOW_CPU_FALLBACK=1 " & getAppFilename()
       return
 
+    # Single-shot smoke/benchmark mode: no agent loop, no system prompt.
+    # Just one short generation to prove the backend computes. (smoke test)
+    if getEnv("NIMO_SMOKE", "") in ["1", "true", "yes"]:
+      let prompt = getEnv("NIMO_SMOKE_PROMPT", "Say OK.")
+      let t0 = cpuTime()
+      let reply = s.generateTurn(prompt, cfg.temperature, cfg.topP, cfg.maxTokens)
+      echo "[smoke] " & $cfg.maxTokens & " tok max, " & $(cpuTime() - t0) & "s"
+      echo "[smoke] reply: " & reply
+      return
+
   s.registerTool("run_pipeline", proc(args: string): string =
     var sess = s
     return pipelineTool(sess, args))
@@ -271,7 +286,7 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
       continue
 
     let t0 = cpuTime()
-    let turn = runHarnessTurn(s, line)
+    let turn = runHarnessTurn(s, line, maxTokens = cfg.maxTokens)
     let elapsed = cpuTime() - t0
 
     echo ""
