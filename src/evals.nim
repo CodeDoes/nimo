@@ -6,7 +6,7 @@
 ##   3. Session logging - is the JSONL message tree (user -> tool_call -> tool_result -> text) well-formed?
 
 import std/[strutils, os, times, json]
-import ./session_manager, ./pipeline, ./harness
+import ./session_manager, ./pipeline, ./harness, ./gpu
 
 type
   Check* = object
@@ -134,6 +134,37 @@ proc evalSessionLogging*(run: var seq[Check]) =
     run.add(Check(name: "session file written", passed: false, detail: "missing " & path))
 
 # ----------------------------------------------------------------------
+# Eval 4: GPU fallback policy (config-gated CPU fallback)
+# ----------------------------------------------------------------------
+proc evalGpuPolicy*(run: var seq[Check]) =
+  # available GPU -> use it regardless
+  let avail = GpuReport(status: gpuAvailable, deviceCount: 1, detail: "test")
+  run.add(Check(name: "healthy GPU uses configured layers",
+                passed: decideGpu(avail, 99, false).decision == gdUseGpu))
+  run.add(Check(name: "healthy GPU preserves layer count",
+                passed: decideGpu(avail, 42, true).layers == 42))
+
+  # unusable GPU + fallback allowed -> CPU (layers 0)
+  let bad = GpuReport(status: gpuUnusable, deviceCount: 0, detail: "requires reset")
+  let fallback = decideGpu(bad, 99, allowCpuFallback = true)
+  run.add(Check(name: "unusable GPU + allowCpuFallback -> CPU",
+                passed: fallback.decision == gdCpuFallback and fallback.layers == 0,
+                detail: "decision=" & $fallback.decision & " layers=" & $fallback.layers))
+
+  # unusable GPU + fallback NOT allowed -> blocked
+  let blocked = decideGpu(bad, 99, allowCpuFallback = false)
+  run.add(Check(name: "unusable GPU + no fallback -> blocked (refuse)",
+                passed: blocked.decision == gdBlocked,
+                detail: "decision=" & $blocked.decision))
+
+  # no driver found -> same as unusable for policy
+  let none = GpuReport(status: gpuUnknown, deviceCount: -1, detail: "no driver")
+  run.add(Check(name: "no CUDA driver + allowCpuFallback -> CPU",
+                passed: decideGpu(none, 99, true).decision == gdCpuFallback))
+  run.add(Check(name: "no CUDA driver + no fallback -> blocked",
+                passed: decideGpu(none, 99, false).decision == gdBlocked))
+
+# ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
 proc runAllEvals*(): int =
@@ -141,6 +172,7 @@ proc runAllEvals*(): int =
   evalToolCalling(run)
   evalLoopTermination(run)
   evalSessionLogging(run)
+  evalGpuPolicy(run)
 
   echo "\n=== nimo harness evals (stub, no model) ==="
   var passCount = 0

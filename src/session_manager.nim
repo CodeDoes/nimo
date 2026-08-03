@@ -66,9 +66,9 @@ proc newSession*(cwd: string = "."): Session =
   result.tools = initTable[string, ToolHandler]()
 
 when not defined(harnessOffline):
-  proc initModel*(s: var Session, modelPath, vocabPath: string) =
+  proc initModel*(s: var Session, modelPath, vocabPath: string, gpuLayers: int = DefaultGpuLayers) =
     s.tok = loadWorldTokenizer(vocabPath)
-    s.model = initRwkvModel(modelPath, DefaultThreads, DefaultGpuLayers)
+    s.model = initRwkvModel(modelPath, DefaultThreads, gpuLayers.uint32)
     s.state = s.model.newState()
     s.logits = s.model.newLogits()
     s.rng = initRand(cpuTime().int64)

@@ -38,10 +38,17 @@ Run the harness with the rwkv libs on the loader path:
 LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:rwkv.cpp/ggml/src/ggml-cuda:$LD_LIBRARY_PATH" ./build/harness
 ```
 
-## GPU: verify before trusting it
+## GPU: verified by the harness itself
 
-The GPU often reports `pstate: [GPU requires reset]` (seen after driver installs
-or suspend). Check first:
+The harness detects the GPU state on startup via the CUDA Driver API
+(`src/gpu.nim`, `gpuProbe`), *before* loading the model — so a broken GPU gives a
+clean, actionable message instead of a crash.
+
+- Healthy         -> `[gpu] OK — GPU usable ...` (uses `gpuLayers`).
+- Unusable        -> `[gpu] ERROR ...` and it **refuses to start by default**.
+- `gpuUnknown`    -> no NVIDIA driver found; treated like unusable for the policy.
+
+A manual sanity check is still worth doing first:
 
 ```bash
 nvidia-smi --query-gpu=name,pstate,utilization.gpu,memory.used --format=csv
@@ -54,6 +61,22 @@ nvidia-smi --query-gpu=name,pstate,utilization.gpu,memory.used --format=csv
 Fix requires root: reboot, or
 `sudo modprobe -r nvidia_uvm nvidia_drm nvidia_modeset nvidia && sudo modprobe nvidia`.
 Laptop GPUs don't support `nvidia-smi --gpu-reset`.
+
+## CPU fallback is opt-in (config-gated)
+
+The harness only runs on CPU when explicitly allowed. Default is GPU-required.
+
+```jsonc
+// nimo.json (repo root; see src/config.nim for all keys)
+{
+  "model": "models/rwkv7-g1i-2.9b-20260729-ctx16384-f16.bin",
+  "allowCpuFallback": true     // opt-in: run on CPU if the GPU is unusable
+}
+```
+
+Env overrides (applied on top): `NIMO_MODEL`, `NIMO_VOCAB`, `NIMO_GPU_LAYERS`,
+`NIMO_ALLOW_CPU_FALLBACK=1`, `NIMO_*`. If the GPU is unusable and fallback is NOT
+allowed, the harness prints the diagnosis + fix and exits cleanly.
 
 To rebuild CUDA fast for THIS machine only (sm_86), do NOT use `build-cuda`
 (compiles 4 archs): configure with just `86`:
@@ -99,10 +122,11 @@ Small RWKV models frequently emit bare JSON instead of `[tool]` — the fallback
 
 - `src/session_manager.nim` — messages, tool registry, JSONL save, `genStub`.
   `-d:harnessOffline` strips the RWKV backend (evals run without rwkv.cpp).
-- `src/harness.nim` — agent loop + tool parsing + CLI.
+- `src/gpu.nim` — CUDA Driver API probe (`gpuProbe`) + fallback policy (`decideGpu`).
+- `src/harness.nim` — agent loop + tool parsing + CLI (loads `nimo.json`).
 - `src/pipeline.nim` — `run_pipeline` tool: steps, target files, state in `.nimo/`.
 - `src/session.nim` — low-level RWKV session (real generation).
-- `src/config.nim` — model/vocab paths + generation defaults.
+- `src/config.nim` — `NimoConfig` (model/vocab/layers/allowCpuFallback + env overrides).
 - `devenv.nix` / `devenv.yaml` / `flake.nix` — dev env (allowUnfree is set in
   `devenv.yaml`; CUDA toolkit via `cudaPackages`).
 

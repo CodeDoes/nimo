@@ -3,12 +3,10 @@
 ## Emulates the pi agent loop: think -> text/tool_call, dispatch, feed result back.
 
 import std/[strutils, os, times, json, terminal]
-import ./session_manager, ./pipeline, ./config, ./cli
+import ./session_manager, ./pipeline, ./config, ./cli, ./gpu
 
 const
   MaxToolIterations* = 8
-  HarnessDefaultModel* = "models/rwkv7-g1i-2.9b-20260729-ctx16384-f16.bin"
-  HarnessDefaultVocab* = "rwkv.cpp/python/rwkv_cpp/rwkv_vocab_v20230424.txt"
 
 type
   ToolCall* = object
@@ -187,17 +185,52 @@ proc runHarnessTurn*(s: var Session, userMsg: string, maxIterations: int = MaxTo
   return
 
 ## ---- CLI entry ----
-proc runHarnessCli*(modelPath: string, vocabPath: string, cwd: string = ".") =
+proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
   echo "nimo harness — user -> pipeline -> tool call -> answer"
+  echo "Config file: " & DefaultConfigFile & "  (or env NIMO_* overrides)"
   echo "Type /quit to exit, /save <file> to save session."
   echo ""
 
   var s = newSession(cwd)
-  when not defined(harnessOffline):
-    s.initModel(modelPath, vocabPath)
-  else:
+  when defined(harnessOffline):
     echo "[nimo] offline mode: no model loaded; generation will return placeholder text"
     s.genStub = proc(userMsg: string): string = "[nimo offline] no model"
+  else:
+    # Detect GPU state before loading so we can fail cleanly instead of crashing.
+    let gpu = gpuProbe()
+    echo "[gpu] " & gpu.describe()
+
+    let gpuDecision = decideGpu(gpu, cfg.gpuLayers, cfg.allowCpuFallback)
+    if gpuDecision.decision == gdBlocked:
+      printError "Cannot start: the GPU is unusable and CPU fallback is not enabled."
+      echo ""
+      echo "Options:"
+      echo "  1. Fix the GPU (see the [gpu] message above), or"
+      echo "  2. Allow CPU fallback:"
+      echo "       nimo.json -> { \"allowCpuFallback\": true }"
+      echo "       or       -> NIMO_ALLOW_CPU_FALLBACK=1 <binary>"
+      return
+
+    let layers = gpuDecision.layers
+    if gpuDecision.decision == gdCpuFallback:
+      echo "[gpu] CPU fallback enabled by config; running on CPU (gpuLayers=0)."
+    else:
+      echo "[gpu] using " & $layers & " GPU layer(s)."
+
+    try:
+      s.initModel(cfg.modelPath, cfg.vocabPath, layers)
+      echo "[model] loaded."
+    except Exception as e:
+      let upper = e.msg.toUpperAscii()
+      printError "Failed to load model: " & e.msg
+      if upper.contains("CUDA") or upper.contains("GPU") or upper.contains("DEVICE"):
+        echo ""
+        echo "This looks like a GPU/CUDA init failure. The driver may report \"GPU requires reset\":"
+        echo "  reboot, or: sudo modprobe -r nvidia_uvm nvidia_drm nvidia_modeset nvidia && sudo modprobe nvidia"
+        echo "Then retry. Or to run on CPU for now:"
+        echo "  NIMO_ALLOW_CPU_FALLBACK=1 " & getAppFilename()
+      return
+
   s.registerTool("run_pipeline", proc(args: string): string =
     var sess = s
     return pipelineTool(sess, args))
