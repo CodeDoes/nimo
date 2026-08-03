@@ -11,52 +11,52 @@ Session = object
   activeBranch: int          # current branch index
 
 Message = object
-  parts: seq[Part]           # ordered sequence of parts
-
-Part = object
-  kind: PartKind             # system, user, think, tool_call, tool_result, text
+  kind: MessageKind          # user, think, text, tool_call, tool_result, system
   content: string
 ```
 
-## Message Structure
+## Message Types
 
-Each message has parts in this order:
+Each message is ONE type:
 
-```
-user → think → text → (tool_call + tool_result) → system
-```
+| Type | Description |
+|------|-------------|
+| `system` | Primes the model (always first) |
+| `user` | User input |
+| `think` | Model's thinking (hidden from user) |
+| `text` | Model's text response |
+| `tool_call` | Model requests a tool |
+| `tool_result` | Tool output (injected by NIMO) |
 
 ## Example: Simple Chat
 
 ```
-Message:
-  part[0] (user):   "Hello"
-  part[1] (think):  "I should respond"
-  part[2] (text):   "Hi! How can I help?"
+messages[0] (system): "You are helpful"
+messages[1] (user):   "Hello"
+messages[2] (think):  "I should respond"
+messages[3] (text):   "Hi! How can I help?"
 ```
 
 ## Example: Tool Call
 
 ```
-Message:
-  part[0] (user):   "What's the weather?"
-  part[1] (think):  "I need to call the weather tool"
-  part[2] (tool_call): "get_weather(Boston)"
-  part[3] (tool_result): "72°F, sunny"
-  part[4] (text):   "It's 72°F and sunny in Boston"
+messages[0] (user):   "What's the weather?"
+messages[1] (think):  "I need to call the weather tool"
+messages[2] (tool_call): "get_weather(Boston)"
+messages[3] (tool_result): "72°F, sunny"
+messages[4] (text):   "It's 72°F and sunny in Boston"
 ```
 
 ## Example: Multi-Tool Call
 
 ```
-Message:
-  part[0] (user):   "Weather in Boston and NYC?"
-  part[1] (think):  "I'll check both cities"
-  part[2] (tool_call): "get_weather(Boston), get_weather(NYC)"
-  part[3] (tool_result): "Boston: 72°F, NYC: 68°F"
-  part[4] (text):   "Boston is 72°F and NYC is 68°F"
+messages[0] (user):   "Weather in Boston and NYC?"
+messages[1] (think):  "I'll check both cities"
+messages[2] (tool_call): "get_weather(Boston), get_weather(NYC)"
+messages[3] (tool_result): "Boston: 72°F, NYC: 68°F"
+messages[4] (text):   "Boston is 72°F and NYC is 68°F"
 ```
 
 ## See Also
 
-- [1100-message-format.md](1100-message-format.md) — raw text format for each part type
+- [1100-message-format.md](1100-message-format.md) — raw text format for each message type
