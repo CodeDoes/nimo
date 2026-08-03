@@ -1,6 +1,6 @@
 # 3000 — Pipeline
 
-Pipeline is a tool the model can call. Steps are injected into the session.
+Pipeline is a tool the model can call. Steps produce artifacts in workspace, not session.
 
 ## Session Flow
 
@@ -14,16 +14,41 @@ messages[4] (tool_result): "[nimo] ▶ 1/10 Generating wiki: Max...
                            [nimo] ▶ 2/10 Generating wiki: Rob...
                            [nimo] ✔ 2/10 (0.7s)
                            ...
-                           [nimo] ✔ 10/10 (45.2s)
-                           Artifacts: wiki/max.md, chapters/01.md"
-messages[5] (think): "Pipeline complete. I should summarize the results."
-messages[6] (text): "Here's your cyberpunk story! Check wiki/max.md and chapters/01.md"
+                           [nimo] ✔ 10/10 (45.2s)"
+messages[5] (think): "Pipeline complete. Let me read the artifacts."
+messages[6] (text): "Your story is ready! Check wiki/max.md and chapters/01.md"
+```
+
+## Pipeline Context
+
+Each pipeline step defines what context it produces:
+
+```nim
+let max_wiki = generate("Generate character: Max", target = "wiki/max.md")
+let max_ctx = extract(max_wiki, "combat, gear, personality")
+```
+
+- `target` writes to workspace file
+- `extract` pulls specific content into pipeline context
+- Context is isolated — not injected into session
+
+## Session Stay Clean
+
+Session only contains:
+- `tool_call`: "run_pipeline: intent"
+- `tool_result`: trace output (progress + completion)
+
+Actual artifacts stay in workspace:
+```
+~/.ws/myproject/
+  wiki/max.md
+  chapters/01.md
+  outline.md
 ```
 
 ## Interrupt / Resume
 
-User presses Ctrl+C during execution. Pipeline state saved:
-
+Ctrl+C saves pipeline state:
 ```
 ~/.ws/myproject/.nimo/pipeline_{id}.json
 ```
@@ -46,3 +71,4 @@ proc summarize(src: PipelineNode, length: string = "brief"): PipelineNode
 - [1000-session.md](1000-session.md) — session data model
 - [9100-logging.md](9100-logging.md) — JSONL logging
 - [9200-trace.md](9200-trace.md) — trace output
+- [3200-story.md](3200-story.md) — story pipeline example
