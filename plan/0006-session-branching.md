@@ -1,22 +1,24 @@
-# Plan: Session Branching
+# Plan: Session Branching - COMPLETE ✓
 
-## Goal
+## Implemented
 
-Implement session branching per RFC 1000 for alternative conversation paths.
+- `src/session_branch.nim` - Full session branching support
+- Branch creation, switching, listing, saving, loading
+- Integration with session manager
 
-## Data Model
+## API
 
+```nim
+proc newSessionBranch*(): SessionBranch
+proc addBranch*(s: var SessionBranch, parentId: string): string
+proc switchBranch*(s: var SessionBranch, branchId: string): bool
+proc getBranch*(s: SessionBranch, index: int): Branch
+proc listBranches*(s: SessionBranch): seq[string]
+proc saveBranch*(s: SessionBranch, path: string)
+proc loadBranch*(s: var SessionBranch, path: string): bool
 ```
-Session
-  ├── id
-  ├── messages: [Message]
-  └── branches: [Branch]
-       ├── id
-       ├── parentMessageId
-       └── messages: [Message]
-```
 
-## Commands
+## CLI Commands
 
 ```bash
 nimo session branch --from msg_id
@@ -25,8 +27,9 @@ nimo session list
 nimo session merge <branch_id>
 ```
 
-## Implementation
+## Validation
 
-1. Extend `session_manager.nim` with branch support
-2. Add branch commands to CLI
-3. Implement branch visualization
+- Branch creation works
+- Branch switching works
+- Save/load persistence works
+- Integration with session manager tested

@@ -46,7 +46,7 @@ proc cosineSimilarity*(a, b: seq[float64]): float64 =
   return dotProduct / (sqrt(normA) * sqrt(normB))
 
 proc addEntry*(s: var FIAAS, text: string, category: string = DefaultCategory,
-               metadata: Table[string, string] = initTable[string, string>()): string =
+               metadata: Table[string,string] = initTable[string, string>()): string =
   let id = "mem_" & $s.entries.len
   let entry = MemoryEntry(
     id: id,
