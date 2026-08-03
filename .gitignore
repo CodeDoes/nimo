@@ -11,3 +11,8 @@ src/chat
 src/generate
 src/main
 src/test_rwkv_full
+
+# runtime harness artifacts
+.nimo/
+output.txt
+*.jsonl

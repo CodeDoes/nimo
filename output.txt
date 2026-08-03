@@ -1,3 +1,0 @@
-```json
-{"result": "The ocean whispers secrets to the shore, A gentle lullaby, a soothing roar. Its waves caress the sand, a rhythm so sweet, A dance of light and shadow, a sight to meet."}
-```
