@@ -23,17 +23,16 @@ Part = object
 Each message has parts in this order:
 
 ```
-system → user → (think → text) OR (think → tool_call → tool_result)
+user → think → text → (tool_call + tool_result) → system
 ```
 
 ## Example: Simple Chat
 
 ```
 Message:
-  part[0] (system): "You are helpful"
-  part[1] (user):   "Hello"
-  part[2] (think):  "I should respond"
-  part[3] (text):   "Hi! How can I help?"
+  part[0] (user):   "Hello"
+  part[1] (think):  "I should respond"
+  part[2] (text):   "Hi! How can I help?"
 ```
 
 ## Example: Tool Call
