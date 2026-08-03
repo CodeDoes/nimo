@@ -1,62 +1,62 @@
 # 1000 — Session
 
-A session is a conversation between user and model. It tracks messages and allows branching.
+Session format emulating pi agent sessions.
 
-## Data Model
+## Session Header
 
-```nim
-Session = object
-  messages: seq[Message]
-  branches: seq[Branch]      # alternative conversation paths
-  activeBranch: int          # current branch index
-
-Message = object
-  kind: MessageKind          # user, think, text, tool_call, tool_result, system
-  content: string
+```jsonl
+{"type":"session","version":3,"id":"uuid","timestamp":"2026-08-03T14:47:08.723Z","cwd":"/home/kit/dev/nimo","parentSession":"..."}
 ```
 
-## Message Types
+## Message Structure
 
-Each message is ONE type:
-
-| Type | Description |
-|------|-------------|
-| `system` | Primes the model (always first) |
-| `user` | User input |
-| `think` | Model's thinking (hidden from user) |
-| `text` | Model's text response |
-| `tool_call` | Model requests a tool |
-| `tool_result` | Tool output (injected by NIMO) |
-
-## Example: Simple Chat
-
-```
-messages[0] (system): "You are helpful"
-messages[1] (user):   "Hello"
-messages[2] (think):  "I should respond"
-messages[3] (text):   "Hi! How can I help?"
+```jsonl
+{"type":"message","id":"uuid","parentId":"uuid","timestamp":"...","message":{"role":"...","content":[...]}}
 ```
 
-## Example: Tool Call
+## Content Types
 
-```
-messages[0] (user):   "What's the weather?"
-messages[1] (think):  "I need to call the weather tool"
-messages[2] (tool_call): "get_weather(Boston)"
-messages[3] (tool_result): "72°F, sunny"
-messages[4] (text):   "It's 72°F and sunny in Boston"
+### Text
+
+```json
+{"type":"text","text":"Hello!"}
 ```
 
-## Example: Multi-Tool Call
+### Thinking
 
+```json
+{"type":"thinking","thinking":"I should respond...","thinkingSignature":"..."}
 ```
-messages[0] (user):   "Weather in Boston and NYC?"
-messages[1] (think):  "I'll check both cities"
-messages[2] (tool_call): "get_weather(Boston), get_weather(NYC)"
-messages[3] (tool_result): "Boston: 72°F, NYC: 68°F"
-messages[4] (text):   "Boston is 72°F and NYC is 68°F"
+
+### Tool Call
+
+```json
+{"type":"toolCall","id":"call_xxx","name":"bash","arguments":{"command":"ls"}}
+```
+
+### Tool Result
+
+```json
+{"type":"toolResult","toolCallId":"call_xxx","toolName":"bash","content":[{"type":"text","text":"output"}],"isError":false}
+```
+
+## Example Session
+
+```jsonl
+{"type":"session","version":3,"id":"019fc817","timestamp":"2026-08-03T14:47:08Z","cwd":"/home/kit/dev/nimo"}
+{"type":"message","id":"msg1","parentId":null,"timestamp":"...","message":{"role":"user","content":[{"type":"text","text":"Write a story"}]}}
+{"type":"message","id":"msg2","parentId":"msg1","timestamp":"...","message":{"role":"assistant","content":[{"type":"thinking","thinking":"I should create a pipeline...","thinkingSignature":"..."},{"type":"toolCall","id":"call1","name":"run_pipeline","arguments":{"intent":"Write a cyberpunk story"}}],"stopReason":"toolUse"}}
+{"type":"message","id":"msg3","parentId":"msg2","timestamp":"...","message":{"role":"toolResult","toolCallId":"call1","toolName":"run_pipeline","content":[{"type":"text","text":"[nimo] ▶ 1/10... ✔ 1/10..."}],"isError":false}}
+{"type":"message","id":"msg4","parentId":"msg3","timestamp":"...","message":{"role":"assistant","content":[{"type":"text","text":"Here's your story!"}}]}}
+```
+
+## Usage Tracking
+
+```json
+{"input":2081,"output":130,"cacheRead":0,"cacheWrite":0,"reasoning":26,"totalTokens":2211,"cost":{"input":0,"output":0,"total":0}}
 ```
 
 ## See Also
 
-- [1100-message-format.md](1100-message-format.md) — raw text format for each message type
+- [1100-message-format.md](1100-message-format.md) — raw text format
+- [9100-logging.md](9100-logging.md) — JSONL logging
