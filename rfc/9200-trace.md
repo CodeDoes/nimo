@@ -1,30 +1,32 @@
 # Trace
 
-## Purpose
+What the user sees in the CLI during execution.
 
-Track execution flow for debugging and observability.
+## Examples
+
+```
+[nimo] ▶ 1/10 Generating wiki: Max...
+→ wiki/max.md
+
+## Max
+Robot ninja. Stealth specialist...
+
+[nimo] ✔ 1/10 Generating wiki: Max... (0.8s)
+[nimo] ▶ 2/10 Generating wiki: Rob...
+```
+
+Active step shows `▶`, completed shows `✔` with elapsed time.
+Generated content appears inline beneath each step.
 
 ## Trace Points
 
-- Pipeline node entry/exit
-- Tool call dispatch
-- Think block parsing
+- Pipeline progress (step N/M)
+- Tool call dispatch (which tool, args)
+- Think block detection (`...`)
 - Workspace operations
-- Model eval timing
-
-## Trace Format
-
-```
-[timestamp] [level] [module] [trace_point] [details]
-```
+- Model timing (tokens/sec)
 
 ## Current Implementation
 
-`src/macros.nim` — `benchmarkStep` macro logs timing to eternal log.
-
-## RFC Scope
-
-- Structured trace format
-- Trace collector (in-memory buffer)
-- Trace export (JSON, text)
-- Performance profiling integration
+`src/cli.nim` — banner, colored output.
+`src/macros.nim` — `benchmarkStep` logs timing.

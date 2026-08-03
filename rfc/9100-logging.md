@@ -1,26 +1,24 @@
 # Logging
 
-## Log Levels
+JSONL files for each message part. Structured, append-only.
 
-- `trace` — detailed execution flow (pipeline steps, token counts)
-- `debug` — model loading, tokenization, sampling details
-- `info` — session start, generation complete, errors
-- `warn` — missing files, deprecated features
-- `error` — failures, exceptions
+## Format
 
-## Log Targets
+```jsonl
+{"timestamp":"2024-01-01T00:00:00","type":"session_start","app":"chat","model":"/path/to/model.bin"}
+{"timestamp":"2024-01-01T00:00:01","type":"message_part","part_type":"system","content":"You are a helpful assistant"}
+{"timestamp":"2024-01-01T00:00:02","type":"message_part","part_type":"user","content":"Hello"}
+{"timestamp":"2024-01-01T00:00:03","type":"message_part","part_type":"think","content":"I should respond politely"}
+{"timestamp":"2024-01-01T00:00:04","type":"message_part","part_type":"text","content":"Hi there! How can I help?"}
+{"timestamp":"2024-01-01T00:00:05","type":"generation_stats","tokens":42,"elapsed_ms":1234}
+```
 
-- `logs/eternal.log` — append-only, never truncated
-- `logs/session-{timestamp}.log` — per-session detailed log
-- stderr — real-time progress for CLI/TUI
+## Files
+
+- `logs/sessions/{session_id}.jsonl` — one file per session
+- `logs/pipelines/{pipeline_id}.jsonl` — one file per pipeline run
+- `logs/tools/{tool_name}.jsonl` — one file per tool type
 
 ## Current Implementation
 
-`src/logger.nim` — basic append-to-file with session start, generation, chat entries.
-
-## RFC Scope
-
-- Log format spec (structured JSON vs plain text)
-- Log rotation policy
-- Per-workspace log isolation
-- Log aggregation for pipelines
+`src/logger.nim` — append-to-file with session/generation/chat entries.
