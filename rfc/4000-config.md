@@ -31,5 +31,5 @@
 
 ## See Also
 
-- [pipeline.md](03-pipeline.md) — pipeline uses config for model params
-- [env.md](09-env.md) — engine selection maps to env config
+- [3000-pipeline.md](3000-pipeline.md) — pipeline uses config for model params
+- [7000-env.md](7000-env.md) — engine selection maps to env config

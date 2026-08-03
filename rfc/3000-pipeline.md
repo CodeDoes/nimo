@@ -89,5 +89,5 @@ Parallel execution of independent nodes is optional (nice-to-have).
 
 ## See Also
 
-- [cli.md](02-cli.md) — intent extraction produces pipeline.nim
-- [config.md](05-config.md) — pipeline uses config for model params
+- [2000-cli.md](2000-cli.md) — intent extraction produces pipeline.nim
+- [4000-config.md](4000-config.md) — pipeline uses config for model params

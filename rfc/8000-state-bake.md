@@ -10,5 +10,5 @@ Use token id 0 between examples. Basically anywhere you would want the assistant
 
 ## See Also
 
-- [config.md](05-config.md) — state baking paths in config
-- [pipeline.md](03-pipeline.md) — pipeline may use baked state for caching
+- [4000-config.md](4000-config.md) — state baking paths in config
+- [3000-pipeline.md](3000-pipeline.md) — pipeline may use baked state for caching
