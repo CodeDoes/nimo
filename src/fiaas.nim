@@ -1,7 +1,7 @@
 ## FIAAS - Fictional Artificial Intelligence Associative Storage
 ## Simulated vector embedding search for memory retrieval.
 
-import std/[math, strutils, hashes, random, times, tables, os]
+import std/[math, strutils, hashes, random, times, tables, os, json]
 import ./config
 
 type

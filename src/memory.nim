@@ -1,14 +1,14 @@
 ## Memory System for NIMO
 ## Integrates FIAAS with session management for persistent context.
 
-import std/[json, strutils, os, times, tables]
+import std/[json, strutils, os, times, tables, strformat]
 import ./fiaas, ./session_manager, ./workspace, ./config
 
 type
   MemoryStore* = ref object
     fiaas*: FIAAS
     sessions*: seq[string]
-    characters*: dict[string, string]  # character name -> memory ID
+    characters*: Table[string, string]  # character name -> memory ID
 
 proc newMemoryStore*(): MemoryStore =
   result = MemoryStore.new()
