@@ -3,7 +3,7 @@
 import std/[os, strutils, json]
 
 const
-  DefaultModelPath* = "models/rwkv7-g1i-2.9b-20260729-ctx16384-f16.bin"
+  DefaultModelPath* = "models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin"
   DefaultVocabPath* = "rwkv.cpp/python/rwkv_cpp/rwkv_vocab_v20230424.txt"
   DefaultPrompt* = "User: Hi!\n\nBot: Hello! How can I help you today?"
   DefaultGenLength* = 60

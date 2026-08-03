@@ -211,9 +211,15 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
       echo "       or       -> NIMO_ALLOW_CPU_FALLBACK=1 <binary>"
       return
 
-    let layers = gpuDecision.layers
+    let layers = if gpuDecision.decision == gdUseGpu:
+        safeGpuLayers(cfg.modelPath, gpuDecision.layers, freeVramMiB())
+      else:
+        gpuDecision.layers
     if gpuDecision.decision == gdCpuFallback:
       echo "[gpu] CPU fallback enabled by config; running on CPU (gpuLayers=0)."
+    elif layers < gpuDecision.layers:
+      echo "[gpu] VRAM-limited: using " & $layers & " of " & $gpuDecision.layers &
+           " requested GPU layer(s) (see nimo.json gpuLayers)."
     else:
       echo "[gpu] using " & $layers & " GPU layer(s)."
 

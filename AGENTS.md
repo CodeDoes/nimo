@@ -7,8 +7,10 @@ Sessions follow the pi-agent JSONL message-tree format (parentId chains).
 ## Project overview
 
 - **Nim 2.2.10** app; model inference via `rwkv.cpp` (C/C++ backend, dlopen'd `librwkv.so`).
-- Model: `models/rwkv7-g1i-2.9b-20260729-ctx16384-f16.bin` (converted from
-  `~/Documents/models/rwkv7-g1i_preview5031-2.9b-20260729-ctx16384.pth`, FP16).
+- Model: `models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin` (Q4_K quant of
+  `~/Documents/models/rwkv7-g1i_preview5031-2.9b-20260729-ctx16384.pth`,
+  ~2.2 GB — fits the 4 GB RTX 2050). FP16 variant (`-f16.bin`, 5.9 GB) is too
+  big for full-GPU offload; the harness clamps `gpuLayers` to fit.
   Vocab: `rwkv.cpp/python/rwkv_cpp/rwkv_vocab_v20230424.txt`.
 - GPU: NVIDIA GeForce RTX 2050 (Ampere, sm_86, 4 GB) on a hybrid-graphics laptop
   (AMD Vega is boot VGA).
@@ -90,10 +92,17 @@ make -j$(nproc)
 ## Model conversion gotchas
 
 - `.pth` -> GGML `.bin`: `python3 rwkv.cpp/python/convert_pytorch_to_ggml.py <src.pth> <out.bin> FP16`.
+- FP16 -> Q4_K (default runtime model; 4-bit, ~2.2 GB, fits 4 GB VRAM):
+  `devenv shell python3 rwkv.cpp/python/quantize.py <f16.bin> <q4k.bin> Q4_K`
+  (needs librwkv.so on the loader path — run from repo root, lib is at `rwkv.cpp/librwkv.so`).
 - The nix python's numpy is broken (`undefined symbol: zgesv_`) — preload OpenBLAS:
   `LD_PRELOAD=/nix/store/*openblas*/lib/libopenblas.so python3 ...`
   (glob may match several; any works).
 - torch 2.12.0 lives in the devenv shell; the bare `python3` outside it may not import torch.
+- If the GPU can't hold the whole model, `safeGpuLayers` (in `src/gpu.nim`)
+  clamps `gpuLayers` to fit free VRAM (reads the file header: 6 u32,
+  magic `ggmf`, `n_layer` at offset 16) — rwkv.cpp SIGSEGVs on overcommit, so
+  don't bypass the clamp.
 
 ## Evals
 

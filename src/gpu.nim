@@ -5,7 +5,7 @@
 ## with "no CUDA-capable device is detected" (e.g. driver reports the GPU needs
 ## a reset), and we want a clean, actionable message instead of a crash.
 
-import std/dynlib
+import std/[dynlib, os]
 
 type
   GpuStatus* = enum
@@ -105,3 +105,51 @@ proc decideGpu*(r: GpuReport, wantGpuLayers: int, allowCpuFallback: bool): tuple
       result = (gdCpuFallback, 0)
     else:
       result = (gdBlocked, wantGpuLayers)
+
+## ---- VRAM-aware GPU-layer clamping ----
+## rwkv.cpp SIGSEGVs (null deref) if asked to put more model on the GPU than
+## fits in VRAM, so before loading we clamp n_gpu_layers to what actually fits.
+
+proc freeVramMiB*(): int =
+  ## Free VRAM on device 0 in MiB via cuMemGetInfo, or -1 if unavailable.
+  let lib = loadLib("libcuda.so.1")
+  if lib == nil: return -1
+  defer: unloadLib(lib)
+  type CuMemGetInfo = proc(free, total: ptr int64): cint {.cdecl.}
+  let cuMemGetInfo = cast[CuMemGetInfo](symAddr(lib, "cuMemGetInfo"))
+  if cuMemGetInfo == nil: return -1
+  var freeMem, totalMem: int64
+  if cuMemGetInfo(addr freeMem, addr totalMem) != cuSuccess: return -1
+  return int(freeMem div (1024 * 1024))
+
+proc modelFileInfo*(modelPath: string): tuple[nLayers: int, bytes: int64] =
+  ## Reads the rwkv.cpp file header (6 u32: magic,version,vocab,embed,layers,dtype)
+  ## straight off disk + reports the file size — no library load required.
+  if not fileExists(modelPath): return
+  result.bytes = getFileSize(modelPath)
+  var f: File
+  if f.open(modelPath, fmRead):
+    var buf: array[24, uint8]
+    if f.readBytes(buf, 0, 24) == 24:
+      # magic must be GGML (0x67676d66 = 'ggmf')
+      if buf[0] == 0x66 and buf[1] == 0x6d and buf[2] == 0x67 and buf[3] == 0x67:
+        result.nLayers = int(buf[16]) or (int(buf[17]) shl 8) or
+                         (int(buf[18]) shl 16) or (int(buf[19]) shl 24)
+    f.close()
+
+proc safeGpuLayers*(modelPath: string, requested: int, freeVram: int): int =
+  ## Returns a gpu-layers count: the requested one if the model fits in VRAM
+  ## with headroom, otherwise a proportional clamp based on size / n_layers.
+  ## Reserved headroom covers activations + the KV/state cache.
+  const headroomMiB = 1536
+  let info = modelFileInfo(modelPath)
+  if info.nLayers <= 0 or info.bytes <= 0 or freeVram <= 0:
+    return requested
+  let modelMiB = int(info.bytes div (1024 * 1024))
+  if modelMiB + headroomMiB <= freeVram:
+    return requested
+  let perLayer = modelMiB div info.nLayers
+  if perLayer <= 0: return 0
+  let usable = freeVram - headroomMiB
+  if usable <= 0: return 0
+  return min(requested, usable div perLayer)
