@@ -8,7 +8,7 @@
 import std/[json, times, strutils, os, random, tables]
 import ./config
 when not defined(harnessOffline):
-  import ./rwkv, ./tokenizer, ./sampling, ./macros
+  import ./rwkv, ./tokenizer, ./sampling, ./macros, ./state_cache
 
 type
   ContentKind* = enum
@@ -66,12 +66,20 @@ proc newSession*(cwd: string = "."): Session =
   result.tools = initTable[string, ToolHandler]()
 
 when not defined(harnessOffline):
-  proc initModel*(s: var Session, modelPath, vocabPath: string, gpuLayers: int = DefaultGpuLayers) =
+  proc initModel*(s: var Session, modelPath, vocabPath: string,
+                  gpuLayers: int = DefaultGpuLayers,
+                  systemPrompt: string = "",
+                  stateCacheDir: string = "",
+                  bakeContext: bool = false) =
     s.tok = loadWorldTokenizer(vocabPath)
     s.model = initRwkvModel(modelPath, DefaultThreads, gpuLayers.uint32)
-    s.state = s.model.newState()
     s.logits = s.model.newLogits()
     s.rng = initRand(cpuTime().int64)
+    s.state = s.model.newState()
+    # RFC 8000: bake the fixed system context once, resume from it on later runs.
+    if systemPrompt.len > 0 and stateCacheDir.len > 0:
+      let cache = initStateCache(stateCacheDir)
+      s.state = cache.bakeContext(s.model, s.tok, modelPath, vocabPath, systemPrompt)
 
 proc generateTurn*(s: var Session, userMsg: string, temp: float32 = DefaultTemp, topP: float32 = DefaultTopP, maxTokens: int = 200): string =
   ## Generates a reply. In offline mode (or with a genStub set) returns the

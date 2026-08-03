@@ -6,7 +6,7 @@
 ##   3. Session logging - is the JSONL message tree (user -> tool_call -> tool_result -> text) well-formed?
 
 import std/[strutils, os, times, json]
-import ./session_manager, ./pipeline, ./harness, ./gpu
+import ./session_manager, ./pipeline, ./harness, ./gpu, ./model_cache, ./state_cache
 
 type
   Check* = object
@@ -180,6 +180,105 @@ proc evalGpuPolicy*(run: var seq[Check]) =
   removeFile(tmpHead)
 
 # ----------------------------------------------------------------------
+# Eval 5: raw -> quantize -> cache (model_cache)
+# ----------------------------------------------------------------------
+proc evalModelCache*(run: var seq[Check]) =
+  let tmpDir = getTempDir() / "nimo_mcache_test"
+  removeDir(tmpDir)
+  createDir(tmpDir)
+
+  # fake raw FP16 model file: 24-byte header (magic, v101, vocab 65536,
+  # embed 2560, layers 32, dtype 1=F16) + padding
+  var blob = newString(256 * 1024)
+  blob[0] = 'f'; blob[1] = 'm'; blob[2] = 'g'; blob[3] = 'g'   # magic 0x67676d66 LE
+  blob[4] = char(101)                                          # version
+  blob[8] = char(0); blob[9] = char(0); blob[10] = char(1)     # n_vocab = 65536
+  blob[12] = char(0); blob[13] = char(10)                      # n_embed = 2560
+  blob[16] = char(32)                                          # n_layer = 32
+  blob[20] = char(1)                                           # data_type = F16 (raw)
+  let raw = tmpDir / "raw-f16.bin"
+  writeFile(raw, blob)
+
+  let h = readModelHeader(raw)
+  run.add(Check(name: "model header parses (magic/version/layers/dtype)",
+                passed: h.magic == ModelMagic and h.version == 101 and
+                        h.nLayer == 32 and h.dataType == 1,
+                detail: "magic=" & $h.magic & " dtype=" & $h.dataType))
+  run.add(Check(name: "FP16 header is a raw model, not quantized",
+                passed: isRawModel(h) and not isQuantized(h)))
+
+  # deterministic cache path, stable across calls
+  let mc = initModelCache(tmpDir / "cache")
+  let p1 = mc.quantizedPath(raw, "Q4_K")
+  let p2 = mc.quantizedPath(raw, "Q4_K")
+  run.add(Check(name: "quantized cache path is deterministic",
+                passed: p1 == p2 and p1.contains("q4_k"), detail: p1))
+  run.add(Check(name: "different format -> different cache path",
+                passed: mc.quantizedPath(raw, "Q4_K") != mc.quantizedPath(raw, "Q5_1")))
+
+  # offline ensureQuantized reports the would-be path and doesn't crash
+  let (offPath, offCached) = mc.ensureQuantized(raw, "Q4_K")
+  run.add(Check(name: "offline ensureQuantized is safe (no librwkv needed)",
+                passed: offPath == p1 and offCached == fileExists(p1),
+                detail: offPath))
+
+  # already-quantized raw model is used as-is
+  blob[20] = char(12)   # dtype = Q4_K
+  let qraw = tmpDir / "raw-q4k.bin"
+  writeFile(qraw, blob)
+  let (qp, qcached) = mc.ensureQuantized(qraw, "Q4_K")
+  run.add(Check(name: "already-quantized model is used directly",
+                passed: qp == qraw and qcached,
+                detail: qp))
+
+  removeDir(tmpDir)
+
+# ----------------------------------------------------------------------
+# Eval 6: context-read -> state -> cache (state_cache / RFC 8000)
+# ----------------------------------------------------------------------
+proc evalStateCache*(run: var seq[Check]) =
+  let tmpDir = getTempDir() / "nimo_scache_test"
+  removeDir(tmpDir)
+  createDir(tmpDir)
+
+  let modelPath = tmpDir / "model.bin"
+  let vocabPath = tmpDir / "vocab.txt"
+  # model signature hashes size/mtime/head; make a stable tiny file
+  writeFile(modelPath, "fake-model-contents")
+  writeFile(vocabPath, "token vocab 65536")
+
+  let sc = initStateCache(tmpDir / "state")
+  let k1 = stateCacheKey(modelPath, vocabPath, "User: hi\n\nBot:")
+  let k2 = stateCacheKey(modelPath, vocabPath, "User: hi\n\nBot:")
+  run.add(Check(name: "state cache key is deterministic",
+                passed: k1 == k2 and k1.len == 40, detail: k1))
+  let k3 = stateCacheKey(modelPath, vocabPath, "different context")
+  run.add(Check(name: "state cache key changes with context",
+                passed: k1 != k3))
+  let k4 = stateCacheKey(tmpDir / "model2.bin", vocabPath, "User: hi\n\nBot:")
+  writeFile(tmpDir / "model2.bin", "different-model-contents")
+  run.add(Check(name: "state cache key changes with model file",
+                passed: k1 != k4))
+
+  # round-trip save/load + miss behavior
+  let state = @[1.0'f32, 2.0, 3.0, 4.0]
+  let stPath = sc.statePath(k1)
+  saveStateToFile(state, stPath)
+  var loaded = newSeq[float32](4)
+  run.add(Check(name: "state round-trips through cache file",
+                passed: loadStateFromFile(loaded, stPath) and loaded == state))
+  var wrongLen = newSeq[float32](8)
+  run.add(Check(name: "state load rejects size mismatch",
+                passed: not loadStateFromFile(wrongLen, stPath)))
+  run.add(Check(name: "state load misses on absent file",
+                passed: not loadStateFromFile(loaded, tmpDir / "nope.state.bin")))
+  run.add(Check(name: "loadCachedState returns empty on miss",
+                passed: sc.loadCachedState(tmpDir / "missing.bin", vocabPath,
+                                           "ctx", 4).len == 0))
+
+  removeDir(tmpDir)
+
+# ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
 proc runAllEvals*(): int =
@@ -188,6 +287,8 @@ proc runAllEvals*(): int =
   evalLoopTermination(run)
   evalSessionLogging(run)
   evalGpuPolicy(run)
+  evalModelCache(run)
+  evalStateCache(run)
 
   echo "\n=== nimo harness evals (stub, no model) ==="
   var passCount = 0

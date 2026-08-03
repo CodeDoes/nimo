@@ -3,7 +3,7 @@
 ## Emulates the pi agent loop: think -> text/tool_call, dispatch, feed result back.
 
 import std/[strutils, os, times, json, terminal]
-import ./session_manager, ./pipeline, ./config, ./cli, ./gpu
+import ./session_manager, ./pipeline, ./config, ./cli, ./gpu, ./model_cache
 
 const
   MaxToolIterations* = 8
@@ -211,8 +211,19 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
       echo "       or       -> NIMO_ALLOW_CPU_FALLBACK=1 <binary>"
       return
 
+    # raw -> quantize -> cache: resolve the model actually loaded
+    var modelToLoad = cfg.modelPath
+    if cfg.quantFormat.len > 0 and fileExists(cfg.modelPath):
+      let mc = initModelCache(cfg.modelCacheDir)
+      let (p, cached) = mc.ensureQuantized(cfg.modelPath, cfg.quantFormat)
+      modelToLoad = p
+      if not cached:
+        echo "[model] quantized " & cfg.modelPath & " -> " & p
+      elif p != cfg.modelPath:
+        echo "[model] using cached " & cfg.quantFormat & ": " & p
+
     let layers = if gpuDecision.decision == gdUseGpu:
-        safeGpuLayers(cfg.modelPath, gpuDecision.layers, freeVramMiB())
+        safeGpuLayers(modelToLoad, gpuDecision.layers, freeVramMiB())
       else:
         gpuDecision.layers
     if gpuDecision.decision == gdCpuFallback:
@@ -224,8 +235,11 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
       echo "[gpu] using " & $layers & " GPU layer(s)."
 
     try:
-      s.initModel(cfg.modelPath, cfg.vocabPath, layers)
+      s.initModel(modelToLoad, cfg.vocabPath, layers,
+                  cfg.systemPrompt, cfg.stateCacheDir, cfg.bakeContext)
       echo "[model] loaded."
+      if cfg.bakeContext and cfg.systemPrompt.len > 0:
+        echo "[model] cached state for system prompt (" & cfg.stateCacheDir & ")."
     except Exception as e:
       let upper = e.msg.toUpperAscii()
       printError "Failed to load model: " & e.msg

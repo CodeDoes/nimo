@@ -72,13 +72,19 @@ The harness only runs on CPU when explicitly allowed. Default is GPU-required.
 // nimo.json (repo root; see src/config.nim for all keys)
 {
   "model": "models/rwkv7-g1i-2.9b-20260729-ctx16384-f16.bin",
-  "allowCpuFallback": true     // opt-in: run on CPU if the GPU is unusable
+  "allowCpuFallback": true,     // opt-in: run on CPU if the GPU is unusable
+  "quant": "Q4_K",              // raw -> quantize -> cache (src/model_cache.nim)
+  "modelCacheDir": ".nimo/model-cache",
+  "systemPrompt": "You are nimo.",   // baked into state cache (RFC 8000)
+  "bakeContext": true,               // resume baked state; bake on miss
+  "stateCacheDir": ".nimo/state-cache"
 }
 ```
 
 Env overrides (applied on top): `NIMO_MODEL`, `NIMO_VOCAB`, `NIMO_GPU_LAYERS`,
-`NIMO_ALLOW_CPU_FALLBACK=1`, `NIMO_*`. If the GPU is unusable and fallback is NOT
-allowed, the harness prints the diagnosis + fix and exits cleanly.
+`NIMO_ALLOW_CPU_FALLBACK=1`, `NIMO_QUANT`, `NIMO_MODEL_CACHE`, `NIMO_STATE_CACHE`,
+`NIMO_SYSTEM_PROMPT`, `NIMO_BAKE_CONTEXT=1`, `NIMO_*`. If the GPU is unusable and
+fallback is NOT allowed, the harness prints the diagnosis + fix and exits cleanly.
 
 To rebuild CUDA fast for THIS machine only (sm_86), do NOT use `build-cuda`
 (compiles 4 archs): configure with just `86`:
@@ -132,10 +138,15 @@ Small RWKV models frequently emit bare JSON instead of `[tool]` — the fallback
 - `src/session_manager.nim` — messages, tool registry, JSONL save, `genStub`.
   `-d:harnessOffline` strips the RWKV backend (evals run without rwkv.cpp).
 - `src/gpu.nim` — CUDA Driver API probe (`gpuProbe`) + fallback policy (`decideGpu`).
+- `src/model_cache.nim` — raw -> quantize -> cache: content-addressed quantized
+  model cache (sha1 of size/mtime/head), auto-quantize via `quant` config.
+- `src/state_cache.nim` — context-read -> state -> cache (RFC 8000): baked state
+  keyed by (model sig | vocab hash | context); resume-on-miss via `bakeContext`.
 - `src/harness.nim` — agent loop + tool parsing + CLI (loads `nimo.json`).
 - `src/pipeline.nim` — `run_pipeline` tool: steps, target files, state in `.nimo/`.
 - `src/session.nim` — low-level RWKV session (real generation).
-- `src/config.nim` — `NimoConfig` (model/vocab/layers/allowCpuFallback + env overrides).
+- `src/config.nim` — `NimoConfig` (model/vocab/layers/allowCpuFallback/quant/caches
+  + env overrides).
 - `devenv.nix` / `devenv.yaml` / `flake.nix` — dev env (allowUnfree is set in
   `devenv.yaml`; CUDA toolkit via `cudaPackages`).
 

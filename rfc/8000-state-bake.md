@@ -25,6 +25,16 @@ Hash based on:
 
 If any change, cache is invalid and must be re-baked.
 
+## Implementation
+
+Implemented in `src/state_cache.nim` (cache key = model sig + vocab hash +
+context; bake-from-Disk, resume-on-miss) and wired into the harness via
+`nimo.json` `systemPrompt` + `bakeContext` + `stateCacheDir`. Cache math is
+offline-safe and covered by evals.
+
+The companion **model cache** (`src/model_cache.nim`) pre-quantizes raw FP16
+models into a content-addressed cache — see [8150-quantization.md](8150-quantization.md).
+
 ## See Also
 
 - [2000-cli.md](2000-cli.md) — bake command
