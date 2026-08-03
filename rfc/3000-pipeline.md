@@ -1,59 +1,49 @@
 # 3000 — Pipeline
 
-Pipeline is a tool the model can call. Supports interruption and adjustment.
+Pipeline is a tool the harness executes. Supports interruption, steering, resume.
 
-## Session Flow
+## Tool Call
 
-```
-user -> pipeline -> root.chat
-user -> pipeline -> pipeline.relavent-story.relavent-chapter.write
-pipeline.report -> user
-user -> pipeline -> pipeline.story.summarize
-pipeline.report -> user
-...
+```json
+{"type":"toolCall","id":"call_xxx","name":"run_pipeline","arguments":{"intent":"Write a story"}}
 ```
 
-## Example Session
+## Tool Result
 
-```jsonl
-{"type":"session","version":3,"id":"...","timestamp":"...","cwd":"/home/kit/dev/nimo"}
-{"type":"message","id":"msg1","parentId":null,"message":{"role":"user","content":[{"type":"text","text":"Write a cyberpunk story"}]}}
-{"type":"message","id":"msg2","parentId":"msg1","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Creating pipeline..."},{"type":"toolCall","id":"call1","name":"run_pipeline","arguments":{"intent":"write story"}}],"stopReason":"toolUse"}}
-{"type":"message","id":"msg3","parentId":"msg2","message":{"role":"toolResult","toolCallId":"call1","toolName":"run_pipeline","content":[{"type":"text","text":"[nimo] ▶ 1/10 Generating wiki: Max...\n[nimo] ✔ 1/10 (0.8s)\n[nimo] ▶ 2/10 Generating wiki: Rob...\n[nimo] ✔ 2/10 (0.7s)"}],"isError":false}}
-{"type":"message","id":"msg4","parentId":"msg3","message":{"role":"assistant","content":[{"type":"text","text":"Story in progress..."}]}}
-{"type":"message","id":"msg5","parentId":"msg4","message":{"role":"user","content":[{"type":"text","text":"Actually, make it sci-fi instead"}]}}
-{"type":"message","id":"msg6","parentId":"msg5","message":{"role":"assistant","content":[{"type":"thinking","thinking":"User changed direction. Adjusting pipeline..."},{"type":"toolCall","id":"call2","name":"run_pipeline","arguments":{"intent":"rewrite as sci-fi"}}],"stopReason":"toolUse"}}
-{"type":"message","id":"msg7","parentId":"msg6","message":{"role":"toolResult","toolCallId":"call2","toolName":"run_pipeline","content":[{"type":"text","text":"[nimo] ▶ 1/8 Generating wiki: Max (sci-fi)...\n[nimo] ✔ 1/8 (0.9s)"}],"isError":false}}
+```json
+{"type":"toolResult","toolCallId":"call_xxx","toolName":"run_pipeline","content":[{"type":"text","text":"[nimo] ▶ 1/10... ✔ 1/10..."}],"isError":false}
 ```
 
 ## Interruption
 
-User can interrupt anytime by sending a new message:
-- Current pipeline step is aborted
-- Agent adjusts based on new input
-- New pipeline starts (or continues from checkpoint)
+User sends new message mid-pipeline:
+```jsonl
+{"type":"message","role":"user","content":[{"type":"text","text":"Actually, make it sci-fi"}]}
+```
 
-## Checkpoint / Resume
+Harness:
+1. Aborts current pipeline step
+2. Updates context with new intent
+3. Creates new pipeline (or adjusts existing)
+4. Continues execution
 
-Ctrl+C saves state:
+## Steering
+
+Inject guidance without clearing state:
+```json
+{"type":"message","role":"system","content":[{"type":"text","text":"User updated priority: focus on speed over accuracy"}]}
+```
+
+## Resume
+
+Checkpoint saved on interrupt/Ctrl+C:
 ```
 ~/.ws/myproject/.nimo/pipeline_{id}.json
 ```
 
 Resume:
-```
+```bash
 nimo resume {pipeline_id}
-```
-
-## Workspace Artifacts
-
-```
-~/.ws/myproject/
-  wiki/
-    max.md
-  chapters/
-    01.md
-  summary.md
 ```
 
 ## Pipeline DSL
@@ -63,6 +53,35 @@ proc generate(prompt: string, target: string = ""): PipelineNode
 proc extract(src: PipelineNode, filter: string): PipelineNode
 proc summarize(src: PipelineNode, length: string = "brief"): PipelineNode
 ```
+
+## Planning & State Tracking
+
+Pipeline tracks explicit state:
+```
+Pending: [step1, step2, step3]
+In-Progress: [step2]
+Completed: [step1]
+Failed: []
+```
+
+Feeds back to context each iteration.
+
+## Sub-Agents
+
+Parent pipeline can delegate to child pipelines:
+```nim
+let child = run_pipeline("sub-task", parent = parent_pipeline)
+```
+
+Child runs isolated, returns summarized result.
+
+## Workload Contexts
+
+| Mode | Temp | Context | Tools |
+|------|------|---------|-------|
+| Chat | 0.0-0.3 | Aggressive pruning | Full |
+| Story | 0.7-1.0 | Global continuity | Memory retrieval |
+| Pipeline | 0.5-0.7 | Step-by-step | File I/O |
 
 ## See Also
 

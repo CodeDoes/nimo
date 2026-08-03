@@ -1,89 +1,47 @@
-# NIMO — Product Vision
+# 0001 — Vision
 
-## What is NIMO?
+NIMO is an AI Harness — deterministic software wrapping non-deterministic LLM inference.
 
-A CLI tool for running RWKV-7 language models locally. It supports:
+## Core Principles
 
-- **Chat** — interactive conversation with the model
-- **Generate** — one-shot text generation
-- **Bake** — pre-compute model state for fast resume
-- **Dashboard** — full-screen TUI with conversation history
-- **Pipeline** — multi-step LLM workflows driven by natural language intent
+1. **System Instruction** — Immutable rules anchored at top of context
+2. **Tool Calls** — Model outputs structured requests, harness executes
+3. **Agentic** — Human-in-the-loop with steering, interrupting, resuming
+4. **Planning** — Explicit task decomposition with state tracking
+5. **Sub-Agents** — Hierarchical delegation for complex tasks
+6. **Workload Contexts** — Different configs for chat vs creative
 
-## Core Concept: Pipelines
-
-Instead of a single prompt-response loop, NIMO lets users express complex tasks as **pipelines**.
-
-Example:
-```
-User: "Write a cyberpunk story about a robot ninja named Max"
-
-NIMO response:
-[nimo] Creating plan...
-[nimo] Plan:
-  1. Generate wiki: Max
-  2. Generate wiki: Rob
-  3. Extract context
-  4. Write Chapter 1
-  5. Write Chapter 2
-  ...
-
-[nimo] ▶ 1/10 Generating wiki: Max...
-→ wiki/max.md
-
-[nimo] ✔ 1/10 (0.8s)
-[nimo] ▶ 2/10...
-```
-
-The user describes what they want in natural language. NIMO parses it into a pipeline, then executes each step, showing progress inline.
-
-## Workspace Model
-
-Each project lives in a workspace directory:
-```
-~/.ws/myproject/
-  ├── config.toml       # model path, personas, settings
-  ├── wiki/             # character/world entries
-  ├── chapters/         # generated story chapters
-  └── outline.md        # story outline
-```
-
-Two modes:
-- **Release** — defaults to current working directory
-- **Dev** — defaults to last workspace used
-
-## Tool Calling
-
-The model can call tools. When it does, NIMO intercepts the call and runs the appropriate handler.
+## Architecture
 
 ```
-User: What's the weather in Boston?
-
-Assistant: 
-[get_weather {"location": "Boston, MA"}]
-
-User: <tool_result>72°F, sunny</tool_result>
-
-Assistant: The weather in Boston is 72°F and sunny.
+┌─────────────────────────────────────────┐
+│  User (CLI/TUI)                         │
+├─────────────────────────────────────────┤
+│  Harness (nimo)                         │
+│  ├─ Session Manager (message tree)      │
+│  ├─ Tool Dispatcher (pipeline, bash)    │
+│  ├─ Context Window Manager              │
+│  ├─ Checkpoint/Resume                   │
+│  └─ Workload Config (chat/story)        │
+├─────────────────────────────────────────┤
+│  Model (RWKV-7)                         │
+└─────────────────────────────────────────┘
 ```
 
-## Think Blocks
+## Workload Modes
 
-The model can "think" before responding. This is hidden from the user unless they enable debug mode.
+| Mode | Temp | Context | Tools | Use Case |
+|------|------|---------|-------|----------|
+| Chat | 0.0-0.3 | Aggressive pruning | Full | Conversational |
+| Story | 0.7-1.0 | Global continuity | Memory retrieval | Long-form creative |
+| Pipeline | 0.5-0.7 | Step-by-step | File I/O | Multi-step tasks |
 
-```
-Assistant: 
-<model is thinking...>
-Hi there! How can I help?
-```
+## Session Format
 
-## Status
+JSONL tree structure (see [1000-session.md](1000-session.md)).
 
-- ✅ Core inference engine (rwkv.nim, tokenizer, sampling)
-- ✅ Session management (session.nim)
-- ✅ 5 CLI binaries (chat, generate, bake, dashboard, main)
-- ❌ Pipeline DSL execution
-- ❌ Tool calling parsing
-- ❌ Think block parsing
-- ❌ Workspace management
-- ❌ Intent-to-DSL extraction
+## See Also
+
+- [1000-session.md](1000-session.md) — session data model
+- [3000-pipeline.md](3000-pipeline.md) — pipeline tool
+- [9100-logging.md](9100-logging.md) — JSONL logging
