@@ -18,20 +18,44 @@ Part = object
   content: string
 ```
 
-## Example
+## Message Structure
+
+Each message has parts in this order:
 
 ```
-Session:
-  messages[0]:
-    part[0] (system): "You are helpful"
-    part[1] (user):   "Hello"
-    part[2] (think):  "I should respond"
-    part[3] (text):   "Hi!"
-  messages[1]:
-    part[0] (user):   "What's the weather?"
-    part[1] (tool_call): "get_weather(Boston)"
-    part[2] (tool_result): "72°F"
-    part[3] (text):   "It's sunny"
+system → user → (think → text) OR (think → tool_call → tool_result)
+```
+
+## Example: Simple Chat
+
+```
+Message:
+  part[0] (system): "You are helpful"
+  part[1] (user):   "Hello"
+  part[2] (think):  "I should respond"
+  part[3] (text):   "Hi! How can I help?"
+```
+
+## Example: Tool Call
+
+```
+Message:
+  part[0] (user):   "What's the weather?"
+  part[1] (think):  "I need to call the weather tool"
+  part[2] (tool_call): "get_weather(Boston)"
+  part[3] (tool_result): "72°F, sunny"
+  part[4] (text):   "It's 72°F and sunny in Boston"
+```
+
+## Example: Multi-Tool Call
+
+```
+Message:
+  part[0] (user):   "Weather in Boston and NYC?"
+  part[1] (think):  "I'll check both cities"
+  part[2] (tool_call): "get_weather(Boston), get_weather(NYC)"
+  part[3] (tool_result): "Boston: 72°F, NYC: 68°F"
+  part[4] (text):   "Boston is 72°F and NYC is 68°F"
 ```
 
 ## See Also
