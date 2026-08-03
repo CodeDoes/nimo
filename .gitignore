@@ -1,6 +1,7 @@
 models/
 rwkv.cpp/
 build/
+!scripts/build/
 logs/
 .devenv/
 chat
