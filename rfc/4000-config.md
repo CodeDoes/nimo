@@ -18,6 +18,8 @@ with env applied on top of the file.
   "maxTokens": 200,
 
   // Backend (see 7500-gpu.md)
+  "backend": "cuda",          # "cpu" | "cuda" | "vulkan"
+  "lib": "",                  # explicit librwkv.so path (overrides backend default)
   "gpuLayers": 99,            // layers offloaded to VRAM (auto-clamped to fit)
   "allowCpuFallback": false,  // opt-in: run on CPU if the GPU is unusable
 
@@ -36,7 +38,11 @@ with env applied on top of the file.
 
 `NIMO_MODEL`, `NIMO_VOCAB`, `NIMO_GPU_LAYERS`, `NIMO_ALLOW_CPU_FALLBACK=1`,
 `NIMO_QUANT`, `NIMO_MODEL_CACHE`, `NIMO_STATE_CACHE`, `NIMO_SYSTEM_PROMPT`,
-`NIMO_BAKE_CONTEXT=1`, `NIMO_*`. Boolean flags accept `1`/`true`/`yes`.
+`NIMO_BAKE_CONTEXT=1`, `NIMO_MAX_TOKENS`,
+`NIMO_BACKEND=cpu|cuda|vulkan`,
+`NIMO_LIB=<path>`,
+`NIMO_SMOKE=1`, `NIMO_SMOKE_PROMPT`.
+Boolean flags accept `1`/`true`/`yes`.
 
 ## Personas
 

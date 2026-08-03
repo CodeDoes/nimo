@@ -1,19 +1,23 @@
 ## Nim wrapper for rwkv.cpp
 ## High-performance C/C++ implementation of RWKV language model inference.
+##
+## This is the BACKEND DISPATCHER (RFC 7500): it binds the rwkv.cpp C API at
+## runtime to whichever backend librwkv.so is selected, in priority order
+##   config file > env vars > rwkv (compile-time default) > backend modules.
+## Backend providers live in rwkv_cpu / rwkv_cuda / rwkv_vulkan; each only
+## knows its own lib. The single controlled switch point is selectBackend() +
+## bindBackend(path) — after that, every call below goes through the bound lib.
 
-import std/[macros, strformat]
+import std/[macros, strformat, dynlib]
+import ./config
+import ./rwkv_cpu, ./rwkv_cuda, ./rwkv_vulkan
 
 when defined(linux):
   {.passL: "-lstdc++ -fopenmp -Wl,-rpath,/usr/lib/x86_64-linux-gnu -Wl,-rpath,/run/opengl-driver/lib -Wl,-rpath,$ORIGIN/rwkv.cpp -Wl,-rpath,$ORIGIN/rwkv.cpp/ggml/src -Wl,-rpath,rwkv.cpp -Wl,-rpath,rwkv.cpp/ggml/src".}
 
-const libRwkv* {.strdefine.} = (
-  when defined(windows):
-    "(rwkv.dll|./rwkv.dll|rwkv.cpp/rwkv.dll)"
-  elif defined(macosx):
-    "(librwkv.dylib|./librwkv.dylib|rwkv.cpp/librwkv.dylib)"
-  else:
-    "(librwkv.so|./librwkv.so|rwkv.cpp/librwkv.so)"
-)
+# Compile-time default backend (rwkv-level authority). Override with e.g.
+#   nim c -d:rwkvDefaultBackend=vulkan ...
+const DefaultBackendKind* {.strdefine.} = "cuda"
 
 const
   RWKV_FILE_MAGIC* = 0x67676d66
@@ -59,25 +63,96 @@ type
   RwkvException* = object of CatchableError
     errorCode*: uint32
 
-{.push cdecl, dynlib: libRwkv.}
-proc rwkv_set_print_errors*(ctx: RwkvContext, printErrors: bool) {.importc: "rwkv_set_print_errors".}
-proc rwkv_get_print_errors*(ctx: RwkvContext): bool {.importc: "rwkv_get_print_errors".}
-proc rwkv_get_last_error*(ctx: RwkvContext): uint32 {.importc: "rwkv_get_last_error".}
-proc rwkv_init_from_file*(modelFilePath: cstring, nThreads: uint32, nGpuLayers: uint32): RwkvContext {.importc: "rwkv_init_from_file".}
-proc rwkv_clone_context*(ctx: RwkvContext, nThreads: uint32): RwkvContext {.importc: "rwkv_clone_context".}
-proc rwkv_eval*(ctx: RwkvContext, token: uint32, stateIn: ptr float32, stateOut: ptr float32, logitsOut: ptr float32): bool {.importc: "rwkv_eval".}
-proc rwkv_eval_sequence*(ctx: RwkvContext, tokens: ptr uint32, sequenceLen: csize_t, stateIn: ptr float32, stateOut: ptr float32, logitsOut: ptr float32): bool {.importc: "rwkv_eval_sequence".}
-proc rwkv_eval_sequence_in_chunks*(ctx: RwkvContext, tokens: ptr uint32, sequenceLen: csize_t, chunkSize: csize_t, stateIn: ptr float32, stateOut: ptr float32, logitsOut: ptr float32): bool {.importc: "rwkv_eval_sequence_in_chunks".}
-proc rwkv_get_n_vocab*(ctx: RwkvContext): csize_t {.importc: "rwkv_get_n_vocab".}
-proc rwkv_get_n_embed*(ctx: RwkvContext): csize_t {.importc: "rwkv_get_n_embed".}
-proc rwkv_get_n_layer*(ctx: RwkvContext): csize_t {.importc: "rwkv_get_n_layer".}
-proc rwkv_get_state_len*(ctx: RwkvContext): csize_t {.importc: "rwkv_get_state_len".}
-proc rwkv_get_logits_len*(ctx: RwkvContext): csize_t {.importc: "rwkv_get_logits_len".}
-proc rwkv_init_state*(ctx: RwkvContext, state: ptr float32) {.importc: "rwkv_init_state".}
-proc rwkv_free*(ctx: RwkvContext) {.importc: "rwkv_free".}
-proc rwkv_quantize_model_file*(modelFilePathIn: cstring, modelFilePathOut: cstring, formatName: cstring): bool {.importc: "rwkv_quantize_model_file".}
-proc rwkv_get_system_info_string*(): cstring {.importc: "rwkv_get_system_info_string".}
-{.pop.}
+# ---------------------------------------------------------------------------
+# Runtime C API: proc-pointer globals (bound at runtime by bindBackend)
+# ---------------------------------------------------------------------------
+var
+  rwkv_set_print_errors*: proc(ctx: RwkvContext, printErrors: bool) {.cdecl.}
+  rwkv_get_print_errors*: proc(ctx: RwkvContext): bool {.cdecl.}
+  rwkv_get_last_error*: proc(ctx: RwkvContext): uint32 {.cdecl.}
+  rwkv_init_from_file*: proc(modelFilePath: cstring, nThreads: uint32, nGpuLayers: uint32): RwkvContext {.cdecl.}
+  rwkv_clone_context*: proc(ctx: RwkvContext, nThreads: uint32): RwkvContext {.cdecl.}
+  rwkv_eval*: proc(ctx: RwkvContext, token: uint32, stateIn: ptr float32, stateOut: ptr float32, logitsOut: ptr float32): bool {.cdecl.}
+  rwkv_eval_sequence*: proc(ctx: RwkvContext, tokens: ptr uint32, sequenceLen: csize_t, stateIn: ptr float32, stateOut: ptr float32, logitsOut: ptr float32): bool {.cdecl.}
+  rwkv_eval_sequence_in_chunks*: proc(ctx: RwkvContext, tokens: ptr uint32, sequenceLen: csize_t, chunkSize: csize_t, stateIn: ptr float32, stateOut: ptr float32, logitsOut: ptr float32): bool {.cdecl.}
+  rwkv_get_n_vocab*: proc(ctx: RwkvContext): csize_t {.cdecl.}
+  rwkv_get_n_embed*: proc(ctx: RwkvContext): csize_t {.cdecl.}
+  rwkv_get_n_layer*: proc(ctx: RwkvContext): csize_t {.cdecl.}
+  rwkv_get_state_len*: proc(ctx: RwkvContext): csize_t {.cdecl.}
+  rwkv_get_logits_len*: proc(ctx: RwkvContext): csize_t {.cdecl.}
+  rwkv_init_state*: proc(ctx: RwkvContext, state: ptr float32) {.cdecl.}
+  rwkv_free*: proc(ctx: RwkvContext) {.cdecl.}
+  rwkv_quantize_model_file*: proc(modelFilePathIn: cstring, modelFilePathOut: cstring, formatName: cstring): bool {.cdecl.}
+  rwkv_get_system_info_string*: proc(): cstring {.cdecl.}
+
+var loadedLib*: LibHandle = nil   # keep the bound library alive for the process
+
+# ---------------------------------------------------------------------------
+# Backend selection & binding (RFC 7500; single controlled switch point)
+# ---------------------------------------------------------------------------
+proc backendFor*(kind: RwkvBackendKind): RwkvBackend =
+  ## Maps a backend kind to its runtime record. Backend modules (rwkv_cpu /
+  ## rwkv_cuda / rwkv_vulkan) are the LOWEST authority: they only know their lib.
+  case kind
+  of bkCpu:    cpuBackend()
+  of bkCuda:   cudaBackend()
+  of bkVulkan: vulkanBackend()
+
+proc selectBackend*(cfg: NimoConfig): RwkvBackend =
+  ## Decides which backend to run, in priority order:
+  ##   config file > env vars > rwkv (compile-time default) > backend modules.
+  ## Returns the concrete RwkvBackend; hand it to bindBackend() (or let
+  ## initRwkvModel() -> ensureBackend() do it automatically).
+  # 1. explicit lib path (config/env) wins outright — overrides even the kind
+  if cfg.libPath.len > 0:
+    result = backendFor(cfg.backend)
+    result.libPath = cfg.libPath
+    return
+  # 2. explicit backend choice from config file or env var
+  if cfg.backendSet:
+    return backendFor(cfg.backend)
+  # 3. rwkv-level compile-time default (flag -d:rwkvDefaultBackend=...)
+  return backendFor(parseBackendKind(DefaultBackendKind))
+
+proc bindBackend*(libPath: string) =
+  ## Loads the given librwkv.so and binds every rwkv_* symbol into the globals
+  ## above. THE single place that wires a backend lib into this process.
+  ## Raises RwkvException (with the offending symbol) if the library is missing
+  ## or is the wrong build, so problems surface as a clean message.
+  let lib = loadLib(libPath)
+  if lib == nil:
+    raise newException(RwkvException, "cannot load backend librwkv.so: '" & libPath & "'")
+  template require(name: string, sym: untyped) =
+    sym = cast[type(sym)](symAddr(lib, name))
+    if sym == nil:
+      raise newException(RwkvException,
+        "backend librwkv.so '" & libPath & "' is missing symbol '" & name &
+        "' (wrong backend build?)")
+  require("rwkv_set_print_errors", rwkv_set_print_errors)
+  require("rwkv_get_print_errors", rwkv_get_print_errors)
+  require("rwkv_get_last_error", rwkv_get_last_error)
+  require("rwkv_init_from_file", rwkv_init_from_file)
+  require("rwkv_clone_context", rwkv_clone_context)
+  require("rwkv_eval", rwkv_eval)
+  require("rwkv_eval_sequence", rwkv_eval_sequence)
+  require("rwkv_eval_sequence_in_chunks", rwkv_eval_sequence_in_chunks)
+  require("rwkv_get_n_vocab", rwkv_get_n_vocab)
+  require("rwkv_get_n_embed", rwkv_get_n_embed)
+  require("rwkv_get_n_layer", rwkv_get_n_layer)
+  require("rwkv_get_state_len", rwkv_get_state_len)
+  require("rwkv_get_logits_len", rwkv_get_logits_len)
+  require("rwkv_init_state", rwkv_init_state)
+  require("rwkv_free", rwkv_free)
+  require("rwkv_quantize_model_file", rwkv_quantize_model_file)
+  require("rwkv_get_system_info_string", rwkv_get_system_info_string)
+  loadedLib = lib
+
+proc ensureBackend*() =
+  ## Binds the compile-time default backend if none is bound yet, so direct
+  ## callers of initRwkvModel/quantizeModelFile without an explicit selection
+  ## still work. Safe to call at any time.
+  if loadedLib == nil:
+    bindBackend(backendFor(parseBackendKind(DefaultBackendKind)).libPath)
 
 # --- Pointer Conversion Helper Templates ---
 template unsafePtr*[T](arr: openArray[T]): ptr T =
@@ -144,6 +219,8 @@ proc decodeError*(flags: uint32): string =
 
 proc initRwkvModel*(modelPath: string, nThreads: uint32 = 4, nGpuLayers: uint32 = 99): RwkvModel =
   ## Loads model from GGML format file, offloading up to nGpuLayers to GPU VRAM.
+  ## Binds the default backend automatically if none was selected explicitly.
+  ensureBackend()
   let ctx = rwkv_init_from_file(modelPath.cstring, nThreads, nGpuLayers)
   if ctx == nil:
     let err = rwkv_get_last_error(nil)
@@ -253,6 +330,7 @@ genEvalOverloads(evalSequence, rwkv_eval_sequence, "sequence")
 genEvalOverloads(evalSequenceInChunks, rwkv_eval_sequence_in_chunks, "chunked")
 
 proc quantizeModelFile*(modelFilePathIn, modelFilePathOut: string, formatName: string): bool =
+  ensureBackend()
   rwkv_quantize_model_file(modelFilePathIn.cstring, modelFilePathOut.cstring, formatName.cstring)
 
 proc getSystemInfo*(): string =

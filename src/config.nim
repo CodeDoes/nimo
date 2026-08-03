@@ -19,12 +19,32 @@ const
   DefaultStateCacheDir* = ".nimo/state-cache"
   DefaultBakeContext* = false        # RFC 8000: bake systemPrompt state once, then resume it
 
+# --- Backend selection (RFC 7500) ---
+# Priority: config file > env vars > rwkv (compile-time default) > backend modules.
+# "backend" chooses the rwkv.cpp runtime lib; "lib" overrides the lib path itself.
+type
+  RwkvBackendKind* = enum
+    bkCpu = "cpu"
+    bkCuda = "cuda"
+    bkVulkan = "vulkan"
+
+proc parseBackendKind*(s: string): RwkvBackendKind =
+  ## Parses "cpu"/"cuda"/"vulkan" (also accepts "nvidia"). Raises ValueError otherwise.
+  case s.toLowerAscii()
+  of "cpu": bkCpu
+  of "cuda", "nvidia": bkCuda
+  of "vulkan", "amd": bkVulkan
+  else: raise newException(ValueError, "unknown backend '" & s & "' (expected cpu|cuda|vulkan)")
+
 type
   NimoConfig* = object
     modelPath*: string
     vocabPath*: string
     gpuLayers*: int
     allowCpuFallback*: bool  # run on CPU if the GPU is unusable
+    backend*: RwkvBackendKind      # runtime backend: cpu | cuda | vulkan
+    backendSet*: bool              # true when backend came from config/env (beats rwkv default)
+    libPath*: string               # explicit librwkv.so path (overrides per-backend default)
     threads*: int
     temperature*: float32
     topP*: float32
@@ -41,6 +61,9 @@ proc defaultConfig*(): NimoConfig =
     vocabPath: DefaultVocabPath,
     gpuLayers: DefaultGpuLayers,
     allowCpuFallback: false,  # GPU required by default; opt-in to CPU
+    backend: bkCuda,
+    backendSet: false,
+    libPath: "",
     threads: DefaultThreads,
     temperature: DefaultTemp,
     topP: DefaultTopP,
@@ -66,6 +89,14 @@ proc loadConfig*(path: string = DefaultConfigFile): NimoConfig =
         result.gpuLayers = j["gpuLayers"].getInt(result.gpuLayers)
       if j.hasKey("allowCpuFallback"):
         result.allowCpuFallback = j["allowCpuFallback"].getBool(result.allowCpuFallback)
+      if j.hasKey("backend"):
+        try:
+          result.backend = parseBackendKind(j["backend"].getStr())
+          result.backendSet = true
+        except ValueError:
+          discard
+      if j.hasKey("lib"):
+        result.libPath = j["lib"].getStr(result.libPath)
       if j.hasKey("threads"):
         result.threads = j["threads"].getInt(result.threads)
       if j.hasKey("temperature"):
@@ -95,6 +126,16 @@ proc loadConfig*(path: string = DefaultConfigFile): NimoConfig =
     result.vocabPath = envVocab
   if getEnv("NIMO_ALLOW_CPU_FALLBACK", "") in ["1", "true", "yes"]:
     result.allowCpuFallback = true
+  let envBackend = getEnv("NIMO_BACKEND", "")
+  if envBackend.len > 0:
+    try:
+      result.backend = parseBackendKind(envBackend)
+      result.backendSet = true
+    except ValueError:
+      discard
+  let envLib = getEnv("NIMO_LIB", "")
+  if envLib.len > 0:
+    result.libPath = envLib
   let envLayers = getEnv("NIMO_GPU_LAYERS", "")
   if envLayers.len > 0:
     try:

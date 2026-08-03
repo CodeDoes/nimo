@@ -3,7 +3,7 @@
 ## Emulates the pi agent loop: think -> text/tool_call, dispatch, feed result back.
 
 import std/[strutils, os, times, json, terminal]
-import ./session_manager, ./pipeline, ./config, ./cli, ./gpu, ./model_cache
+import ./session_manager, ./pipeline, ./config, ./cli, ./gpu, ./model_cache, ./rwkv
 
 const
   MaxToolIterations* = 8
@@ -201,20 +201,36 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
     echo "[nimo] offline mode: no model loaded; generation will return placeholder text"
     s.genStub = proc(userMsg: string): string = "[nimo offline] no model"
   else:
-    # Detect GPU state before loading so we can fail cleanly instead of crashing.
-    let gpu = gpuProbe()
-    echo "[gpu] " & gpu.describe()
-
-    let gpuDecision = decideGpu(gpu, cfg.gpuLayers, cfg.allowCpuFallback)
-    if gpuDecision.decision == gdBlocked:
-      printError "Cannot start: the GPU is unusable and CPU fallback is not enabled."
+    # Backend selection (RFC 7500): config > env > rwkv default > backend libs.
+    # selectBackend is the single controlled switch point; bind it ONCE here
+    # for the whole process, then GPU policy runs per backend kind.
+    let backend = selectBackend(cfg)
+    try:
+      bindBackend(backend.libPath)
+    except RwkvException as e:
+      printError "Backend error: " & e.msg
       echo ""
-      echo "Options:"
-      echo "  1. Fix the GPU (see the [gpu] message above), or"
-      echo "  2. Allow CPU fallback:"
-      echo "       nimo.json -> { \"allowCpuFallback\": true }"
-      echo "       or       -> NIMO_ALLOW_CPU_FALLBACK=1 <binary>"
+      echo "To run a different backend, set backend/lib in nimo.json or:"
+      echo "  NIMO_BACKEND=cpu|cuda|vulkan  NIMO_LIB=<librwkv.so path> <binary>"
       return
+    echo "[backend] " & backend.name & "  lib=" & backend.libPath
+
+    var gpuDecision = (decision: gdUseGpu, layers: cfg.gpuLayers)
+    if backend.kind == bkCuda:
+      # Detect GPU state before loading so we can fail cleanly instead of crashing.
+      let gpu = gpuProbe()
+      echo "[gpu] " & gpu.describe()
+
+      gpuDecision = decideGpu(gpu, cfg.gpuLayers, cfg.allowCpuFallback)
+      if gpuDecision.decision == gdBlocked:
+        printError "Cannot start: the GPU is unusable and CPU fallback is not enabled."
+        echo ""
+        echo "Options:"
+        echo "  1. Fix the GPU (see the [gpu] message above), or"
+        echo "  2. Allow CPU fallback:"
+        echo "       nimo.json -> { \"allowCpuFallback\": true }"
+        echo "       or       -> NIMO_ALLOW_CPU_FALLBACK=1 <binary>"
+        return
 
     # raw -> quantize -> cache: resolve the model actually loaded
     var modelToLoad = cfg.modelPath
@@ -227,17 +243,26 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
       elif p != cfg.modelPath:
         echo "[model] using cached " & cfg.quantFormat & ": " & p
 
-    let layers = if gpuDecision.decision == gdUseGpu:
-        safeGpuLayers(modelToLoad, gpuDecision.layers, freeVramMiB())
+    # Effective GPU layers, per backend kind.
+    var layers: int
+    case backend.kind
+    of bkCuda:
+      if gpuDecision.decision == gdUseGpu:
+        layers = safeGpuLayers(modelToLoad, gpuDecision.layers, freeVramMiB())
+        if layers < gpuDecision.layers:
+          echo "[gpu] VRAM-limited: using " & $layers & " of " & $gpuDecision.layers &
+               " requested GPU layer(s) (see nimo.json gpuLayers)."
+        else:
+          echo "[gpu] using " & $layers & " GPU layer(s)."
       else:
-        gpuDecision.layers
-    if gpuDecision.decision == gdCpuFallback:
-      echo "[gpu] CPU fallback enabled by config; running on CPU (gpuLayers=0)."
-    elif layers < gpuDecision.layers:
-      echo "[gpu] VRAM-limited: using " & $layers & " of " & $gpuDecision.layers &
-           " requested GPU layer(s) (see nimo.json gpuLayers)."
-    else:
-      echo "[gpu] using " & $layers & " GPU layer(s)."
+        layers = 0
+        echo "[gpu] CPU fallback enabled by config; running on CPU (gpuLayers=0)."
+    of bkCpu:
+      layers = 0
+      echo "[gpu] CPU backend: gpuLayers=0."
+    of bkVulkan:
+      layers = cfg.gpuLayers
+      echo "[gpu] Vulkan backend: using " & $layers & " GPU layer(s)."
 
     try:
       s.initModel(modelToLoad, cfg.vocabPath, layers,

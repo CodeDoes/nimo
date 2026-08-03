@@ -17,6 +17,8 @@
     vulkan-loader
     vulkan-headers
     vulkan-tools
+    shaderc        # provides glslc (ggml-vulkan shader compile)
+    glslang        # glslangValidator as fallback
     clblast
     ocl-icd
 
