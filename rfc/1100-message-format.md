@@ -18,10 +18,32 @@ Hi there! How can I help?
 
 ## Tool Call
 
+The model is prompted to emit the `[tool]` line form. Small RWKV models often
+emit the others, so the harness parses **all three** (see `src/harness.nim`,
+`parseToolCalls`):
+
+### 1. `[tool]` line (preferred)
+
 ```
-Assistant: 
+[tool] run_pipeline {"intent": "write a poem about roses"}
+```
+
+### 2. `<tool_call>` JSON tag
+
+```
 <tool_call>{"name": "run_pipeline", "arguments": {"intent": "Write a story"}}</tool_call>
 ```
+
+### 3. Bare JSON object line (fallback)
+
+```json
+{"name": "run_pipeline", "arguments": {"intent": "Write a story"}}
+{"tool": "run_pipeline", "arguments": {"intent": "Write a story"}}
+{"arguments": {"intent": "Write a story"}}            // implied run_pipeline
+```
+
+Any unrecognized non-JSON text around the call is kept as natural language
+(`stripToolCallText`).
 
 ## Tool Result
 

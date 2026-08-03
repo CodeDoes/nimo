@@ -60,6 +60,7 @@ Recommendations for future features. Not implemented unless accepted.
 | 5000 | [workspace.md](5000-workspace.md) | Workspace | Create, list, dev vs release modes |
 | 6000 | [src.md](6000-src.md) | Architecture | Desired source layout: lib/, app/, protocol/ |
 | 7000 | [env.md](7000-env.md) | Environment | Engines, memory, storage, model paths |
+| 7500 | [gpu.md](7500-gpu.md) | Environment | GPU detection, fallback, VRAM clamp |
 | 8000 | [state-bake.md](8000-state-bake.md) | Model | State caching with model/vocab/prompt hash |
 | 8100 | [rwkv.md](8100-rwkv.md) | Model | Quantization, model formats |
 | 8150 | [quantization.md](8150-quantization.md) | Model | Quant formats, VRAM budget, workflows |
@@ -78,6 +79,10 @@ Recommendations for future features. Not implemented unless accepted.
 6000-src.md ──▶ 1000-session.md (protocol/session.nim implements message model)
 6000-src.md ──▶ 3000-pipeline.md (protocol/user_intent.nim = pipeline system)
 7000-env.md ──▶ 8100-rwkv.md (engines map to lib/rwkv_*.so)
+7000-env.md ──▶ 7500-gpu.md (engine chosen at runtime by GPU probe)
+7500-gpu.md ──▶ 8150-quantization.md (model size vs VRAM budget)
+7500-gpu.md ──▶ 4000-config.md (allowCpuFallback / gpuLayers)
+8000-state-bake.md ──▶ 8150-quantization.md (model cache complements state cache)
 9100-logging.md ──▶ 9200-trace.md (trace uses logging infrastructure)
 9300-eval.md ──▶ 9400-test.md (eval uses test infrastructure)
 ```
