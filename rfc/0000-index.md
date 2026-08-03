@@ -25,7 +25,7 @@ Recommendations for future features. Not implemented unless accepted.
 | 1000 | [session.md](1000-session.md) | Session | Conversation model: messages, branches, parts |
 | 1100 | [message-format.md](1100-message-format.md) | Message Format | Message format specs: tool calling, think blocks |
 | 2000 | [cli.md](2000-cli.md) | CLI | Commands, workspace flow, intent extraction |
-| 3000 | [pipeline.md](3000-pipeline.md) | Pipeline | NimScript DSL, DAG execution |
+| 3000 | [pipeline.md](3000-pipeline.md) | Pipeline | Core DSL, execution model |
 | 4000 | [config.md](4000-config.md) | Config | Personas, model params, BNF settings |
 | 5000 | [workspace.md](5000-workspace.md) | Workspace | Create, list, dev vs release modes |
 | 6000 | [src.md](6000-src.md) | Architecture | Desired source layout: lib/, app/, protocol/ |
