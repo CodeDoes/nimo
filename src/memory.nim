@@ -15,7 +15,7 @@ proc newMemoryStore*(): MemoryStore =
   result.fiaas = newFIAAS()
 
 proc addMemory*(s: var MemoryStore, text: string, category: string = "general",
-                metadata: dict[string, string] = @[]): string =
+                metadata: Table[string,string] = initTable[string,string]()): string =
   ## Adds a memory entry and returns its ID.
   return s.fiaas.addEntry(text, category, metadata)
 
