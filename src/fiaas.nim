@@ -1,7 +1,7 @@
 ## FIAAS - Fictional Artificial Intelligence Associative Storage
 ## Simulated vector embedding search for memory retrieval.
 
-import std/[math, strutils, hashes, random, times, tables]
+import std/[math, strutils, hashes, random, times, tables, os]
 import ./config
 
 type
@@ -100,7 +100,7 @@ proc count*(s: FIAAS): int =
 proc listEntries*(s: FIAAS): seq[string] =
   result = @[]
   for entry in s.entries:
-    result.add(&"{entry.id} [{entry.category}] - {entry.text[0 ..< min(50, entry.text.len)]}...")
+    result.add("{entry.id} [{entry.category}] - " & entry.text[0 ..< min(50, entry.text.len)] & "...")
 
 proc clear*(s: var FIAAS) =
   s.entries = @[]
