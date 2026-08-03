@@ -8,7 +8,7 @@ type
   MemoryStore* = ref object
     fiaas*: FIAAS
     sessions*: seq[string]
-    characters*: Table[string, string]  # character name -> memory ID
+    characters*: Table[string,string]  # character name -> memory ID
 
 proc newMemoryStore*(): MemoryStore =
   result = MemoryStore.new()
