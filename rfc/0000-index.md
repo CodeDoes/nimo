@@ -14,7 +14,7 @@ Recommendations for future features. Not implemented unless accepted.
 6000-6999  Architecture (source structure)
 7000-7999  Environment (build, runtime)
 8000-8999  RWKV (model, quantization, state baking)
-9000-9999  Agent (autonomous actions)
+9000-9999  Agent + Infrastructure (autonomous actions, logging, trace, eval, test)
 ```
 
 ## RFCs
