@@ -8,7 +8,10 @@
   outputs = { self, nixpkgs }:
     let
       system = "x86_64-linux";
-      pkgs = nixpkgs.legacyPackages.${system};
+      pkgs = import nixpkgs {
+        inherit system;
+        config = { allowUnfree = true; };
+      };
     in
     {
       devShells.${system}.default = pkgs.mkShell {
@@ -25,6 +28,11 @@
           vulkan-loader
           clblast
           ocl-icd
+          # NVIDIA CUDA Toolkit
+          cudaPackages.cuda_nvcc
+          cudaPackages.cuda_cudart
+          cudaPackages.libcublas
+          cudaPackages.cuda_cuobjdump
         ];
 
         shellHook = ''

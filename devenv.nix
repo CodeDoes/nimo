@@ -19,6 +19,12 @@
     vulkan-tools
     clblast
     ocl-icd
+
+    # NVIDIA CUDA Toolkit (for rwkv.cpp GPU acceleration)
+    cudaPackages.cuda_nvcc
+    cudaPackages.cuda_cudart
+    cudaPackages.libcublas
+    cudaPackages.cuda_cupti
   ];
 
   languages.nim.enable = true;

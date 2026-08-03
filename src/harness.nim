@@ -7,7 +7,7 @@ import ./session_manager, ./pipeline, ./config, ./cli
 
 const
   MaxToolIterations* = 8
-  HarnessDefaultModel* = "models/rwkv7-g1h-2.9b-20260710-ctx10240-q4_0.bin"
+  HarnessDefaultModel* = "models/rwkv7-g1i-2.9b-20260729-ctx16384-f16.bin"
   HarnessDefaultVocab* = "rwkv.cpp/python/rwkv_cpp/rwkv_vocab_v20230424.txt"
 
 type
@@ -68,6 +68,33 @@ proc parseToolCalls*(text: string): seq[ToolCall] =
       discard
     pos = endPos + "</tool_call>".len
 
+  # Form 3: bare JSON object line like {"name":"run_pipeline","arguments":{...}}
+  # or {"tool":"run_pipeline",...} or {"arguments":{...},"prompt":...}
+  for line in text.splitLines():
+    let trimmed = line.strip()
+    if trimmed.len < 2 or not trimmed.startsWith("{"):
+      continue
+    # skip lines already captured as [tool] or <tool_call>
+    var already = false
+    for c in result:
+      if c.raw.strip() == trimmed:
+        already = true
+        break
+    if already: continue
+    try:
+      let j = parseJson(trimmed)
+      var name = ""
+      if "name" in j and j["name"].kind == JString:
+        name = j["name"].str
+      elif "tool" in j and j["tool"].kind == JString:
+        name = j["tool"].str
+      elif "arguments" in j and ("prompt" in j["arguments"] or "intent" in j["arguments"]):
+        name = "run_pipeline"
+      if name.len > 0 and "arguments" in j:
+        result.add(ToolCall(name: name, args: $(j["arguments"]), raw: trimmed))
+    except JsonParsingError:
+      discard
+
 proc stripToolCallText*(text: string): string =
   ## Removes tool call markers, leaving only natural text.
   result = text
@@ -84,17 +111,36 @@ proc stripToolCallText*(text: string): string =
   var lines = result.splitLines()
   var keptLines: seq[string]
   for line in lines:
-    if line.strip().startsWith("[tool]"):
+    let t = line.strip()
+    if t.startsWith("[tool]") or t.startsWith("<tool_call>"):
       continue
+    # drop bare JSON tool-call lines
+    if t.startsWith("{") and t.endsWith("}"):
+      try:
+        let j = parseJson(t)
+        if ("name" in j and "arguments" in j) or
+           ("tool" in j and "arguments" in j) or
+           ("arguments" in j and ("prompt" in j["arguments"] or "intent" in j["arguments"])):
+          continue
+      except JsonParsingError:
+        discard
     keptLines.add(line)
   result = keptLines.join("\n").strip()
 
 ## ---- System prompt for tool usage ----
 const HarnessSystemPrompt* = """You are a helpful assistant running inside the nimo harness.
-You have access to tools. To use a tool, emit exactly one line:
-[tool] tool_name {"argument": "value"}
+You have access to one tool: run_pipeline. It runs a generation pipeline for you.
+
+When the user asks you to write, generate, create, or produce content, call the tool
+by outputting EXACTLY one line, nothing else around it:
+[tool] run_pipeline {"intent": "what you want to write about"}
+
+Example:
+User: write me a poem about roses
+Assistant: [tool] run_pipeline {"intent": "write a short poem about roses"}
+
 After the tool result comes back, answer the user with natural text.
-Do not describe using tools — just use them when needed, then answer."""
+If no tool is needed, just answer directly in natural text."""
 
 proc buildUserPrompt*(userMsg: string): string =
   result = HarnessSystemPrompt & "\n\nUser: " & userMsg
