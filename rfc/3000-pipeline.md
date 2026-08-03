@@ -1,54 +1,65 @@
 # 3000 — Pipeline
 
-Pipeline is a tool the model can call. Steps produce artifacts in workspace, not session.
+Interactive pipeline tool. User can interact at different stages.
 
-## Session Flow
+## Flow
 
 ```
-messages[0] (system): "You are helpful"
-messages[1] (user): "Write a cyberpunk story about Max"
-messages[2] (think): "I should create a pipeline..."
-messages[3] (tool_call): "run_pipeline: Write a cyberpunk story"
-messages[4] (tool_result): "[nimo] ▶ 1/10 Generating wiki: Max...
-                           [nimo] ✔ 1/10 (0.8s)
-                           [nimo] ▶ 2/10 Generating wiki: Rob...
-                           [nimo] ✔ 2/10 (0.7s)
-                           ...
-                           [nimo] ✔ 10/10 (45.2s)"
-messages[5] (think): "Pipeline complete. Let me read the artifacts."
-messages[6] (text): "Your story is ready! Check wiki/max.md and chapters/01.md"
+user -> pipeline -> root.chat
+user -> pipeline -> pipeline.relavent-story.relavent-chapter.write
+pipeline.report -> user
+user -> pipeline -> pipeline.story.summarize
+pipeline.report -> user
+...
 ```
 
-## Pipeline Context
+## Example Session
 
-Each pipeline step defines what context it produces:
-
-```nim
-let max_wiki = generate("Generate character: Max", target = "wiki/max.md")
-let max_ctx = extract(max_wiki, "combat, gear, personality")
+```
+messages[0] (user): "Write a cyberpunk story about Max"
+messages[1] (tool_call): "run_pipeline: write story"
+messages[2] (tool_result): "[nimo] ▶ 1/10 Generating wiki: Max...
+                            [nimo] ✔ 1/10 (0.8s)
+                            ...
+                            [nimo] ✔ 10/10 (45.2s)"
+messages[3] (user): "Now write chapter 3"
+messages[4] (tool_call): "run_pipeline: write chapter 3"
+messages[5] (tool_result): "[nimo] ▶ 1/3 Writing chapter 3...
+                            [nimo] ✔ 1/3 (12.4s)
+                            → chapters/03.md"
+messages[6] (user): "Summarize the story so far"
+messages[7] (tool_call): "run_pipeline: summarize"
+messages[8] (tool_result): "[nimo] ▶ 1/1 Summarizing...
+                            [nimo] ✔ 1/1 (3.2s)
+                            → summary.md"
 ```
 
-- `target` writes to workspace file
-- `extract` pulls specific content into pipeline context
-- Context is isolated — not injected into session
+## Pipeline Structure
 
-## Session Stay Clean
+```
+pipeline.relavent-story.relavent-chapter.write
+pipeline.story.summarize
+pipeline.report
+```
 
-Session only contains:
-- `tool_call`: "run_pipeline: intent"
-- `tool_result`: trace output (progress + completion)
+Nested paths for organized workflow.
 
-Actual artifacts stay in workspace:
+## Workspace Artifacts
+
 ```
 ~/.ws/myproject/
-  wiki/max.md
-  chapters/01.md
-  outline.md
+  wiki/
+    max.md
+  chapters/
+    01.md
+    02.md
+    03.md
+  summary.md
 ```
 
 ## Interrupt / Resume
 
-Ctrl+C saves pipeline state:
+Ctrl+C saves state:
 ```
 ~/.ws/myproject/.nimo/pipeline_{id}.json
 ```
@@ -56,14 +67,6 @@ Ctrl+C saves pipeline state:
 Resume:
 ```
 nimo resume {pipeline_id}
-```
-
-## Pipeline DSL
-
-```nim
-proc generate(prompt: string, target: string = ""): PipelineNode
-proc extract(src: PipelineNode, filter: string): PipelineNode
-proc summarize(src: PipelineNode, length: string = "brief"): PipelineNode
 ```
 
 ## See Also
