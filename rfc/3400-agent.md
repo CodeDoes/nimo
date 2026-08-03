@@ -1,40 +1,40 @@
-# Agent Pipeline
+# 3400 — Agent Pipeline
 
-Autonomous agent actions pipeline.
+Agent performs autonomous actions on behalf of user.
 
 ## Concept
 
-An agent performs actions on behalf of the user. It can do autonomous actions.
+Agent receives a goal, decomposes it into steps, executes, and reports back.
 
-## Pipeline Structure
+## Flow
 
 ```
-User intent
-  → Agent analyzes intent
-  → Agent plans steps (may generate pipeline.nim)
-  → Agent executes steps
-  → Agent returns results
-  → Agent takes follow-up actions (if needed)
+User: "Research quantum computing basics"
+
+Agent:
+  1. Parse intent
+  2. Create pipeline:
+     - Research topic
+     - Break into sub-topics
+     - Generate summary
+  3. Execute pipeline
+  4. Return results
 ```
 
-## Example: Autonomous Research
+## Example Pipeline
 
 ```nim
-# Agent researches a topic autonomously
-let topic = generate("Research the following: quantum computing basics", target = "research/topic.md")
+# Agent researches autonomously
+let topic = generate("Research: quantum computing basics", target = "research/topic.md")
 
-# Agent breaks into sub-topics (parallel)
+# Parallel sub-topics
 let qubits = generate("Explain qubits", target = "research/qubits.md")
-let entanglement = generate("Explain entanglement", target = "research/entanglement.md")
-let applications = generate("List applications", target = "research/applications.md")
+let entangle = generate("Explain entanglement", target = "research/entanglement.md")
+let apps = generate("List applications", target = "research/apps.md")
 
-# Agent synthesizes
+# Synthesize
 let summary = summarize(
-  """
-  Qubits: #{qubits}
-  Entanglement: #{entanglement}
-  Applications: #{applications}
-  """,
+  "Qubits: $#{qubits}\nEntanglement: $#{entangle}\nApps: $#{apps}",
   length = "brief",
   target = "research/summary.md"
 )
@@ -46,10 +46,9 @@ let summary = summarize(
 - Task decomposition
 - Pipeline generation
 - Error recovery (retry/abort)
-- User notification on completion
+- Progress notification
 
 ## See Also
 
-- [3400-agent.md](3400-agent.md) — agent concept
-- [3000-pipeline.md](3000-pipeline.md) — core DSL
-- [2000-cli.md](2000-cli.md) — intent extraction flow
+- [2000-cli.md](2000-cli.md) — intent extraction
+- [3000-pipeline.md](3000-pipeline.md) — pipeline DSL

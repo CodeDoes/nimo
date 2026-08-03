@@ -1,35 +1,43 @@
-# Config
+# 4000 — Config
 
-## What to include
+What's in `config.toml` for a workspace.
 
-- default workspace path (defaults to `.` but can be overwritten)
-- model path
-- model inference engine
-- vocab path
-- state baking paths
-- personas
-  - user intent
-  - writer
-  - manager
-  - reader
-  - critique
-  - editor
-  - planner
-  - coder
-- default model parameters
-  - temperature
-  - max tokens
-  - top p
-  - frequency penalty
-  - presence penalty
-  - stop sequences
-- BNF settings
-- logging settings
-- eval settings
-- test settings
-- web app settings
+## Example config.toml
+
+```toml
+# Paths
+default_workspace = "~/.ws"
+model_path = "models/rwkv7-2.9b-q4.bin"
+vocab_path = "rwkv.cpp/python/rwkv_cpp/rwkv_vocab_v20230424.txt"
+
+# Model parameters
+temperature = 0.7
+top_p = 0.9
+max_tokens = 200
+stop_sequences = ["\n\nUser:", "\n\nAssistant:"]
+
+# Personas (which prompt templates to use)
+personas = ["user_intent", "writer", "editor"]
+
+# Engine
+engine = "cuda"  # cuda, vulkan, cpu
+
+# Logging
+log_level = "info"  # trace, debug, info, warn, error
+```
+
+## Personas
+
+| Persona | Purpose |
+|---------|---------|
+| `user_intent` | Parse vague user requests into structured tasks |
+| `writer` | Generate creative content |
+| `editor` | Refine and improve content |
+| `critique` | Evaluate quality |
+| `planner` | Create execution plans |
+| `coder` | Generate code |
 
 ## See Also
 
-- [3000-pipeline.md](3000-pipeline.md) — pipeline uses config for model params
-- [7000-env.md](7000-env.md) — engine selection maps to env config
+- [7000-env.md](7000-env.md) — engine options
+- [3000-pipeline.md](3000-pipeline.md) — config used by pipelines

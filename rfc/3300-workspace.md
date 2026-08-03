@@ -1,48 +1,58 @@
-# Workspace Pipeline
+# 3300 — Workspace Pipeline
 
-Workspace management pipeline.
+Workspace creation and initialization via pipeline.
 
-## Operations
+## Commands
 
-- `workspace create` — create new workspace
-- `workspace create --set-default` — create and set as default
-- `workspace use <path>` — switch to existing workspace
-- `workspace list` — list all workspaces
-- `workspace remove <path>` — remove a workspace
+```bash
+nimo workspace create              # Create in current dir
+nimo workspace create --set-default  # Create and set as default
+nimo workspace create myproject    # Create with name
+nimo workspace list                # List all workspaces
+nimo workspace use <path>          # Switch workspace
+```
+
+## Workspace Structure
+
+```
+~/.ws/myproject/
+  ├── config.toml          # Model path, personas, settings
+  ├── wiki/                # Character/world entries
+  ├── chapters/            # Generated content
+  └── outline.md
+```
 
 ## Pipeline Example
 
 ```nim
-# Create workspace pipeline
-let ws = generate(
+# Initialize workspace
+let setup = generate(
   """
-  Create workspace at ~/.ws/myproject
-  Initialize with:
-    - config.toml (model path, personas)
-    - wiki/ (empty dir for character/world entries)
-    - chapters/ (empty dir for story output)
+  Create workspace at ~/.ws/myproject:
+  - config.toml with model path
+  - wiki/ directory
+  - chapters/ directory
   """,
   target = "workspace/setup.md"
 )
 
-# Populate workspace
-let setup = generate(
+# Generate initial config
+let config = generate(
   """
-  Generate initial config for workspace:
-    - default_workspace = ~/.ws/myproject
-    - personas = [user_intent, writer, editor]
-    - model_path = models/rwkv7-2.9b-q4.bin
+  default_workspace = ~/.ws/myproject
+  personas = [user_intent, writer, editor]
+  model_path = models/rwkv7-2.9b-q4.bin
   """,
   target = "workspace/config.toml"
 )
 ```
 
-## Workspace States
+## Workspace Modes
 
-- **release**: `default_workspace = .` (cwd)
-- **dev**: `default_workspace = <last_workspace>` (from previous session)
+- **Release**: `default_workspace = .` (current directory)
+- **Dev**: `default_workspace = <last_workspace>`
 
 ## See Also
 
-- [5000-workspace.md](5000-workspace.md) — workspace commands
-- [3000-pipeline.md](3000-pipeline.md) — core DSL
+- [2000-cli.md](2000-cli.md) — CLI commands
+- [5000-workspace.md](5000-workspace.md) — workspace RFC

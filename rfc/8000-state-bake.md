@@ -1,14 +1,31 @@
-# State Bake
+# 8000 — State Bake
 
-Unique hash to determine if state bake cache is valid.
+Pre-compute model state from a prompt for fast resume.
+
+## Why
+
+Evaluating the system prompt every chat turn is slow. Baking stores the state so we can resume instantly.
+
+## Example
+
+```bash
+# Bake state from system prompt
+$ nimo bake "User: hi\n\nBot: Hello!" baked_state.bin
+
+# Use baked state
+$ nimo chat model.bin vocab.txt baked_state.bin
+```
+
+## Cache Key
+
 Hash based on:
-- bake examples
-- rwkv model hash
-- rwkv vocab hash
+- Model file hash
+- Vocab file hash
+- Prompt content
 
-Use token id 0 between examples. Basically anywhere you would want the assistant to naturally stop so the system can add its own parts or when it wants to hand over to the user. (tool_call, think end maybe? text end, response finished)
+If any change, cache is invalid and must be re-baked.
 
 ## See Also
 
-- [4000-config.md](4000-config.md) — state baking paths in config
-- [3000-pipeline.md](3000-pipeline.md) — pipeline may use baked state for caching
+- [2000-cli.md](2000-cli.md) — bake command
+- [4000-config.md](4000-config.md) — bake paths in config
