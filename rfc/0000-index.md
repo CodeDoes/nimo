@@ -62,6 +62,7 @@ Recommendations for future features. Not implemented unless accepted.
 | 7000 | [env.md](7000-env.md) | Environment | Engines, memory, storage, model paths |
 | 8000 | [state-bake.md](8000-state-bake.md) | Model | State caching with model/vocab/prompt hash |
 | 8100 | [rwkv.md](8100-rwkv.md) | Model | Quantization, model formats |
+| 8150 | [quantization.md](8150-quantization.md) | Model | Quant formats, VRAM budget, workflows |
 | 9100 | [logging.md](9100-logging.md) | Infrastructure | Log levels, targets, format |
 | 9200 | [trace.md](9200-trace.md) | Infrastructure | Execution tracing, debug info |
 | 9300 | [eval.md](9300-eval.md) | Infrastructure | Model evaluation, benchmarks |
