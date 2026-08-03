@@ -18,3 +18,5 @@ logs/
   sessions/   {session_id}.jsonl
   pipelines/  {pipeline_id}.jsonl
 ```
+
+Each pipeline run gets its own JSONL file with step-by-step trace.
