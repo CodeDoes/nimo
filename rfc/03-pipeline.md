@@ -1,4 +1,4 @@
-## What is this file for?
+# Pipeline DSL
 
 NimScript DSL for multi-step LLM pipelines. Run with `nim script pipeline.nim`.
 
@@ -86,3 +86,8 @@ Parallel execution of independent nodes is optional (nice-to-have).
 - Cache: skip nodes whose inputs haven't changed
 - Context window: chunking or RAG for large outputs
 - Error handling: retry or abort?
+
+## See Also
+
+- [cli.md](02-cli.md) — intent extraction produces pipeline.nim
+- [config.md](05-config.md) — pipeline uses config for model params

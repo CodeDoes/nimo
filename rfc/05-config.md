@@ -1,5 +1,8 @@
-# What to include in config
-- default workspace path (defaults to `.` but can be overwritten so that the workspace is in a constant directory)
+# Config
+
+## What to include
+
+- default workspace path (defaults to `.` but can be overwritten)
 - model path
 - model inference engine
 - vocab path
@@ -14,14 +17,19 @@
   - planner
   - coder
 - default model parameters
-  - temprature
+  - temperature
   - max tokens
   - top p
   - frequency penalty
   - presence penalty
   - stop sequences
-- bnf settings
+- BNF settings
 - logging settings
 - eval settings
 - test settings
 - web app settings
+
+## See Also
+
+- [pipeline.md](03-pipeline.md) — pipeline uses config for model params
+- [env.md](09-env.md) — engine selection maps to env config

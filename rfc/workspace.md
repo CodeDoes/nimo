@@ -1,3 +1,0 @@
-- `nimo workspace create`
-- `nimo workspace create --set-default`
-- `nimo workspace create my-workspace`
