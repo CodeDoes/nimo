@@ -1,39 +1,38 @@
-# Plan: Story Pipeline
+# Plan: Story Pipeline - PARTIAL ✓
 
-## Goal
+## Implemented
 
-Implement multi-chapter story generation with wiki context per RFC 3200.
+- `src/story.nim` - Story pipeline with validation
+- Chapter validation (word count, paragraph count, repeating segments)
+- Critique generation
+- Wiki entry generation
+- Chapter generation with context
+- Outline generation
 
-## Pipeline Steps
-
-1. **Wiki Generation** - Create character/world entries
-2. **Context Extraction** - Extract relevant details
-3. **Chapter Generation** - Sequential with recap
-4. **Validation** - Quality checks
-5. **Critique** - Feedback loop
-6. **Outline** - Finalize story structure
-
-## Commands
+## Commands (CLI stubs)
 
 ```bash
-nimo story create "cyberpunk robot ninja" --workspace myproject
-nimo story generate --chapter 1
-nimo story validate --chapter 1
-nimo story critique --chapter 1
-nimo story outline
+nimo story generate <premise> --workspace <name>
+nimo story validate <chapter> --workspace <name>
+nimo story critique <chapter> --workspace <name>
+nimo story outline --workspace <name>
 ```
 
-## Validation Criteria
+## Validation Functions
 
-- Word count >= 500 per chapter
-- Paragraph count >= 5 per chapter
-- No repeating segments (>3 consecutive repeated words)
-- Character consistency
-- Plot coherence
+```nim
+proc validateChapter*(content: string): ChapterValidation
+proc critiqueChapter*(content: string, chapterNum: int): CritiqueResult
+proc generateWikiEntry*(session, characterName, traits): string
+proc generateChapter*(session, chapterNum, title, wikiContext, previousRecap): string
+proc summarizeChapter*(session, content): string
+proc generateOutline*(session, premise): string
+proc runStoryPipeline*(ws, session, premise, maxChapters): bool
+```
 
-## Implementation
+## Next Steps
 
-1. `src/story.nim` - Story pipeline module
-2. `src/validate.nim` - Quality validation
-3. `src/critique.nim` - Critique pipeline
-4. Update `pipeline.nim` with story-specific steps
+1. Integrate with real model inference
+2. Add FIAAS (vector embedding search) for memory
+3. Add session branching support
+4. Implement full pipeline with retry logic

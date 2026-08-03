@@ -1,8 +1,21 @@
-# Plan: Workspace Management
+# Plan: Workspace Management - COMPLETE ✓
 
-## Goal
+## Implemented
 
-Implement workspace creation, management, and persistence per RFC 5000/3300.
+- `src/workspace.nim` - Full workspace management module
+- `src/nimo.nim` - CLI integration for workspace commands
+- Standard directory structure created
+
+## Commands
+
+```bash
+nimo workspace create <name>          # Create new workspace
+nimo workspace create <name> --set-default
+nimo workspace list                   # List all workspaces
+nimo workspace use <name>             # Switch workspace
+nimo workspace status                 # Show current workspace
+nimo workspace remove <name>          # Remove workspace
+```
 
 ## Workspace Structure
 
@@ -13,32 +26,32 @@ Implement workspace creation, management, and persistence per RFC 5000/3300.
   │   └── *.md
   ├── chapters/            # Generated content
   │   └── *.md
+  ├── sessions/            # JSONL session files
+  │   └── *.jsonl
   ├── outline.md           # Story outline
-  └── sessions/            # JSONL session files
-      └── *.jsonl
+  └── .nimo/
+      ├── model-cache/     # Quantized model cache
+      └── state-cache/     # Baked state cache
 ```
-
-## Commands
-
-```bash
-nimo workspace create [NAME]      # Create new workspace
-nimo workspace create --set-default [NAME]
-nimo workspace list               # List all workspaces
-nimo workspace use <path|name>    # Switch workspace
-nimo workspace remove <path|name> # Delete workspace
-nimo workspace status             # Show current workspace
-```
-
-## Implementation
-
-1. `src/workspace.nim` - Workspace management module
-2. Update `nimo.nim` CLI to add workspace subcommand
-3. Update `config.nim` to support workspace path
-4. Create default workspace template
 
 ## Validation
 
-- Create workspace, verify structure
-- List workspaces
-- Switch workspace, verify config loaded
-- Remove workspace
+```bash
+$ nimo workspace create test_project
+[workspace] Creating workspace: test_project
+[workspace] Created: /home/kit/.ws/test_project
+
+$ nimo workspace list
+[workspace] Available workspaces:
+  test_project
+
+$ nimo workspace use test_project
+[workspace] Switched to: test_project
+
+$ nimo workspace status
+[workspace] Current: /home/kit/.ws/test_project
+  wiki/ (0 items)
+  chapters/ (0 items)
+  sessions/ (0 items)
+  .nimo/ (2 items)
+```
