@@ -1,8 +1,8 @@
 # 3000 — Pipeline
 
-Interactive pipeline tool. User can interact at different stages.
+Pipeline is a tool the model can call. Supports interruption and adjustment.
 
-## Flow
+## Session Flow
 
 ```
 user -> pipeline -> root.chat
@@ -15,49 +15,25 @@ pipeline.report -> user
 
 ## Example Session
 
-```
-messages[0] (user): "Write a cyberpunk story about Max"
-messages[1] (tool_call): "run_pipeline: write story"
-messages[2] (tool_result): "[nimo] ▶ 1/10 Generating wiki: Max...
-                            [nimo] ✔ 1/10 (0.8s)
-                            ...
-                            [nimo] ✔ 10/10 (45.2s)"
-messages[3] (user): "Now write chapter 3"
-messages[4] (tool_call): "run_pipeline: write chapter 3"
-messages[5] (tool_result): "[nimo] ▶ 1/3 Writing chapter 3...
-                            [nimo] ✔ 1/3 (12.4s)
-                            → chapters/03.md"
-messages[6] (user): "Summarize the story so far"
-messages[7] (tool_call): "run_pipeline: summarize"
-messages[8] (tool_result): "[nimo] ▶ 1/1 Summarizing...
-                            [nimo] ✔ 1/1 (3.2s)
-                            → summary.md"
+```jsonl
+{"type":"session","version":3,"id":"...","timestamp":"...","cwd":"/home/kit/dev/nimo"}
+{"type":"message","id":"msg1","parentId":null,"message":{"role":"user","content":[{"type":"text","text":"Write a cyberpunk story"}]}}
+{"type":"message","id":"msg2","parentId":"msg1","message":{"role":"assistant","content":[{"type":"thinking","thinking":"Creating pipeline..."},{"type":"toolCall","id":"call1","name":"run_pipeline","arguments":{"intent":"write story"}}],"stopReason":"toolUse"}}
+{"type":"message","id":"msg3","parentId":"msg2","message":{"role":"toolResult","toolCallId":"call1","toolName":"run_pipeline","content":[{"type":"text","text":"[nimo] ▶ 1/10 Generating wiki: Max...\n[nimo] ✔ 1/10 (0.8s)\n[nimo] ▶ 2/10 Generating wiki: Rob...\n[nimo] ✔ 2/10 (0.7s)"}],"isError":false}}
+{"type":"message","id":"msg4","parentId":"msg3","message":{"role":"assistant","content":[{"type":"text","text":"Story in progress..."}]}}
+{"type":"message","id":"msg5","parentId":"msg4","message":{"role":"user","content":[{"type":"text","text":"Actually, make it sci-fi instead"}]}}
+{"type":"message","id":"msg6","parentId":"msg5","message":{"role":"assistant","content":[{"type":"thinking","thinking":"User changed direction. Adjusting pipeline..."},{"type":"toolCall","id":"call2","name":"run_pipeline","arguments":{"intent":"rewrite as sci-fi"}}],"stopReason":"toolUse"}}
+{"type":"message","id":"msg7","parentId":"msg6","message":{"role":"toolResult","toolCallId":"call2","toolName":"run_pipeline","content":[{"type":"text","text":"[nimo] ▶ 1/8 Generating wiki: Max (sci-fi)...\n[nimo] ✔ 1/8 (0.9s)"}],"isError":false}}
 ```
 
-## Pipeline Structure
+## Interruption
 
-```
-pipeline.relavent-story.relavent-chapter.write
-pipeline.story.summarize
-pipeline.report
-```
+User can interrupt anytime by sending a new message:
+- Current pipeline step is aborted
+- Agent adjusts based on new input
+- New pipeline starts (or continues from checkpoint)
 
-Nested paths for organized workflow.
-
-## Workspace Artifacts
-
-```
-~/.ws/myproject/
-  wiki/
-    max.md
-  chapters/
-    01.md
-    02.md
-    03.md
-  summary.md
-```
-
-## Interrupt / Resume
+## Checkpoint / Resume
 
 Ctrl+C saves state:
 ```
@@ -69,9 +45,27 @@ Resume:
 nimo resume {pipeline_id}
 ```
 
+## Workspace Artifacts
+
+```
+~/.ws/myproject/
+  wiki/
+    max.md
+  chapters/
+    01.md
+  summary.md
+```
+
+## Pipeline DSL
+
+```nim
+proc generate(prompt: string, target: string = ""): PipelineNode
+proc extract(src: PipelineNode, filter: string): PipelineNode
+proc summarize(src: PipelineNode, length: string = "brief"): PipelineNode
+```
+
 ## See Also
 
 - [1000-session.md](1000-session.md) — session data model
 - [9100-logging.md](9100-logging.md) — JSONL logging
 - [9200-trace.md](9200-trace.md) — trace output
-- [3200-story.md](3200-story.md) — story pipeline example
