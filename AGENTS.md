@@ -41,15 +41,16 @@ short reply, reports PASS/FAIL + wall time.
 
 ```bash
 devenv shell scripts/smoke_test.sh
-# cpu     -> uses gpuLayers=0 (CPU)
-# nvidia  -> CUDA backend (this machine: PASS, ~4s)
-# amd     -> needs rwkv.cpp/build-amd/librwkv.so built for Vulkan
-#            (scripts/build/amd-vulkan.sh; requires glslang + a CMake patch —
-#            not yet done on this box; NV/CPU PASS, amd reports SKIP)
+# cpu     -> NIMO_BACKEND=cpu (PASS, ~7s)
+# nvidia  -> NIMO_BACKEND=cuda (PASS, ~4s)
+# amd     -> NIMO_BACKEND=vulkan (PASS, ~6s)
+#
+# All three run through the single controlled path:
+#   config > env > rwkv default > backend modules
 ```
 
 The harness's `NIMO_SMOKE=1 NIMO_SMOKE_PROMPT="..." NIMO_MAX_TOKENS=n` single-shot
-mode also benchmarks a backend directly: `env SMOKE_TOKENS=16 scripts/smoke_test.sh`.
+mode also benchmarks a backend directly.
 
 ```bash
 # online (real model):
@@ -64,7 +65,44 @@ Run the harness with the rwkv libs on the loader path:
 LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:rwkv.cpp/ggml/src/ggml-cuda:$LD_LIBRARY_PATH" ./build/harness
 ```
 
-## GPU: verified by the harness itself
+## Backend Selection (RFC 7500)
+
+Runtime backend is selected in one controlled place (`src/rwkv.nim`). Priority:
+1. Config file: `nimo.json` → `"backend"` / `"lib"`
+2. Env vars: `NIMO_BACKEND=cpu|cuda|vulkan`, `NIMO_LIB=<path>`
+3. Compile-time default: `-d:rwkvDefaultBackend=cuda`
+4. Backend modules (`src/rwkv_cpu/cuda/vulkan.nim`) — lowest authority
+
+Switch point: `selectBackend(cfg)` → `bindBackend(libPath)` (one dlopen per session).
+
+Per-backend GPU policy:
+| backend | GPU probe | gpuLayers |
+|---------|-----------|----------|
+| `cpu`   | skip      | 0        |
+| `cuda`  | required  | clamped  |
+| `vulkan`| skip      | cfg.gpuLayers |
+
+### CLI generate command
+
+```bash
+# Direct binary
+./build/generate --backend cpu|cuda|vulkan --max-length 20 "prompt"
+
+# Via harness dispatcher
+./build/harness generate --backend vulkan --max-length 20 "prompt"
+```
+
+### Measured performance (8 tokens, this machine)
+
+| Backend | Time      | Notes |
+|---------|-----------|-------|
+| CPU     | ~15s      | OpenMP, no GPU |
+| CUDA    | ~1s       | RTX 2050 (may fail if GPU state is bad) |
+| Vulkan  | ~0.9s     | AMD Radeon Graphics (RADV) |
+
+Note: CUDA may fail with `CUDA driver is a stub library` on this hybrid-
+graphics laptop when the NVIDIA GPU is in a suspended state. Use `vulkan`
+or `cpu` as fallback. See `src/gpu.nim` for the probe logic.
 
 The harness detects the GPU state on startup via the CUDA Driver API
 (`src/gpu.nim`, `gpuProbe`), *before* loading the model — so a broken GPU gives a

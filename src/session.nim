@@ -12,10 +12,10 @@ type
     logits*: seq[float32]
     rng*: Rand
 
-proc initSession*(modelPath, vocabPath: string): Session =
+proc initSession*(modelPath, vocabPath: string; gpuLayers: int = DefaultGpuLayers): Session =
   ## Loads model and tokenizer. Raises on failure.
   result.tok = loadWorldTokenizer(vocabPath)
-  result.model = initRwkvModel(modelPath, DefaultThreads, DefaultGpuLayers)
+  result.model = initRwkvModel(modelPath, DefaultThreads, uint32(gpuLayers))
   result.state = result.model.newState()
   result.logits = result.model.newLogits()
   result.rng = initRand(cpuTime().int64)
