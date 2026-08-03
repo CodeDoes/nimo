@@ -50,6 +50,6 @@ let summary = summarize(
 
 ## See Also
 
-- [9000-agent.md](9000-agent.md) — agent concept
+- [3400-agent.md](3400-agent.md) — agent concept
 - [3000-pipeline.md](3000-pipeline.md) — core DSL
 - [2000-cli.md](2000-cli.md) — intent extraction flow
