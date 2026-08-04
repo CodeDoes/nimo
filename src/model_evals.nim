@@ -81,7 +81,7 @@ proc runNaturalEval*(session: var Session, generate: GenerateFn, trials: int): E
       inc result.fail
   result.rate = if result.success + result.fail > 0: result.success.float / (result.success + result.fail).float else: 0.0
 
-proc runEval*(bs: BootstrapResult): int =
+proc runEval*(bs: BootstrapResult, trials: int = 5): int =
   ## Runs all model evals and reports rates.
   echo "[model-eval] Running $1 trials per eval" % [$trials]
   echo ""
