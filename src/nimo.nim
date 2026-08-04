@@ -350,6 +350,19 @@ Usage:
     else:
       echo "Error: unit binary not found. Run 'nimble build' first."
       quit(1)
+  of "model-eval":
+    let binary = baseDir / "model_evals"
+    if fileExists(binary):
+      quit(execCmd(binary))
+    else:
+      echo "Error: model_evals binary not found. Run 'nimble build' first."
+      quit(1)
+    let binary = baseDir / "unit"
+    if fileExists(binary):
+      quit(execCmd(binary))
+    else:
+      echo "Error: unit binary not found. Run 'nimble build' first."
+      quit(1)
   else:
     echo "Error: unknown command '" & cmd & "'"
     echo "Run 'nimo' without arguments for help."
