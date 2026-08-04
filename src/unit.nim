@@ -285,8 +285,6 @@ proc evalValidate*(run: var seq[Check]) =
   run.add(Check(name: "countLines counts non-empty lines",
                 passed: validate.countLines("a" & chr(10) & chr(10) & "b" & chr(10) & "c") == 3))
 
-b
-c") == 3))
   let short = validateText("too short")
   run.add(Check(name: "validateText fails short text",
                 passed: not short.passed))
