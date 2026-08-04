@@ -141,11 +141,8 @@ proc evalGpuPolicy*(run: var seq[Check]) =
 # ----------------------------------------------------------------------
 proc evalModelCache*(run: var seq[Check]) =
   let tmpDir = getTempDir() / "nimo_mcache_test"
-  # Restore original memory file
-  if hadFile:
-    writeFile(memPath, oldContent)
-  else:
-    removeFile(memPath)
+  # Clean up test file
+  removeFile(memPath)
   createDir(tmpDir)
 
   var blob = newString(256 * 1024)
@@ -180,22 +177,16 @@ proc evalModelCache*(run: var seq[Check]) =
   run.add(Check(name: "already-quantized model is used directly",
                 passed: qp == qraw and qcached))
 
-  # Restore original memory file
-  if hadFile:
-    writeFile(memPath, oldContent)
-  else:
-    removeFile(memPath)
+  # Clean up test file
+  removeFile(memPath)
 
 # ----------------------------------------------------------------------
 # Eval 6: State cache
 # ----------------------------------------------------------------------
 proc evalStateCache*(run: var seq[Check]) =
   let tmpDir = getTempDir() / "nimo_scache_test"
-  # Restore original memory file
-  if hadFile:
-    writeFile(memPath, oldContent)
-  else:
-    removeFile(memPath)
+  # Clean up test file
+  removeFile(memPath)
   createDir(tmpDir)
 
   writeFile(tmpDir / "model.bin", "fake-model-contents")
@@ -218,11 +209,8 @@ proc evalStateCache*(run: var seq[Check]) =
   run.add(Check(name: "state round-trips through cache file",
                 passed: loadStateFromFile(loaded, stPath) and loaded == state))
 
-  # Restore original memory file
-  if hadFile:
-    writeFile(memPath, oldContent)
-  else:
-    removeFile(memPath)
+  # Clean up test file
+  removeFile(memPath)
 
 # ----------------------------------------------------------------------
 # Eval 7: Plan artifact
@@ -413,11 +401,8 @@ proc evalStoryPlan*(run: var seq[Check]) =
 proc evalMemory*(run: var seq[Check]) =
   # Create a test memory file
   let tmpDir = getTempDir() / "nimo_memory_test"
-  # Restore original memory file
-  if hadFile:
-    writeFile(memPath, oldContent)
-  else:
-    removeFile(memPath)
+  # Clean up test file
+  removeFile(memPath)
   createDir(tmpDir)
   
   let memDir = tmpDir / ".nimo" / "memory"
@@ -437,11 +422,8 @@ proc evalMemory*(run: var seq[Check]) =
   run.add(Check(name: "lookupMemory handles no matches",
                 passed: empty.len == 0 or empty.contains("nonexistent") == false))
   
-  # Restore original memory file
-  if hadFile:
-    writeFile(memPath, oldContent)
-  else:
-    removeFile(memPath)
+  # Clean up test file
+  removeFile(memPath)
 
 
 proc evalEngineMemory*(run: var seq[Check]) =
@@ -456,11 +438,10 @@ proc evalEngineMemory*(run: var seq[Check]) =
   let memDir = expandTilde("~/.nimo") / "memory"
   createDir(memDir)
   let memPath = memDir / "memories.json"
-  let hadFile = fileExists(memPath)
-  let oldContent = if hadFile: readFile(memPath) else: "[]"
-  writeFile(memPath, """[
-    {"text": "The lighthouse stood on the cliff", "category": "story"}
-  ]""" & oldContent)
+  if not fileExists(memPath):
+    writeFile(memPath, """[
+      {"text": "The lighthouse stood on the cliff", "category": "story"}
+    ]""")
   
   var p = newPlan("memory test")
   p.addStep(extractStep("pull-memory", "memory", "lighthouse"))
@@ -481,11 +462,8 @@ proc evalEngineMemory*(run: var seq[Check]) =
                 passed: p.steps[0].output.contains("lighthouse") or debugResult.contains("lighthouse"),
                 detail: "output=" & p.steps[0].output & " debug=" & debugResult))
   
-  # Restore original memory file
-  if hadFile:
-    writeFile(memPath, oldContent)
-  else:
-    removeFile(memPath)
+  # Clean up test file
+  removeFile(memPath)
 
 
 proc runAllEvals*(): int =
