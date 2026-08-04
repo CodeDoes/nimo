@@ -428,6 +428,16 @@ proc evalEngineMemory*(run: var seq[Check]) =
     genCalls.add(prompt)
     return "generated: " & prompt
 
+  # Create memory file for lookupMemory
+  let tmpDir = getTempDir() / "nimo_mem_engine_test"
+  removeDir(tmpDir)
+  createDir(tmpDir)
+  let memDir = tmpDir / ".nimo" / "memory"
+  createDir(memDir)
+  writeFile(memDir / "memories.json", """[
+    {"text": "The lighthouse stood on the cliff", "category": "story"}
+  ]""")
+  
   var p = newPlan("memory test")
   p.addStep(extractStep("pull-memory", "memory", "lighthouse"))
   p.addStep(generateStep("answer", "use the memory", "output:answer"))
@@ -443,7 +453,9 @@ proc evalEngineMemory*(run: var seq[Check]) =
                 detail: "genCalls=" & $genCalls))
   run.add(Check(name: "engine memory: extract output from lookupMemory",
                 passed: p.steps[0].output.contains("lighthouse"),
-                detail: "output=" & p.steps[0].output))
+                detail: "output=" & p.steps[0].output)
+  
+  removeDir(tmpDir)
 
 
 proc runAllEvals*(): int =
