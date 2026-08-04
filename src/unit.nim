@@ -400,7 +400,9 @@ proc evalMemory*(run: var seq[Check]) =
   removeDir(tmpDir)
   createDir(tmpDir)
   
-  let memPath = tmpDir / "memories.json"
+  let memDir = tmpDir / ".nimo" / "memory"
+  createDir(memDir)
+  let memPath = memDir / "memories.json"
   writeFile(memPath, """[
     {"text": "The lighthouse stood on the cliff", "category": "story"},
     {"text": "Kael was a brave sailor", "category": "character"}
