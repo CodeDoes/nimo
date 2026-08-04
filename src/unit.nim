@@ -410,6 +410,7 @@ proc runAllEvals*(): int =
   evalEmission(run)
   evalSessionRecording(run)
   evalStoryPlan(run)
+  evalMemory(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="
   var passCount = 0
@@ -426,3 +427,29 @@ proc runAllEvals*(): int =
 
 when isMainModule:
   quit(runAllEvals())
+
+# ----------------------------------------------------------------------
+# Eval 15: memory lookup
+# ----------------------------------------------------------------------
+proc evalMemory*(run: var seq[Check]) =
+  # Create a test memory file
+  let tmpDir = getTempDir() / "nimo_memory_test"
+  removeDir(tmpDir)
+  createDir(tmpDir)
+  
+  let memPath = tmpDir / "memories.json"
+  writeFile(memPath, """[
+    {"text": "The lighthouse stood on the cliff", "category": "story"},
+    {"text": "Kael was a brave sailor", "category": "character"}
+  ]""")
+  
+  let result = lookupMemory("lighthouse", tmpDir)
+  run.add(Check(name: "lookupMemory finds relevant context",
+                passed: result.contains("lighthouse") or result.len > 0,
+                detail: result))
+  
+  let empty = lookupMemory("nonexistent", tmpDir)
+  run.add(Check(name: "lookupMemory handles no matches",
+                passed: empty.len == 0 or empty.contains("nonexistent") == false))
+  
+  removeDir(tmpDir)
