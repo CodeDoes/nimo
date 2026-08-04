@@ -7,7 +7,7 @@
 
 import std/[strutils, os, times, json]
 import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header
-import ./program, ./engine, ./validate, ./config
+import ./program, ./engine, ./validate, ./config, ./orchestrator
 
 type
   Check* = object
@@ -473,6 +473,38 @@ proc evalTurnPrimitives*(run: var seq[Check]) =
                 detail: ctx))
 
 # ----------------------------------------------------------------------
+# Eval 11: orchestrator — natural language goal -> plan (RFC 3400)
+# ----------------------------------------------------------------------
+proc evalOrchestrator*(run: var seq[Check]) =
+  run.add(Check(name: "matchIntent: poem",
+                passed: matchIntent("write a poem about roses") == itPoem))
+  run.add(Check(name: "matchIntent: story",
+                passed: matchIntent("write a story about a lighthouse") == itStory))
+  run.add(Check(name: "matchIntent: chapter",
+                passed: matchIntent("make chapter 3 about Kael") == itChapter))
+  run.add(Check(name: "matchIntent: remember",
+                passed: matchIntent("remember that the sky is blue") == itMemory))
+  run.add(Check(name: "matchIntent: falls back to answer",
+                passed: matchIntent("what is the capital of France") == itAnswer))
+
+  let story = interpret("write a story about a lighthouse")
+  run.add(Check(name: "interpret: keeps the goal verbatim",
+                passed: story.goal == "write a story about a lighthouse",
+                detail: story.goal))
+  run.add(Check(name: "interpret: story plan has generate + write + report",
+                passed: story.steps.len == 4 and
+                        story.steps[1].kind == skGenerate and
+                        story.steps[1].skill == "output:story" and
+                        story.steps[2].kind == skWrite and
+                        story.steps[3].kind == skReport,
+                detail: "steps=" & $story.steps.len))
+  run.add(Check(name: "interpret: answer is just generate + report",
+                passed: interpret("hi").steps.len == 2 and
+                        interpret("hi").steps[0].kind == skGenerate))
+  run.add(Check(name: "interpret: memory writes a memory file",
+                passed: interpret("remember the plan").steps[2].path == "memory.md"))
+
+# ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
 proc runAllEvals*(): int =
@@ -487,6 +519,7 @@ proc runAllEvals*(): int =
   evalPlanArtifact(run)
   evalEngine(run)
   evalValidate(run)
+  evalOrchestrator(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="
   var passCount = 0

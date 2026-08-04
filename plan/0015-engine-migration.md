@@ -241,13 +241,15 @@ count-updated); harness/chat/generate spot-checked live.
 **Files**: `harness.nim`, `session_manager.nim`, `unit.nim`, new
 `src/orchestrator.nim`.
 
-1. `orchestrator.nim`:
+1. `orchestrator.nim` (partially DONE — `interpret(goal) -> Plan` + template
+   registry + unit tests landed, commits after Phase 0):
    - `interpret(userMsg, session, config) -> Plan`: deterministic **template
-     registry** first (matches goal keywords → story / memory / answer / custom
-     templates from `nimo.json`), each template a `Plan` of pointed steps.
+     registry** first (matches goal keywords → story / poem / chapter /
+     memory / answer), each template a `Plan` of pointed steps. The learned
+     planner later swaps in behind the same `interpret` seam.
    - Learned planner-state path (stub now): a `planner` skill bake emits
      `[step]`/JSON lines (RFC 1100 emission format); parse via the re-scoped
-     `parseToolCalls` → build the plan. This is the distillation target.
+     `parseToolCalls` → build the plan (Phase 5 distillation target).
 2. `harness.nim`: replace `runHarnessTurn` with
    `interpret → engine.run → report`:
    - Delete the ≤8-iteration improvisation loop.
