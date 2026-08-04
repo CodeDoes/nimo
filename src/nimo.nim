@@ -344,57 +344,5 @@ when isMainModule:
 # ---------------------------------------------------------------------------
 # Session commands (nimo new, nimo run)
 # ---------------------------------------------------------------------------
-proc cmdRun(rest: seq[string]): int =
-  ## `nimo run <plan_path>` — execute a plan through the engine
-  if rest.len == 0:
-    echo """Usage: nimo run <plan_path> [--resume]
-
-Execute a plan artifact through the engine.
-Example:
-  nimo run .nimo/programs/myplan.json
-"""
-    return 1
-
-  let planPath = rest[0]
-  if not fileExists(planPath):
-    echo "Error: plan not found: " & planPath
-    return 1
-
-  let plan = loadPlan(planPath)
-  echo "[run] Plan: " & plan.id
-  echo "[run] Goal: " & plan.goal
-  echo "[run] Steps: " & $plan.steps.len
-  return 0
-
-proc cmdNew(rest: seq[string]): int =
-  ## `nimo new <goal>` — compile goal and save plan
-  if rest.len == 0:
-    echo """Usage: nimo new "<goal>"
-
-Compile a natural-language goal into a plan.
-Example:
-  nimo new "create a story about a lighthouse"
-"""
-    return 1
-
-  var goal = ""
-  for i, a in rest:
-    if i > 0: goal.add(" ")
-    goal.add(a)
-  let plan = interpret(goal)
-
-  echo "[new] Goal: " & plan.goal
-  echo "[new] Plan: " & plan.id
-  echo "[new] Steps:"
-  for i, step in plan.steps:
-    echo "  " & $i & ". [" & $step.kind & "] " & step.name
-
-  let programsDir = getCurrentDir() / ".nimo" / "programs"
-  createDir(programsDir)
-  let planPath = programsDir / (plan.id & ".json")
-  plan.save(planPath)
-  echo "[new] Saved: " & planPath
-  return 0
-
 when isMainModule:
   main()
