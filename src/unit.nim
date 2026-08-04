@@ -35,9 +35,6 @@ proc newSessionWithMockGen*(script: seq[string], registerPipeline: bool = true):
   return (s, gen)
 
 # ----------------------------------------------------------------------
-# Eval 1: Tool calling
-# ----------------------------------------------------------------------
-# ----------------------------------------------------------------------
 # Eval 1: Orchestrator + engine turn (replaces tool-call improvisation)
 # ----------------------------------------------------------------------
 proc evalToolCalling*(run: var seq[Check]) =
@@ -157,52 +154,6 @@ proc evalSessionLogging*(run: var seq[Check]) =
   else:
     run.add(Check(name: "session file written", passed: false, detail: "missing " & path))
 
-proc evalSessionLogging*(run: var seq[Check]) =
-  var (s, gen) = newSessionWithMockGen(@[
-    "[tool] run_pipeline {\"intent\":\"log me\"}",
-    "pipeline: logged",
-    "Final response here."
-  ])
-  discard runHarnessTurn(s, "please log", gen)
-
-  let path = "logs/eval_session_test.jsonl"
-  s.saveSession(path)
-
-  if fileExists(path):
-    # JSONL: one JSON object per line
-    var objs: seq[JsonNode]
-    for line in path.lines:
-      if line.strip().len > 0:
-        try:
-          objs.add(parseJson(line))
-        except JsonParsingError:
-          discard
-
-    run.add(Check(name: "session file has a header line",
-                  passed: objs.len >= 1))
-    run.add(Check(name: "writes 4 messages (user, tool_call, tool_result, text)",
-                  passed: objs.len == 5,
-                  detail: "expected 5 objects (header+4 msgs), got " & $objs.len))
-    if objs.len == 5:
-      let userLine = objs[1]
-      let toolCallLine = objs[2]
-      let toolResultLine = objs[3]
-      let textLine = objs[4]
-      run.add(Check(name: "first message is the user request",
-                    passed: userLine["role"].str == "user"))
-      run.add(Check(name: "tool_call message has stopReason=toolUse",
-                    passed: toolCallLine["stopReason"].str == "toolUse"))
-      run.add(Check(name: "tool_call contains toolName+args",
-                    passed: toolCallLine["content"][0]["toolName"].str == "run_pipeline" and
-                              toolCallLine["content"][0]["arguments"].str.len > 0))
-      run.add(Check(name: "tool_result references its tool_call",
-                    passed: toolResultLine["parentId"].str == toolCallLine["id"].str))
-      run.add(Check(name: "final text message role=assistant",
-                    passed: textLine["role"].str == "assistant"))
-  else:
-    run.add(Check(name: "session file written", passed: false, detail: "missing " & path))
-
-# ----------------------------------------------------------------------
 # Eval 4: GPU policy (explicit only — no fallbacks)
 # ----------------------------------------------------------------------
 proc evalGpuPolicy*(run: var seq[Check]) =
