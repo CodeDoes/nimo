@@ -232,8 +232,18 @@ Example:
   echo "[run] Goal: " & plan.goal
   echo "[run] Steps: " & $plan.steps.len
   
-  # For now, report - full execution needs bootstrap + engine
-  echo "[run] To execute with model, bootstrap a session first."
+  # Execute through engine with a placeholder generator
+  # (Full model integration: bootstrap session, wire generateTurn)
+  var sinkText = ""
+  let gen: GenerateFn = proc(prompt: string): string =
+    "[stub] " & prompt
+  let result = plan.run(gen, sink = proc(t: string) = sinkText.add(t), maxSteps = 256)
+  
+  echo "[run] Completed: " & $result.completed
+  echo "[run] Steps run: " & $result.stepsRun
+  if sinkText.len > 0:
+    echo "[run] Output:"
+    echo sinkText
   return 0
 
 proc cmdNew(rest: seq[string]): int =
