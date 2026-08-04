@@ -29,7 +29,8 @@ proc newWorkspace*(name: string, baseDir: string = DefaultWorkspaceDir): Workspa
   result = Workspace.new()
   result.name = name
   let ts = nowTimestamp()
-  result.path = baseDir / name
+  # Expand `~` so dirs land in HOME rather than a literal `./~` in the cwd.
+  result.path = expandTilde(baseDir) / name
   result.created = ts
   result.isActive = false
 

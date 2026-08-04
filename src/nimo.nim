@@ -1,8 +1,175 @@
 ## NIMO CLI entry point
 ## Usage: nimo <command> [args...]
-## Commands: generate, quantize, harness, chat, bake, workspace, story, eval
+## Commands: generate, quantize, harness, chat, bake, workspace, story, unit
+##
+## Phase 0 item 4: the CLI DELEGATES to library modules — workspace.nim and
+## story.nim hold the logic; this file only parses args and calls their
+## functions. (Standalone tool binaries like generate/quantize/chat/harness
+## are spawned because each owns its own arg parse + bootstrap — see
+## rfc/2000-cli.md "Conceptual only".)
 
-import std/[os, strutils, osproc, times]
+import std/[os, strutils, osproc, times, strformat]
+import ./config, ./workspace, ./story, ./bootstrap
+
+proc resolveWorkspace*(nameOrPath: string = ""): Workspace =
+  ## Resolves the workspace for a story/workspace command: explicit name/path
+  ## first, then the default for the current directory, else a fresh untitled
+  ## workspace (which becomes the default).
+  if nameOrPath.len > 0:
+    return findWorkspace(nameOrPath)
+  let def = getDefaultWorkspace()
+  if def.len > 0 and dirExists(def):
+    return loadWorkspace(def)
+  let ws = newWorkspace("untitled_" & now().format("yyyyMMddHHmmss"))
+  setDefaultWorkspace(ws.path)
+  return ws
+
+proc cmdWorkspace(rest: seq[string]): int =
+  if rest.len == 0:
+    echo """Usage: nimo workspace <command> [args]
+
+Commands:
+  create [NAME] [--set-default]  Create new workspace
+  list                           List all workspaces
+  use <name|path>                Switch to workspace
+  status                         Show workspace status
+  remove <name|path>             Remove workspace"""
+    return 1
+
+  let wsCmd = rest[0].strip().toLowerAscii()
+  let wsArgs = if rest.len > 1: rest[1 ..< rest.len] else: @[]
+  try:
+    case wsCmd
+    of "create":
+      let setNameDefault = "--set-default" in wsArgs
+      # first positional that is not a known flag is the name
+      var name = ""
+      for a in wsArgs:
+        if a.startsWith("--"): continue
+        name = a
+        break
+      if name.len == 0:
+        name = "untitled_" & now().format("yyyyMMddHHmmss")
+      echo "[workspace] Creating workspace: " & name
+      let ws = newWorkspace(name)
+      if setNameDefault:
+        setDefaultWorkspace(ws.path)
+        echo "[workspace] Set as default for: " & getCurrentDir()
+      echo "[workspace] Created: " & ws.path
+    of "list":
+      echo "[workspace] Available workspaces:"
+      let wss = listWorkspaces()
+      if wss.len == 0: echo "  (none)"
+      for ws in wss:
+        echo "  " & ws.name
+    of "use":
+      if wsArgs.len == 0:
+        echo "Error: workspace name required"
+        return 1
+      let ws = findWorkspace(wsArgs[0])
+      setDefaultWorkspace(ws.path)
+      echo "[workspace] Switched to: " & ws.name
+    of "status":
+      let def = getDefaultWorkspace()
+      if def.len > 0 and dirExists(def):
+        workspaceStatus(loadWorkspace(def))
+      else:
+        echo "[workspace] No active workspace"
+    of "remove":
+      if wsArgs.len == 0:
+        echo "Error: workspace name required"
+        return 1
+      if removeWorkspace(wsArgs[0]):
+        echo "[workspace] Removed: " & wsArgs[0]
+      else:
+        echo "Error: workspace not found: " & wsArgs[0]
+        return 1
+    else:
+      echo "Error: unknown workspace command '" & wsCmd & "'"
+      return 1
+  except CatchableError as e:
+    echo "Error: " & e.msg
+    return 1
+  return 0
+
+proc cmdStory(rest: seq[string]): int =
+  if rest.len == 0:
+    echo """Usage: nimo story <command> [args]
+
+Commands:
+  generate <premise> [--workspace <name>] [--chapters N]
+  validate <chapter-file> [--workspace <name>]
+  critique <chapter-file> [--workspace <name>]
+  outline [--workspace <name>] [--premise <text>]"""
+    return 1
+
+  let storyCmd = rest[0].strip().toLowerAscii()
+  let storyArgs = if rest.len > 1: rest[1 ..< rest.len] else: @[]
+
+  # find --workspace / --premise / --chapters values in args
+  proc flagVal(args: seq[string], flag: string): string =
+    for i, a in args:
+      if a == flag and i + 1 < args.len: return args[i + 1]
+    return ""
+  let wsName = flagVal(storyArgs, "--workspace")
+
+  try:
+    case storyCmd
+    of "validate", "critique":
+      if storyArgs.len == 0:
+        echo "Error: chapter file required"
+        return 1
+      let content = readFile(storyArgs[0])
+      if storyCmd == "validate":
+        let v = validateChapter(content)
+        echo "[story] Chapter: " & v.title
+        echo "[story] " & $v.wordCount & " words, " & $v.paragraphCount &
+             " paragraphs, " & $v.repeatingSegments & " repeating segments"
+        echo "[story] Quality: " & $v.quality
+        for issue in v.issues:
+          echo "  - " & issue
+        return if v.quality == sqPass: 0 else: 1
+      else:
+        let c = critiqueChapter(content, 0)
+        echo "[story] Score: " & $c.score
+        echo "[story] Strengths: " & c.strengths.join(", ")
+        echo "[story] Weaknesses: " & c.weaknesses.join(", ")
+        echo "[story] Suggestions: " & c.suggestions.join(", ")
+        return if c.shouldRevise: 1 else: 0
+    of "outline", "generate":
+      # Needs the real model: one bootstrap, then delegate to story.nim.
+      if storyCmd == "generate" and storyArgs.len == 0:
+        echo "Error: premise required"
+        return 1
+      let cfg = loadConfig()
+      let bs = bootstrapSession(cfg, getCurrentDir())
+      for line in bs.lines: echo line
+      if not bs.ok: return 1
+      var s = bs.session
+      let ws = resolveWorkspace(wsName)
+      if storyCmd == "outline":
+        let premise = flagVal(storyArgs, "--premise")
+        echo "[story] Generating outline for workspace " & ws.name & "..."
+        let outline = generateOutline(s, premise)
+        writeFile(ws.path / "outline.md", outline)
+        echo "[story] Outline saved to " & ws.path / "outline.md"
+      else:
+        let premise = storyArgs[0]
+        var chapters = 5
+        let chStr = flagVal(storyArgs, "--chapters")
+        if chStr.len > 0: chapters = parseInt(chStr)
+        echo "[story] Running story pipeline for workspace " & ws.name & "..."
+        if runStoryPipeline(ws, s, premise, chapters):
+          echo "[story] Story complete."
+        else:
+          echo "[story] Pipeline finished with revisions pending."
+      return 0
+    else:
+      echo "Error: unknown story command '" & storyCmd & "'"
+      return 1
+  except CatchableError as e:
+    echo "Error: " & e.msg
+    return 1
 
 proc main() =
   let args = commandLineParams()
@@ -58,119 +225,13 @@ Usage:
     var cmdLine = binary & " " & rest.join(" ")
     if execCmd(cmdLine) != 0: quit(1)
   of "workspace":
-    if rest.len == 0:
-      echo "Usage: nimo workspace <command> [args]"
-      echo ""
-      echo "Commands:"
-      echo "  create [NAME] [--set-default]  Create new workspace"
-      echo "  list                           List all workspaces"
-      echo "  use <name|path>                Switch to workspace"
-      echo "  status                         Show workspace status"
-      echo "  remove <name|path>             Remove workspace"
-      quit(0)
-    
-    let wsCmd = rest[0].strip().toLowerAscii()
-    let wsArgs = if rest.len > 1: rest[1 ..< rest.len] else: @[]
-    
-    case wsCmd
-    of "create":
-      let setNameDefault = "--set-default" in wsArgs
-      let wsName = if wsArgs.len > 0 and not setNameDefault: wsArgs[0] else: "untitled_" & now().format("yyyyMMddHHmmss")
-      echo "[workspace] Creating workspace: " & wsName
-      let wsPath = expandTilde("~/.ws") / wsName
-      createDir(wsPath)
-      createDir(wsPath / "wiki")
-      createDir(wsPath / "chapters")
-      createDir(wsPath / "sessions")
-      createDir(wsPath / ".nimo")
-      createDir(wsPath / ".nimo" / "model-cache")
-      createDir(wsPath / ".nimo" / "state-cache")
-      writeFile(wsPath / "config.toml", "# NIMO Workspace Config\nworkspace = \"" & wsName & "\"\n")
-      writeFile(wsPath / "outline.md", "# " & wsName & "\n\n## Outline\n\n[TBD]\n")
-      echo "[workspace] Created: " & wsPath
-      if setNameDefault:
-        writeFile(getCurrentDir() / ".nimo-workspace", wsPath)
-        echo "[workspace] Set as default for: " & getCurrentDir()
-    of "list":
-      echo "[workspace] Available workspaces:"
-      let wsDir = expandTilde("~/.ws")
-      if dirExists(wsDir):
-        for entry in walkDir(wsDir):
-          let name = entry.path.splitPath().tail
-          let configPath = entry.path / "config.toml"
-          if fileExists(configPath):
-            echo "  " & name
-      else:
-        echo "  (none)"
-    of "use":
-      if wsArgs.len == 0:
-        echo "Error: workspace name required"
-        quit(1)
-      let wsPath = expandTilde("~/.ws") / wsArgs[0]
-      if dirExists(wsPath):
-        writeFile(getCurrentDir() / ".nimo-workspace", wsPath)
-        echo "[workspace] Switched to: " & wsArgs[0]
-      else:
-        echo "Error: workspace not found: " & wsArgs[0]
-        quit(1)
-    of "status":
-      let rcPath = getCurrentDir() / ".nimo-workspace"
-      let wsPath = if fileExists(rcPath): readFile(rcPath).strip() else: ""
-      if wsPath.len > 0 and dirExists(wsPath):
-        echo "[workspace] Current: " & wsPath
-        for d in ["wiki", "chapters", "sessions", ".nimo"]:
-          let fullDir = wsPath / d
-          var count = 0
-          if dirExists(fullDir):
-            for _ in walkDir(fullDir): inc count
-          echo "  " & d & "/ (" & $count & " items)"
-      else:
-        echo "[workspace] No active workspace"
-    of "remove":
-      if wsArgs.len == 0:
-        echo "Error: workspace name required"
-        quit(1)
-      let wsPath = expandTilde("~/.ws") / wsArgs[0]
-      if dirExists(wsPath):
-        removeDir(wsPath)
-        echo "[workspace] Removed: " & wsArgs[0]
-      else:
-        echo "Error: workspace not found: " & wsArgs[0]
-    else:
-      echo "Error: unknown workspace command '" & wsCmd & "'"
-      quit(1)
+    quit(cmdWorkspace(rest))
   of "story":
-    if rest.len == 0:
-      echo "Usage: nimo story <command> [args]"
-      echo ""
-      echo "Commands:"
-      echo "  generate <premise> [--workspace <name>] [--chapters N]"
-      echo "  validate <chapter> [--workspace <name>]"
-      echo "  critique <chapter> [--workspace <name>]"
-      echo "  outline [--workspace <name>]"
-      quit(0)
-    
-    let storyCmd = rest[0].strip().toLowerAscii()
-    let storyArgs = if rest.len > 1: rest[1 ..< rest.len] else: @[]
-    
-    case storyCmd
-    of "generate":
-      echo "[story] Generating story..."
-      echo "[story] Use: nimo story generate <premise> --workspace <name>"
-    of "validate":
-      echo "[story] Validating chapter..."
-    of "critique":
-      echo "[story] Critiquing chapter..."
-    of "outline":
-      echo "[story] Generating outline..."
-    else:
-      echo "Error: unknown story command '" & storyCmd & "'"
-      quit(1)
+    quit(cmdStory(rest))
   of "unit", "eval":
     let binary = baseDir / "unit"
     if fileExists(binary):
-      let rc = execCmd(binary)
-      quit(rc)
+      quit(execCmd(binary))
     else:
       echo "Error: unit binary not found. Run 'nimble build' first."
       quit(1)

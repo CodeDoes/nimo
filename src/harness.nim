@@ -207,7 +207,23 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
     return
   var s = bs.session
 
-  # Smoke/benchmark mode: no agent loop, no system prompt.
+  # Single-shot smoke/benchmark mode (NIMO_SMOKE=1): load the model once,
+  # generate a short reply, print a PASS line, exit. No agent loop, no system
+  # prompt — this is the backend verification path scripts/smoke_test.sh uses.
+  if getEnv("NIMO_SMOKE") == "1":
+    let smokePrompt = block:
+      let p = getEnv("NIMO_SMOKE_PROMPT")
+      if p.len > 0: p else: "Say OK."
+    let smokeTokens = block:
+      let t = getEnv("NIMO_MAX_TOKENS")
+      if t.len > 0: parseInt(t) else: cfg.maxTokens
+    let t0 = cpuTime()
+    let reply = s.generateTurn(smokePrompt, bs.generate, DefaultTemp,
+                               DefaultTopP, smokeTokens)
+    echo "[smoke] prompt: " & smokePrompt
+    echo "[smoke] reply: " & reply
+    echo "[smoke] " & (cpuTime() - t0).formatFloat(ffDecimal, 3) & "s"
+    quit(0)
 
   s.registerTool("run_pipeline", proc(args: string): string =
     var sess = s
@@ -248,25 +264,15 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
 
 ## ---- CLI entry point (main) ----
 proc main() =
-  let rawCmd = if paramCount() > 0: paramStr(1).strip().toLowerAscii() else: "chat"
-
-  if rawCmd == "generate":
-    var newArgs = newSeq[string]()
-    for i in 2 .. paramCount():
-      newArgs.add(paramStr(i))
-    discard execCmd("./build/generate " & newArgs.join(" "))
-  elif rawCmd == "bake":
-    var newArgs = newSeq[string]()
-    for i in 2 .. paramCount():
-      newArgs.add(paramStr(i))
-    discard execCmd("./build/bake_state " & newArgs.join(" "))
-  else:
-    # Default: chat mode
-    var cfg = loadConfig()
-    if paramCount() > 1: cfg.modelPath = paramStr(2)
-    if paramCount() > 2: cfg.vocabPath = paramStr(3)
-    let cwd = getCurrentDir()
-    runHarnessCli(cfg, cwd)
+  # The harness owns ONLY its own arg parse + bootstrapSession + run loop (the
+  # engine chat for this session), per Phase 0 item 4. It no longer re-dispatches
+  # generate/bake via execCmd — those are separate binaries with their own
+  # args + bootstrap.
+  var cfg = loadConfig()
+  if paramCount() > 1: cfg.modelPath = paramStr(2)
+  if paramCount() > 2: cfg.vocabPath = paramStr(3)
+  let cwd = getCurrentDir()
+  runHarnessCli(cfg, cwd)
 
 when isMainModule:
   main()
