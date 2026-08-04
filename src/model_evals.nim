@@ -39,7 +39,7 @@ proc runPatternEval*(session: var Session, generate: GenerateFn, trials: int): E
   ## Tests: can the model continue a numerical pattern?
   result = EvalResult(name: "pattern_continuation", trials: trials)
   for i in 1 .. trials:
-    let reply = session.generateTurn(PatternPrompt, bs.generate, DefaultTemp, DefaultTopP, 10)
+    let reply = session.generateTurn(PatternPrompt, generate, DefaultTemp, DefaultTopP, 10)
     if reply.len > 0 and ("6" in reply or "six" in reply.toLowerAscii()):
       inc result.success
     else:
