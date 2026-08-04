@@ -141,8 +141,6 @@ proc evalGpuPolicy*(run: var seq[Check]) =
 # ----------------------------------------------------------------------
 proc evalModelCache*(run: var seq[Check]) =
   let tmpDir = getTempDir() / "nimo_mcache_test"
-  # Clean up test file
-  removeFile(memPath)
   createDir(tmpDir)
 
   var blob = newString(256 * 1024)
