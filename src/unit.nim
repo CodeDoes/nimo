@@ -436,6 +436,7 @@ proc runAllEvals*(): int =
   evalEmission(run)
   evalSessionRecording(run)
   evalStoryPlan(run)
+  evalEngineMemory(run)
   evalMemory(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="
@@ -457,3 +458,30 @@ when isMainModule:
 # ----------------------------------------------------------------------
 # Eval 15: memory lookup
 # ----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# Eval 16: engine memory integration
+# ----------------------------------------------------------------------
+proc evalEngineMemory*(run: var seq[Check]) =
+  # A plan with an extract step using source="memory" should call
+  # lookupMemory instead of the mock generate function.
+  var genCalls = newSeq[string]()
+  let gen: GenerateFn = proc(prompt: string): string =
+    genCalls.add(prompt)
+    return "generated: " & prompt
+
+  var p = newPlan("memory test")
+  p.addStep(extractStep("pull-memory", "memory", "lighthouse"))
+  p.addStep(generateStep("answer", "use the memory", "output:answer"))
+  p.addStep(reportStep("done"))
+
+  var sinkText = ""
+  let r = p.run(gen, sink = proc(t: string) = sinkText.add(t), maxSteps = 10)
+  
+  run.add(Check(name: "engine memory: completes plan",
+                passed: r.completed and r.stepsRun == 3))
+  run.add(Check(name: "engine memory: extract used lookupMemory not generate",
+                passed: genCalls.len == 1 and genCalls[0] == "use the memory",
+                detail: "genCalls=" & $genCalls))
+  run.add(Check(name: "engine memory: extract output from lookupMemory",
+                passed: p.steps[0].output.contains("lighthouse"),
+                detail: "output=" & p.steps[0].output))
