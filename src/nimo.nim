@@ -171,6 +171,7 @@ Commands:
     echo "Error: " & e.msg
     return 1
 
+
 proc main() =
   let args = commandLineParams()
   if args.len == 0:
@@ -244,35 +245,3 @@ Usage:
 
 when isMainModule:
   main()
-
-# ---------------------------------------------------------------------------
-# Goal-first CLI commands (RFC 2000)
-# ---------------------------------------------------------------------------
-proc cmdPlanner(rest: seq[string]): int =
-  ## `nimo planner "<goal>"` — compile a natural-language goal into a plan
-  ## and show the steps. Deterministic, no model needed.
-  if rest.len == 0:
-    echo """Usage: nimo planner "<goal>"
-
-Shows the plan the orchestrator would create from your goal.
-Example:
-  nimo planner "create a story about a lighthouse"
-"""
-    return 1
-
-  let goal = rest.join(" ")
-  let plan = interpret(goal)
-
-  echo "[planner] Goal: " & plan.goal
-  echo "[planner] Plan: " & plan.id
-  echo "[planner] Steps:"
-  for i, step in plan.steps:
-    let kind = $step.kind
-    let name = if step.name.len > 0: " (" & step.name & ")" else: ""
-    echo "  " & $i & ". [" & kind & "]" & name
-  echo "[planner] Status: " & $plan.status
-  return 0
-
-proc cmdPlan(rest: seq[string]): int =
-  ## `nimo plan <goal>` — alias for planner (goal-first CLI)
-  return cmdPlanner(rest)
