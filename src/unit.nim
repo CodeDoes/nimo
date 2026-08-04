@@ -477,3 +477,14 @@ proc runAllEvals*(): int =
 
 when isMainModule:
   quit(runAllEvals())
+
+# ----------------------------------------------------------------------
+# Eval 17: model evals
+# ----------------------------------------------------------------------
+proc evalModelEvals*(run: var seq[Check]) =
+  # Test that model evals compile and run without crashing
+  # (Real model probes require GPU - this tests the deterministic planner part)
+  let result = runPlannerEval(5)
+  run.add(Check(name: "model evals: planner compilation works",
+                passed: result.trials > 0 and result.rate >= 0.0,
+                detail: "rate=" & $result.rate & " trials=" & $result.trials))
