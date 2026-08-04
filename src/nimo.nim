@@ -208,6 +208,58 @@ Commands:
     return 1
 
 
+proc cmdRun(rest: seq[string]): int =
+  ## `nimo run <plan_path>` — execute a plan through the engine
+  if rest.len == 0:
+    echo """Usage: nimo run <plan_path> [--resume]
+
+Execute a plan artifact through the engine.
+Example:
+  nimo run .nimo/programs/myplan.json
+  nimo run .nimo/programs/myplan.json --resume
+"""
+    return 1
+
+  let planPath = rest[0]
+  let resume = "--resume" in rest
+
+  if not fileExists(planPath):
+    echo "Error: plan not found: " & planPath
+    return 1
+
+  let plan = loadP
+
+proc cmdNew(rest: seq[string]): int =
+  ## `nimo new <goal>` — open a session, compile goal, run plan
+  if rest.len == 0:
+    echo """Usage: nimo new "<goal>"
+
+Open a session and run the plan for your goal.
+Example:
+  nimo new "create a story about a lighthouse"
+"""
+    return 1
+
+  let goal = rest.join(" ")
+  let plan = interpret(goal)
+
+  echo "[new] Goal: " & plan.goal
+  echo "[new] Plan: " & plan.id
+  echo "[new] Steps:"
+  for i, step in plan.steps:
+    echo "  " & $i & ". [" & $step.kind & "] " & step.name
+
+  # Save plan
+  let programsDir = getCurrentDir() / ".nimo" / "programs"
+  createDir(programsDir)
+  let planPath = programsDir / (plan.id & ".json")
+  plan.save(planPath)
+  echo "[new] Saved: " & planPath
+
+  echo "[new] To run: nimo run " & planPath
+  return 0
+
+
 proc main() =
   let args = commandLineParams()
   if args.len == 0:
@@ -291,61 +343,11 @@ when isMainModule:
 
 # ---------------------------------------------------------------------------
 # Session commands (nimo new, nimo run)
-# ---------------------------------------------------------------------------
-proc cmdRun(rest: seq[string]): int =
-  ## `nimo run <plan_path>` — execute a plan through the engine
-  if rest.len == 0:
-    echo """Usage: nimo run <plan_path> [--resume]
-
-Execute a plan artifact through the engine.
-Example:
-  nimo run .nimo/programs/myplan.json
-  nimo run .nimo/programs/myplan.json --resume
-"""
-    return 1
-
-  let planPath = rest[0]
-  let resume = "--resume" in rest
-
-  if not fileExists(planPath):
-    echo "Error: plan not found: " & planPath
-    return 1
-
-  let plan = loadPlan(planPath)
+# ---------------------------------------------------------------------------lan(planPath)
   echo "[run] Plan: " & plan.id
   echo "[run] Goal: " & plan.goal
   echo "[run] Steps: " & $plan.steps.len
 
   # For now, just report - full engine run needs bootstrap
   echo "[run] To execute, bootstrap a session and run the plan."
-  return 0
-
-proc cmdNew(rest: seq[string]): int =
-  ## `nimo new <goal>` — open a session, compile goal, run plan
-  if rest.len == 0:
-    echo """Usage: nimo new "<goal>"
-
-Open a session and run the plan for your goal.
-Example:
-  nimo new "create a story about a lighthouse"
-"""
-    return 1
-
-  let goal = rest.join(" ")
-  let plan = interpret(goal)
-
-  echo "[new] Goal: " & plan.goal
-  echo "[new] Plan: " & plan.id
-  echo "[new] Steps:"
-  for i, step in plan.steps:
-    echo "  " & $i & ". [" & $step.kind & "] " & step.name
-
-  # Save plan
-  let programsDir = getCurrentDir() / ".nimo" / "programs"
-  createDir(programsDir)
-  let planPath = programsDir / (plan.id & ".json")
-  plan.save(planPath)
-  echo "[new] Saved: " & planPath
-
-  echo "[new] To run: nimo run " & planPath
   return 0
