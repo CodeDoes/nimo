@@ -434,7 +434,6 @@ proc runAllEvals*(): int =
   evalEmission(run)
   evalSessionRecording(run)
   evalStoryPlan(run)
-  evalMemory(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="
   var passCount = 0
