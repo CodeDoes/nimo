@@ -9,7 +9,7 @@
 ## rfc/2000-cli.md "Conceptual only".)
 
 import std/[os, strutils, osproc, times, strformat]
-import ./config, ./workspace, ./story, ./bootstrap
+import ./config, ./workspace, ./story, ./bootstrap, ./orchestrator, ./program
 
 proc resolveWorkspace*(nameOrPath: string = ""): Workspace =
   ## Resolves the workspace for a story/workspace command: explicit name/path
@@ -224,6 +224,8 @@ Usage:
     let binary = baseDir / "bake_state"
     var cmdLine = binary & " " & rest.join(" ")
     if execCmd(cmdLine) != 0: quit(1)
+  of "planner", "plan":
+    quit(cmdPlanner(rest))
   of "workspace":
     quit(cmdWorkspace(rest))
   of "story":
@@ -242,3 +244,35 @@ Usage:
 
 when isMainModule:
   main()
+
+# ---------------------------------------------------------------------------
+# Goal-first CLI commands (RFC 2000)
+# ---------------------------------------------------------------------------
+proc cmdPlanner(rest: seq[string]): int =
+  ## `nimo planner "<goal>"` — compile a natural-language goal into a plan
+  ## and show the steps. Deterministic, no model needed.
+  if rest.len == 0:
+    echo """Usage: nimo planner "<goal>"
+
+Shows the plan the orchestrator would create from your goal.
+Example:
+  nimo planner "create a story about a lighthouse"
+"""
+    return 1
+
+  let goal = rest.join(" ")
+  let plan = interpret(goal)
+
+  echo "[planner] Goal: " & plan.goal
+  echo "[planner] Plan: " & plan.id
+  echo "[planner] Steps:"
+  for i, step in plan.steps:
+    let kind = $step.kind
+    let name = if step.name.len > 0: " (" & step.name & ")" else: ""
+    echo "  " & $i & ". [" & kind & "]" & name
+  echo "[planner] Status: " & $plan.status
+  return 0
+
+proc cmdPlan(rest: seq[string]): int =
+  ## `nimo plan <goal>` — alias for planner (goal-first CLI)
+  return cmdPlanner(rest)
