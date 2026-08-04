@@ -50,7 +50,7 @@ proc runStateEval*(session: var Session, generate: GenerateFn, trials: int): Eva
   ## Tests: does the model retain state from earlier context?
   result = EvalResult(name: "state_retention", trials: trials)
   for i in 1 .. trials:
-    let reply = cfg.session.generateTurn(StatePrompt, cfg.generate, DefaultTemp, DefaultTopP, 20)
+    let reply = session.generateTurn(StatePrompt, generate, DefaultTemp, DefaultTopP, 20)
     if "dog" in reply.toLowerAscii() or "lazy" in reply.toLowerAscii():
       inc result.success
     else:
@@ -61,7 +61,7 @@ proc runPlannerEval*(session: var Session, generate: GenerateFn, trials: int): E
   ## Tests: can the model emit parseable plan structure?
   result = EvalResult(name: "planner_emission", trials: trials)
   for i in 1 .. trials:
-    let reply = cfg.session.generateTurn(PlannerPrompt, cfg.generate, DefaultTemp, DefaultTopP, 100)
+    let reply = session.generateTurn(PlannerPrompt, generate, DefaultTemp, DefaultTopP, 100)
     # Check for [step] or structured output
     if reply.contains("[step]") or reply.contains("step") and reply.contains("{"):
       inc result.success
@@ -73,7 +73,7 @@ proc runNaturalEval*(session: var Session, generate: GenerateFn, trials: int): E
   ## Tests: does the model respond naturally?
   result = EvalResult(name: "natural_response", trials: trials)
   for i in 1 .. trials:
-    let reply = cfg.session.generateTurn(NaturalPrompt, cfg.generate, DefaultTemp, DefaultTopP, 15)
+    let reply = session.generateTurn(NaturalPrompt, generate, DefaultTemp, DefaultTopP, 15)
     # Should be short and contain hello/greeting
     if reply.len > 0 and reply.len < 50 and ("hello" in reply.toLowerAscii() or "hi" in reply.toLowerAscii()):
       inc result.success
