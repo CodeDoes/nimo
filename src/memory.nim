@@ -69,3 +69,51 @@ proc getRelevantContext*(s: MemoryStore, currentText: string, maxTokens: int = 5
     context.add(mem & "\n")
     tokenCount += mem.len
   return context.strip()
+
+# ---------------------------------------------------------------------------
+# Pointed tool for memory (RFC 3000)
+# ---------------------------------------------------------------------------
+proc lookupMemory*(query: string, workspace: string = ""): string =
+  ## Searches memory for relevant context. Used as a pointed step in plans.
+  ## Returns summarized memory relevant to the query.
+  let memDir = if workspace.len > 0: workspace / ".nimo" / "memory" else: expandTilde("~/.nimo") / "memory"
+  let memPath = memDir / "memories.json"
+  
+  if not fileExists(memPath):
+    return ""
+  
+  try:
+    let j = parseJson(readFile(memPath))
+    var results: seq[string] = @[]
+    for entry in j:
+      if entry.hasKey("text") and entry.hasKey("category"):
+        results.add(entry["text"].getStr())
+    
+    # Simple relevance scoring (could be improved with embeddings)
+    var scored: seq[(string, int)] = @[]
+    let queryWords = query.toLowerAscii().splitWhitespace()
+    for r in results:
+      let rLower = r.toLowerAscii()
+      var score = 0
+      for w in queryWords:
+        if w in rLower: inc score
+      scored.add((r, score))
+    
+    # Sort by score descending (bubble sort for simplicity)
+    for i in 0 ..< scored.len:
+      for j in i+1 ..< scored.len:
+        if scored[j][1] > scored[i][1]:
+          let tmp = scored[i]
+          scored[i] = scored[j]
+          scored[j] = tmp
+    
+    var context = ""
+    var tokenCount = 0
+    for (text, score) in scored:
+      if score > 0 and tokenCount + text.len < 500:
+        context.add(text & "\n")
+        tokenCount += text.len
+    
+    return context.strip()
+  except:
+    return ""
