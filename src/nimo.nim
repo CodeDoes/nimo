@@ -274,6 +274,8 @@ Commands:
   bake         Bake model state
   workspace    Workspace management
   planner      Show plan for a goal
+  new          Create session from goal
+  run          Execute a plan
   story        Story pipeline
   unit         Run the unit test suite
   eval         (alias) Run the unit test suite
@@ -321,7 +323,6 @@ Usage:
     quit(cmdRun(rest))
   of "new":
     quit(cmdNew(rest))
-    quit(cmdPlanner(rest))
   of "workspace":
     quit(cmdWorkspace(rest))
   of "story":
