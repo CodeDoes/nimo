@@ -35,18 +35,18 @@ const
   # Multi-turn coherence: can the model maintain coherence across turns?
   CoherencePrompt* = "Once upon a time there was a lighthouse keeper. The keeper was lonely."
 
-proc runPatternEval*(bs: BootstrapResult, trials: int): EvalResult =
+proc runPatternEval*(var session: Session, generate: GenerateFn, trials: int): EvalResult =
   ## Tests: can the model continue a numerical pattern?
   result = EvalResult(name: "pattern_continuation", trials: trials)
   for i in 1 .. trials:
-    let reply = bs.session.generateTurn(PatternPrompt, bs.generate, DefaultTemp, DefaultTopP, 10)
+    let reply = session.generateTurn(PatternPrompt, bs.generate, DefaultTemp, DefaultTopP, 10)
     if reply.len > 0 and ("6" in reply or "six" in reply.toLowerAscii()):
       inc result.success
     else:
       inc result.fail
   result.rate = if result.success + result.fail > 0: result.success.float / (result.success + result.fail).float else: 0.0
 
-proc runStateEval*(bs: BootstrapResult, trials: int): EvalResult =
+proc runStateEval*(var session: Session, generate: GenerateFn, trials: int): EvalResult =
   ## Tests: does the model retain state from earlier context?
   result = EvalResult(name: "state_retention", trials: trials)
   for i in 1 .. trials:
@@ -57,7 +57,7 @@ proc runStateEval*(bs: BootstrapResult, trials: int): EvalResult =
       inc result.fail
   result.rate = if result.success + result.fail > 0: result.success.float / (result.success + result.fail).float else: 0.0
 
-proc runPlannerEval*(bs: BootstrapResult, trials: int): EvalResult =
+proc runPlannerEval*(var session: Session, generate: GenerateFn, trials: int): EvalResult =
   ## Tests: can the model emit parseable plan structure?
   result = EvalResult(name: "planner_emission", trials: trials)
   for i in 1 .. trials:
@@ -69,7 +69,7 @@ proc runPlannerEval*(bs: BootstrapResult, trials: int): EvalResult =
       inc result.fail
   result.rate = if result.success + result.fail > 0: result.success.float / (result.success + result.fail).float else: 0.0
 
-proc runNaturalEval*(bs: BootstrapResult, trials: int): EvalResult =
+proc runNaturalEval*(var session: Session, generate: GenerateFn, trials: int): EvalResult =
   ## Tests: does the model respond naturally?
   result = EvalResult(name: "natural_response", trials: trials)
   for i in 1 .. trials:
@@ -87,19 +87,19 @@ proc runEval*(bs: BootstrapResult, trials: int = 5): int =
   echo ""
   
   echo "[model-eval] Pattern continuation (expect '6' or 'six'):"
-  let pattern = runPatternEval(bs, trials)
+  let pattern = runPatternEval(bs.session, bs.generate, trials)
   echo "  rate=$1% ($2/$3)" % [$pattern.rate.formatFloat(ffDecimal, 0), $pattern.success, $pattern.trials]
   
   echo "[model-eval] State retention (expect 'dog' or 'lazy'):"
-  let state = runStateEval(bs, trials)
+  let state = runStateEval(bs.session, bs.generate, trials)
   echo "  rate=$1% ($2/$3)" % [$state.rate.formatFloat(ffDecimal, 0), $state.success, $state.trials]
   
   echo "[model-eval] Planner emission (expect structured output):"
-  let planner = runPlannerEval(bs, trials)
+  let planner = runPlannerEval(bs.session, bs.generate, trials)
   echo "  rate=$1% ($2/$3)" % [$planner.rate.formatFloat(ffDecimal, 0), $planner.success, $planner.trials]
   
   echo "[model-eval] Natural response (expect short greeting):"
-  let natural = runNaturalEval(bs, trials)
+  let natural = runNaturalEval(bs.session, bs.generate, trials)
   echo "  rate=$1% ($2/$3)" % [$natural.rate.formatFloat(ffDecimal, 0), $natural.success, $natural.trials]
   
   echo ""
