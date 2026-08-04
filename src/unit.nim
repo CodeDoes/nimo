@@ -529,6 +529,27 @@ proc evalSessionRecording*(run: var seq[Check]) =
 
 # Runner
 # ----------------------------------------------------------------------
+
+# ----------------------------------------------------------------------
+# Eval 14: story plan template
+# ----------------------------------------------------------------------
+proc evalStoryPlan*(run: var seq[Check]) =
+  let p = storyPlan("a robot gardener")
+  run.add(Check(name: "storyPlan creates a plan with goal",
+                passed: p.goal == "a robot gardener" and p.steps.len > 0,
+                detail: "steps=" & $p.steps.len))
+  run.add(Check(name: "storyPlan has generate-outline step",
+                passed: p.steps[0].kind == skGenerate and
+                        p.steps[0].name == "generate-outline"))
+  run.add(Check(name: "storyPlan has write-outline step",
+                passed: p.steps[1].kind == skWrite and
+                        p.steps[1].path == "outline.md"))
+  run.add(Check(name: "storyPlan has extract-characters step",
+                passed: p.steps[2].kind == skExtract and
+                        p.steps[2].name == "pull-characters"))
+  run.add(Check(name: "storyPlan ends with report",
+                passed: p.steps[^1].kind == skReport))
+
 proc runAllEvals*(): int =
   var run: seq[Check]
   evalToolCalling(run)
@@ -559,29 +580,39 @@ proc runAllEvals*(): int =
   echo "  exit=" & $(if passCount == run.len: 0 else: 1)
   return if passCount == run.len: 0 else: 1
 
-when isMainModule:
-  quit(runAllEvals())
 
 # ----------------------------------------------------------------------
+# Runner
+# ----------------------------------------------------------------------
+proc runAllEvals*(): int =
+  var run: seq[Check]
+  evalToolCalling(run)
+  evalLoopTermination(run)
+  evalSessionLogging(run)
+  evalTurnPrimitives(run)
+  evalGpuPolicy(run)
+  evalModelCache(run)
+  evalStateCache(run)
+  evalPlanArtifact(run)
+  evalEngine(run)
+  evalValidate(run)
+  evalOrchestrator(run)
+  evalEmission(run)
+  evalSessionRecording(run)
+  evalStoryPlan(run)
+
+  echo "\n=== nimo unit tests (stub, no model) ==="
+  var passCount = 0
+  for c in run:
+    let mark = if c.passed: "[PASS]" else: "[FAIL]"
+    echo mark & " " & c.name
+    if c.detail.len > 0:
+      echo "       " & c.detail
+    if c.passed: inc passCount
+  echo ""
+  echo "  " & $passCount & "/" & $run.len & " passed"
+  echo "  exit=" & $(if passCount == run.len: 0 else: 1)
+  return if passCount == run.len: 0 else: 1
+
 when isMainModule:
   quit(runAllEvals())
-
-# ----------------------------------------------------------------------
-# Eval 14: story plan template
-# ----------------------------------------------------------------------
-proc evalStoryPlan*(run: var seq[Check]) =
-  let p = storyPlan("a robot gardener")
-  run.add(Check(name: "storyPlan creates a plan with goal",
-                passed: p.goal == "a robot gardener" and p.steps.len > 0,
-                detail: "steps=" & $p.steps.len))
-  run.add(Check(name: "storyPlan has generate-outline step",
-                passed: p.steps[0].kind == skGenerate and
-                        p.steps[0].name == "generate-outline"))
-  run.add(Check(name: "storyPlan has write-outline step",
-                passed: p.steps[1].kind == skWrite and
-                        p.steps[1].path == "outline.md"))
-  run.add(Check(name: "storyPlan has extract-characters step",
-                passed: p.steps[2].kind == skExtract and
-                        p.steps[2].name == "pull-characters"))
-  run.add(Check(name: "storyPlan ends with report",
-                passed: p.steps[^1].kind == skReport))
