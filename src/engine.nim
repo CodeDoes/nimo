@@ -11,7 +11,7 @@
 ## into per-token streaming by wiring the sink through generateTurnStream.
 
 import std/[os, strutils]
-import ./config, ./program, ./validate
+import ./config, ./program, ./validate, ./memory
 
 type
   TokenSink* = proc(text: string)                 # emit produced text, immediately
@@ -65,13 +65,19 @@ proc run*(p: var Plan, generate: GenerateFn,
       s.status = ssCompleted
       emit(sink, s.output)
     of skExtract:
-      var prompt = "Extract"
-      if s.filter.len > 0: prompt.add(" " & s.filter)
-      if s.source.len > 0: prompt.add(" from " & s.source)
-      if s.forWhom.len > 0: prompt.add(" for " & s.forWhom)
-      s.output = generate(prompt)
-      s.status = ssCompleted
-      emit(sink, s.output)
+      # If source is "memory", use lookupMemory instead of generate
+      if s.source == "memory":
+        s.output = lookupMemory(s.filter)
+        s.status = ssCompleted
+        emit(sink, s.output)
+      else:
+        var prompt = "Extract"
+        if s.filter.len > 0: prompt.add(" " & s.filter)
+        if s.source.len > 0: prompt.add(" from " & s.source)
+        if s.forWhom.len > 0: prompt.add(" for " & s.forWhom)
+        s.output = generate(prompt)
+        s.status = ssCompleted
+        emit(sink, s.output)
     of skSummarize:
       let prompt = "Summarize (" & s.length & "): " & s.input
       s.output = generate(prompt)
