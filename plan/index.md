@@ -16,21 +16,26 @@ Plan for what to do on this codebase in the future.
 | [0008-complete-summary.md](0008-complete-summary.md) | **COMPLETE** ✓ | Implementation overview |
 | [0009-end-to-end-pipeline.md](0009-end-to-end-pipeline.md) | **COMPLETE** ✓ | All 24 components documented |
 | [0010-future-work.md](0010-future-work.md) | **COMPLETE** ✓ | Future enhancements |
+| [0011-complete-guide.md](0011-complete-guide.md) | **COMPLETE** ✓ | Complete usage guide |
+| [0012-final-verification.md](0012-final-verification.md) | **COMPLETE** ✓ | Final backend verification |
+| [0013-docs-alignment.md](0013-docs-alignment.md) | **COMPLETE** ✓ | Docs aligned to code |
+| [0014-engine-design.md](0014-engine-design.md) | **COMPLETE** ✓ | Engine design formalized (program/engine RFCs) |
+| [0015-engine-migration.md](0015-engine-migration.md) | **IN PROGRESS** | Phase 0 (Session unif) + Phase 2 done; Phases 1,3-7 pending |
 
 ## Implementation Summary
 
 ### Metrics
-- **Plan files**: 11
-- **Source files**: 36
+- **Plan files**: 14
+- **Source files**: 39
 - **Git commits**: 110+
-- **Evals passing**: 34/34
+- **Unit tests passing**: 58/58 (offline, no model; `nimo unit`)
 - **CUDA speed**: ~176-220 ms/token
 - **Model size**: 2.2 GB (Q4_K)
 
 ### Components Implemented
 1. Quantize pipeline
 2. Generate with CUDA/CPU/Vulkan
-3. Eval suite (34 tests)
+3. Unit test suite (58 checks, offline)
 4. Workspace management
 5. Session management
 6. Session branching

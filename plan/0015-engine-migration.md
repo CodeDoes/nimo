@@ -5,8 +5,13 @@
 Done:
 - [x] Phase 0 step 1: rename evals -> unit (a409844)
 - [x] Phase 2: program.nim + engine.nim + validate.nim runtime, unit suite
-  34 -> 58 checks (1005670); caught 2 real latent bugs (countWords always 0,
+  34 -> 58 checks (1005670); unit tests caught 2 real latent bugs
+  (validate.countWords never assigned its result -> always 0;
   repeating-segment check never fired)
+  CORRECTION: the earlier claim that story.nim's countWords had the same bug
+  is WRONG — story.nim's version has `return count` and is correct; only
+  validate.nim was broken. story.nim still carries a private duplicate
+  countWords/countLines that Phase 4 should point at validate.nim instead.
 
 Remaining Phase 0 (riskier, online-only verification):
 - [ ] one Session type (unify session.nim object + session_manager.nim ref)
