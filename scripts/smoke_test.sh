@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # nimo backend smoke test: CPU, NVIDIA (CUDA), AMD (Vulkan).
 # Selects each backend through the SINGLE controlled path: rwkv.selectBackend(cfg)
-# fed by NIMO_BACKEND (config > env > rwkv default > backend modules; RFC 7500).
-# Uses the harness single-shot NIMO_SMOKE mode (no agent loop, no system prompt):
+# fed by an explicit --backend flag (same convention as generate.nim) — no env
+# precedence chain.
+# Uses the harness single-shot --smoke mode (no agent loop, no system prompt):
 # load model once, generate a short reply, report PASS/FAIL + wall time.
 # No pipes: harness output goes to a temp file, checked with bash patterns.
 #
@@ -24,8 +25,8 @@ run_backend() {  # name backend_kind libdirs
   local start end secs rc
   start=$(date +%s)
   env LD_LIBRARY_PATH="$libs" \
-    NIMO_BACKEND="$kind" NIMO_SMOKE=1 NIMO_SMOKE_PROMPT="$SMOKE_PROMPT" NIMO_MAX_TOKENS="$SMOKE_TOKENS" \
-    "$HARNESS" < /dev/null > "$OUT" 2>&1
+    "$HARNESS" --backend "$kind" --smoke --prompt "$SMOKE_PROMPT" --max-tokens "$SMOKE_TOKENS" \
+    < /dev/null > "$OUT" 2>&1
   rc=$?
   end=$(date +%s); secs=$((end - start))
   if [[ $rc -eq 0 && -f "$OUT" && $(<"$OUT") == *"[smoke] reply"* ]]; then

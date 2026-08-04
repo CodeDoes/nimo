@@ -214,7 +214,14 @@ proc runHarnessTurn*(s: var Session, userMsg: string,
   return
 
 ## ---- CLI entry ----
-proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
+type
+  HarnessOpts* = object
+    smoke*: bool           # single-shot smoke/benchmark (no agent loop)
+    prompt*: string        # smoke prompt
+    maxTokens*: int        # smoke token cap
+
+proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".",
+                    opts: HarnessOpts = HarnessOpts()) =
   echo "nimo harness — user -> pipeline -> tool call -> answer"
   echo "Config file: " & DefaultConfigFile
   echo "Type /quit to exit, /save <file> to save session."
@@ -228,20 +235,16 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
     return
   var s = bs.session
 
-  # Single-shot smoke/benchmark mode (NIMO_SMOKE=1): load the model once,
+  # Single-shot smoke/benchmark mode (--smoke flag): load the model once,
   # generate a short reply, print a PASS line, exit. No agent loop, no system
-  # prompt — this is the backend verification path scripts/smoke_test.sh uses.
-  if getEnv("NIMO_SMOKE") == "1":
-    let smokePrompt = block:
-      let p = getEnv("NIMO_SMOKE_PROMPT")
-      if p.len > 0: p else: "Say OK."
-    let smokeTokens = block:
-      let t = getEnv("NIMO_MAX_TOKENS")
-      if t.len > 0: parseInt(t) else: cfg.maxTokens
+  # prompt — the backend verification path scripts/smoke_test.sh uses. An
+  # explicit flag, not an env precedence ladder.
+  if opts.smoke:
+    let prompt = if opts.prompt.len > 0: opts.prompt else: "Say OK."
+    let maxTokens = if opts.maxTokens > 0: opts.maxTokens else: cfg.maxTokens
     let t0 = cpuTime()
-    let reply = s.generateTurn(smokePrompt, bs.generate, DefaultTemp,
-                               DefaultTopP, smokeTokens)
-    echo "[smoke] prompt: " & smokePrompt
+    let reply = s.generateTurn(prompt, bs.generate, DefaultTemp, DefaultTopP, maxTokens)
+    echo "[smoke] prompt: " & prompt
     echo "[smoke] reply: " & reply
     echo "[smoke] " & (cpuTime() - t0).formatFloat(ffDecimal, 3) & "s"
     quit(0)
@@ -288,12 +291,43 @@ proc main() =
   # The harness owns ONLY its own arg parse + bootstrapSession + run loop (the
   # engine chat for this session), per Phase 0 item 4. It no longer re-dispatches
   # generate/bake via execCmd — those are separate binaries with their own
-  # args + bootstrap.
+  # args + bootstrap. Backend choice is an explicit --backend flag (like
+  # generate.nim), never an env precedence chain.
   var cfg = loadConfig()
-  if paramCount() > 1: cfg.modelPath = paramStr(2)
-  if paramCount() > 2: cfg.vocabPath = paramStr(3)
-  let cwd = getCurrentDir()
-  runHarnessCli(cfg, cwd)
+  var opts = HarnessOpts()
+  var positional: seq[string]
+  var i = 1
+  while i <= paramCount():
+    let a = paramStr(i)
+    if a == "--backend" and i < paramCount():
+      inc i
+      try:
+        cfg.backend = parseBackendKind(paramStr(i))
+        cfg.backendSet = true
+      except ValueError:
+        echo "Error: unknown backend '" & paramStr(i) & "' (expected cpu|cuda|vulkan)"
+        quit(1)
+    elif a == "--model" and i < paramCount():
+      inc i; cfg.modelPath = paramStr(i)
+    elif a == "--vocab" and i < paramCount():
+      inc i; cfg.vocabPath = paramStr(i)
+    elif a == "--smoke":
+      opts.smoke = true
+    elif a == "--prompt" and i < paramCount():
+      inc i; opts.prompt = paramStr(i)
+    elif a == "--max-tokens" and i < paramCount():
+      inc i
+      try: opts.maxTokens = parseInt(paramStr(i))
+      except ValueError:
+        echo "Error: invalid --max-tokens value"
+        quit(1)
+    else:
+      positional.add(a)
+    inc i
+  # legacy positional: <model> <vocab>
+  if positional.len > 0: cfg.modelPath = positional[0]
+  if positional.len > 1: cfg.vocabPath = positional[1]
+  runHarnessCli(cfg, getCurrentDir(), opts)
 
 when isMainModule:
   main()

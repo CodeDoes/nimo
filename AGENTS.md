@@ -41,16 +41,16 @@ short reply, reports PASS/FAIL + wall time.
 
 ```bash
 devenv shell scripts/smoke_test.sh
-# cpu     -> NIMO_BACKEND=cpu (PASS, ~7s)
-# nvidia  -> NIMO_BACKEND=cuda (PASS, ~4s)
-# amd     -> NIMO_BACKEND=vulkan (PASS, ~6s)
+# cpu     -> --backend cpu (PASS, ~7s)
+# nvidia  -> --backend cuda (PASS, ~4s)
+# amd     -> --backend vulkan (PASS, ~6s)
 #
 # All three run through the single controlled path:
-#   config > env > rwkv default > backend modules
+#   nimo.json config > explicit --backend flag > rwkv default > backend modules
 ```
 
-The harness's `NIMO_SMOKE=1 NIMO_SMOKE_PROMPT="..." NIMO_MAX_TOKENS=n` single-shot
-mode also benchmarks a backend directly.
+The harness's `--smoke --backend <kind> --prompt "..." --max-tokens n` single-shot
+mode also benchmarks a backend directly (an explicit flag, not env vars).
 
 ```bash
 # online (real model):
@@ -68,10 +68,13 @@ LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:rwkv.cpp/ggml/src/ggml-cuda:$LD_LIBR
 ## Backend Selection (RFC 7500)
 
 Runtime backend is selected in one controlled place (`src/rwkv.nim`). Priority:
-1. Config file: `nimo.json` → `"backend"` / `"lib"`
-2. Env vars: `NIMO_BACKEND=cpu|cuda|vulkan`, `NIMO_LIB=<path>`
+1. Explicit `--backend` flag (CLI arg, same convention as `generate.nim`)
+2. Config file: `nimo.json` → `"backend"` / `"lib"`
 3. Compile-time default: `-d:rwkvDefaultBackend=cuda`
 4. Backend modules (`src/rwkv_cpu/cuda/vulkan.nim`) — lowest authority
+
+No env-var precedence chain: env configuration was deliberately dropped (one
+source of truth — config file + explicit flags).
 
 Switch point: `selectBackend(cfg)` → `bindBackend(libPath)` (one dlopen per session).
 
@@ -143,10 +146,10 @@ The harness only runs on CPU when explicitly allowed. Default is GPU-required.
 }
 ```
 
-Env overrides (applied on top): `NIMO_MODEL`, `NIMO_VOCAB`, `NIMO_GPU_LAYERS`,
-`NIMO_ALLOW_CPU_FALLBACK=1`, `NIMO_QUANT`, `NIMO_MODEL_CACHE`, `NIMO_STATE_CACHE`,
-`NIMO_SYSTEM_PROMPT`, `NIMO_BAKE_CONTEXT=1`, `NIMO_*`. If the GPU is unusable and
-fallback is NOT allowed, the harness prints the diagnosis + fix and exits cleanly.
+Config comes from `nimo.json` only (no env-var precedence chain — env
+configuration was deliberately dropped for one source of truth). The `--backend`
+flag is the one explicit override. If the GPU is unusable, the harness prints
+the diagnosis + fix and exits cleanly.
 
 To rebuild CUDA fast for THIS machine only (sm_86), do NOT use `build-cuda`
 (compiles 4 archs): configure with just `86`:
