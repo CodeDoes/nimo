@@ -45,7 +45,7 @@ proc cmdPlan(rest: seq[string]): int =
 ## rfc/2000-cli.md "Conceptual only".)
 
 import std/[os, strutils, osproc, times, strformat, sequtils]
-import ./config, ./workspace, ./story, ./bootstrap, ./orchestrator, ./program
+import ./config, ./workspace, ./story, ./bootstrap, ./orchestrator, ./program, ./harness
 
 proc resolveWorkspace*(nameOrPath: string = ""): Workspace =
   ## Resolves the workspace for a story/workspace command: explicit name/path
