@@ -70,18 +70,54 @@ The history is the pi-agent JSONL message tree (one JSON object per line):
    by `parentId`, terminated by a `stopReason` (`stop` | `toolUse`). Generated
    messages carry `bakeRef`.
 
+### One turn — the assistant's lifecycle
+
+A turn is: **user message → assistant turn (plan → execute → report) → back to
+user**. The assistant turn is not one reply; it is a small pipeline:
+
+```
+user turn
+  user message                     (ckText)
+
+assistant turn
+  planner's plan                   (ckPlan — the compiled program; the planner
+                                    emits structure only)
+  optional planner report          (ckReport, kind=planner — "I'll split this
+                                    into three steps…")
+  plan execute — for each step:
+    pointed tool call + result     (ckToolCall / ckToolResult)   and/or
+    generated text                 (ckText, with bakeRef)
+    optional per-step report       (ckReport, kind=step — what this step
+                                    produced)
+  finished report                  (ckReport, kind=finished — the turn's
+                                    answer)
+→ back to user turn
+```
+
+Content kinds in the tree: `text`, `thinking`, `toolCall`, `toolResult`,
+`plan`, `report` (kind: `planner` | `step` | `finished`).
+
 A typical chain:
 
 ```
 e0 (workspace: mounted to ~/.ws/book-1)
 e1 (model: bound to rwkv7-...q4k.bin, sig ...)
-e2 (user, "create a story about a lighthouse")   <- the current intent
-e3 (plan: [Extract memory -> Generate chapter -> Validate])
-  └─ e4 (assistant, toolCall: Extract memory, bakeRef: planner)
-       └─ e5 (toolResult)
-            └─ e6 (assistant, text: ..., bakeRef: output:chapter)
-e7 (user, "make the lighthouse keeper older")    <- a re-aim
-  └─ e8 (plan: [Extract ... -> Regenerate ...])
+
+# user turn
+e2 (user, "create a story about a lighthouse")
+
+# assistant turn
+└─ e3 (plan: [Extract memory -> Generate chapter -> Validate])
+└─ e4 (report, kind=planner, "Three steps: pull the outline, draft ch1, gate it.")
+└─ e5 (assistant, toolCall: Extract memory, bakeRef: planner)
+     └─ e6 (toolResult)
+          └─ e7 (report, kind=step, "Outline extracted: 5 characters.")
+└─ e8 (assistant, text: <chapter 1>, bakeRef: output:chapter)
+└─ e9 (report, kind=step, "Chapter 1 written (612 words).")
+└─ e10 (report, kind=finished, "Done — ch1 drafted and gated.")
+
+# next user turn (re-aim)
+e11 (user, "make the lighthouse keeper older")
 ```
 
 If the model or workspace changes, another `model`/`workspace` event is

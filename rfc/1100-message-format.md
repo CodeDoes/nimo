@@ -66,7 +66,19 @@ User: <tool_result>[nimo] ▶ 1/10 ... ✔ 1/10 ...</tool_result>
 Assistant:
 ```
 
+## Plan and Report — in the tree
+
+Not player-emitted free text; they are recorded as messages in the history
+(see [1000-session.md](1000-session.md) "One turn").
+
+- `plan` — the compiled program (the planner emits structure only; see
+  [3500-plan-format.md](3500-plan-format.md)). One `plan` node per turn, whose
+  children are the step executions.
+- `report` — the assistant's prose about the run, carrying a `kind`:
+  `planner` (before executing), `step` (after one step), `finished` (the
+  turn's answer). A report is plain text.
+
 ## See Also
 
-- [1000-session.md](1000-session.md) — session data model (JSON format)
+- [1000-session.md](1000-session.md) — session data model + turn lifecycle
 - [3500-plan-format.md](3500-plan-format.md) — the plan these emit
