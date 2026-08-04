@@ -453,7 +453,7 @@ proc evalEngineMemory*(run: var seq[Check]) =
                 detail: "genCalls=" & $genCalls))
   run.add(Check(name: "engine memory: extract output from lookupMemory",
                 passed: p.steps[0].output.contains("lighthouse"),
-                detail: "output=" & p.steps[0].output)
+                detail: "output=" & p.steps[0].output))
   
   removeDir(tmpDir)
 
