@@ -67,14 +67,16 @@ LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:rwkv.cpp/ggml/src/ggml-cuda:$LD_LIBR
 
 ## Backend Selection (RFC 7500)
 
-Runtime backend is selected in one controlled place (`src/rwkv.nim`). Priority:
+Runtime backend is selected in one controlled place (`src/rwkv.nim`). Priority,
+most-specific first:
 1. Explicit `--backend` flag (CLI arg, same convention as `generate.nim`)
 2. Config file: `nimo.json` → `"backend"` / `"lib"`
 3. Compile-time default: `-d:rwkvDefaultBackend=cuda`
 4. Backend modules (`src/rwkv_cpu/cuda/vulkan.nim`) — lowest authority
 
-No env-var precedence chain: env configuration was deliberately dropped (one
-source of truth — config file + explicit flags).
+That's the whole precedence — no more layers above it. (Env vars are fine when
+they earn their place; they are simply not needed here, so the core path stays
+config + flags.)
 
 Switch point: `selectBackend(cfg)` → `bindBackend(libPath)` (one dlopen per session).
 
