@@ -251,11 +251,12 @@ count-updated); harness/chat/generate spot-checked live.
    - Keep `MaxToolIterations` as the engine's max-steps guard (a plan that
      never terminates aborts — the evals already test this shape).
 3. `session_manager.nim`: the history is the single record (RFC 1000).
-   Session writes `plan` nodes (steps + checkpoint cursor), `model` events
-   (bound when generation starts, again on every switch), and per-message
-   `bakeRef` (which baked skill state produced each generated message).
-   Resume reads the latest plan node cursor + latest model event; the header
-   carries `goal` + `workspaceRef` only.
+   Session writes `plan` nodes (steps + checkpoint cursor), `workspace`/`model`
+   events (bound when generation starts, again on every switch), and
+   per-message `bakeRef` (which baked skill state produced each generated
+   message). The header is `id` + `timestamp` only; the current intent is the
+   latest user message (sessions have many). Resume reads the latest plan node
+   cursor + latest model/workspace events.
 4. `unit.nim`: rework `evalToolCalling`/`evalLoopTermination` to the new flow:
    - tool-calling eval → planner emission parse → plan compilation.
    - loop-termination eval → engine max-steps abort.
