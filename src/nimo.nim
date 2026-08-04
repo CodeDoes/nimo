@@ -1,5 +1,5 @@
 import std/[os, strutils, osproc, times, strformat, sequtils]
-import ./config, ./workspace, ./story, ./bootstrap, ./orchestrator, ./program, ./harness
+import ./config, ./workspace, ./story, ./bootstrap, ./orchestrator, ./program, ./engine, ./harness
 
 
 # ---------------------------------------------------------------------------
