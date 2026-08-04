@@ -1,10 +1,14 @@
 # Plan: Make src/ follow the plan/engine intent
 
-## Status: NOT STARTED
+## Status: NOT STARTED — Phase 0 (refactor) is the prerequisite
 
 Design is formalized in `rfc/3500-plan-format.md` + `rfc/3600-engine.md`
 (commit `7271b86`). This plan evaluates the current code and lays out the
 migration. Each phase is a commit and must leave `nimo eval` green.
+
+> **Phase 0 first**: the harness and evals are not DRY and lack composition.
+> Migrations must NOT build on top of that. Phase 0 refactors them (behavior-
+> identical, evals green), so Phase 2/3 build on clean primitives.
 
 ## Code evaluation — what contradicts the intent today
 
@@ -39,6 +43,39 @@ src/orchestrator.nim  # interpret(userMsg) -> Plan — template registry first,
                       #   learned planner-state later
 src/skills/           # baked skill bundles (planner + output states)
 ```
+
+## Phase 0 — Refactor harness + evals (DRY & composition) — PREREQUISITE
+
+> Why before the engine work: the engine and orchestrator must be composed from
+> clean primitives. Refactoring now (behavior-identical, evals green) makes
+> Phase 2/3 a clean build rather than more surgery on muddy code.
+
+**Files**: `harness.nim`, `session_manager.nim`, `session.nim`, `cli.nim`, `evals.nim`.
+
+1. **De-duplicate the tool-call predicate** in `harness.nim`: one
+   `isToolCallJson(j: JsonNode): bool` + a `toolCallName(j): string`; both
+   `parseToolCalls` and `stripToolCallText` call them. Removes drift risk.
+2. **Decompose `runHarnessTurn`** into small composed procs:
+   - `recordTurnStart(s, userMsg) -> parentId`
+   - `parseReply(reply) -> (calls, naturalText)`
+   - `runCalls(s, calls, curParent, ...) -> feedback, nextParent`
+   - `buildNextContext(natural, feedback)`
+   - `runHarnessTurn` becomes ~6 lines composing them.
+3. **Unify model bootstrap**: extract `bootstrapSession(cfg, opts) -> Session`
+   (bind backend → GPU policy → quant cache → init model → seed) used by
+   `harness`, `chat`, `generate` instead of three independent copies.
+4. **One token loop**: extract `sampleReply(s, prompt, temp, topP, maxTokens,
+   sink) -> string` shared by `session.nim` and `session_manager.nim`
+   (per-token `sink`, collected into the returned string). This is also the
+   seam Phase 1 turns fully streaming.
+5. **evals**: add `check(run, name, passed, detail="")` helper; push the
+   predicate/parsing tests onto the new primitives (`isToolCallJson`,
+   `parseReply`) so evals test composed behavior. Count must stay truthful in
+   `rfc/9300-eval.md`.
+
+**Done when**: evals green (34/34, same names or renamed-with-count-updated);
+harness behaves identically (spot-check one live generate).
+**Commit.**
 
 ## Phase 1 — Streaming foundation
 
@@ -177,10 +214,12 @@ evals green.
 
 - **Evals coupling**: the harness rewrite touches exactly what `evals.nim`
   tests (tool loop, session logging). Update evals in the same commit as the
-  harness change; keep the count truthful in `rfc/9300-eval.md`.
+  harness change; keep the count truthful in `rfc/9300-eval.md`. Phase 0's
+  decomposition makes this a behavior test, not an implementation test.
 - **Two Session types** (`session.nim` object vs `session_manager.nim` ref):
   don't unify in this pass — just give both a streaming variant. Unification
-  is a separate cleanup.
+  is a separate cleanup, but Phase 0 extracts the *shared token loop* so the
+  duplication lives in one place.
 - **Learned planner is a bake**: the template registry ships first
   (deterministic, no model), so the system works before the skill bakes exist;
   the planner state is the swap-in later (distillation target).
