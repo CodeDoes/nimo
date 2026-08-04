@@ -13,6 +13,33 @@ built against this).
 - **Data-driven** — loops fan out over lists produced by earlier steps.
 - **Resumable** — save plan + cursor (+ state) to continue from step N.
 
+## Steps are composable functions (the mental model)
+
+Each step is a typed function over a data flow, not an imperative command:
+
+```
+part : (input_handle, spec) -> output_handle
+```
+
+- **Handles** are what steps exchange: a session context, an id, or text.
+  `Extract(source, for)` reads from `source` (a handle) and returns the named
+  slice; `Write(path, content)` writes `content` and returns the path;
+  `Loop(items, ...)` fans out over a list of handles.
+- **The session history is a first-class, filterable stream** — a step (or the
+  CLI `session filter --from <id>`) can slice it into a *focused sub-context*.
+  This is the "one kind of thing at a time" principle made mechanical:
+  slicing the stream keeps each step focused.
+- **Composition is the plan.** `a > b > c` means `c(b(a(input)))`; each output
+  handle feeds the next step. A plan is this composition serialized as data;
+  the cursor is the pipe position; resume re-enters at the cursor.
+- **The engine is the interpreter** of the composed dataflow, running
+  in-process over one loaded model — `>` is a function call, never a process
+  spawn (see [2000-cli.md](2000-cli.md) "Conceptual only").
+
+The CLI exposes the same functions standalone (`nico extract ...`), so every
+part is also directly invokable (principle D) — but a real plan never spawns
+parts; the engine threads the handles.
+
 ## Step vocabulary
 
 ```nim
