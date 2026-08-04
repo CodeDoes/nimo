@@ -320,7 +320,6 @@ Usage:
     quit(cmdRun(rest))
   of "new":
     quit(cmdNew(rest))
-  of "planner", "plan":
     quit(cmdPlanner(rest))
   of "workspace":
     quit(cmdWorkspace(rest))
