@@ -12,12 +12,18 @@ Done:
   is WRONG — story.nim's version has `return count` and is correct; only
   validate.nim was broken. story.nim still carries a private duplicate
   countWords/countLines that Phase 4 should point at validate.nim instead.
+- [x] Phase 0 item 1 (one Session type): deleted src/session.nim; all of
+  generate/chat/nimwave_app/bake_state use session_manager.Session via
+  newSession()+initModel() (380b29c). One generateTurn now.
+- [x] Phase 0 item 6 (rename suite): evals.nim -> unit.nim, `nimo unit` (a409844).
 
-Remaining Phase 0 (riskier, online-only verification):
-- [ ] one Session type (unify session.nim object + session_manager.nim ref)
-- [ ] one shared bootstrapSession(cfg)
+Remaining Phase 0 items:
+- [ ] one shared bootstrapSession(cfg) in src/bootstrap.nim
 - [ ] CLI delegates to libraries (nimo.nim inline workspace/story -> modules)
 - [ ] decompose runHarnessTurn; unit tests target the new primitives
+
+(Row removed above: the session-nim vs session_manager duplication is resolved —
+session_manager.Session is the single canonical type.)
 
 Note: Phase 2 was pulled ahead of the remaining Phase 0 items deliberately —
 its work is fully offline/unit-verifiable, which matches "unit tests first".
@@ -42,7 +48,7 @@ These are the non-negotiable criteria each phase is checked against.
 
 ### A. Unit tests vs Model evals — two separate things
 
-- **Unit tests** (today `src/evals.nim`, `nimo eval`): verify OUR deterministic
+- **Unit tests** (today `src/unit.nim`, `nimo unit`): verify OUR deterministic
   machinery — parser, caches, GPU policy, loop bookkeeping. Offline, scripted,
   must always be green. **Renamed to `nimo unit`** so the word is precise.
 - **Model evals** (planned, `nimo model-eval`): probe the **black-box model** in
@@ -113,7 +119,7 @@ to be public, make it private.
 | `bake_state.nim` | bakes a context prompt only | **Skill bakes** (RFC 8000) |
 | `memory.nim`/`fiaas.nim` | exist, not wired into generation | **`lookupMemory` pointed tool** |
 | `session_manager.nim` | message tree only; no plan/checkpoints | **Record plan + checkpoints** (RFC 1000) |
-| `evals.nim` | tests the improvisation tool loop | **Test the plan flow** (RFC 9300) |
+| `unit.nim` | tests the improvisation tool loop | **Test the plan flow** (RFC 9300) |
 
 **What already matches**: `generate.nim` streams per token (`stdout.write` +
 `flushFile` — the canonical example); `workspace.nim` artifact dirs;
@@ -143,7 +149,7 @@ src/skills/           # baked skill bundles (planner + output states)
 > duplication. `rwkv.nim` is already well-abstracted; the surgery is above it.
 
 **Files**: `session.nim`, `session_manager.nim`, `bootstrap.nim` (new),
-`harness.nim`, `chat.nim`, `generate.nim`, `nimo.nim`, `workspace.nim`, `evals.nim`.
+`harness.nim`, `chat.nim`, `generate.nim`, `nimo.nim`, `workspace.nim`, `unit.nim`.
 
 1. **One `Session` type.** Make `session_manager.Session` (ref, with
    messages/tools/**and** model/state) the single canonical session. Either:
@@ -217,16 +223,17 @@ count-updated); harness/chat/generate spot-checked live.
    - `interrupt`: a `volatile bool` checked between steps and between tokens
      (signal handler or keypress), snapshot + return control.
    - `resume(planPath)`: reload plan + cursor + state and continue.
-3. Evals (extend `evals.nim`): plan save/load round-trip, cursor advance,
-   splice, engine step execution with `genStub`, checkpoint/resume.
+3. Unit tests (parts 1-2 already landed): plan save/load round-trip, cursor
+   advance, splice, engine step execution with the mock GenerateFn,
+   checkpoint/resume.
    Update `rfc/9300-eval.md` count if it changes.
 
-**Done when**: new evals pass; offline build compiles.
+**Done when**: new unit tests pass; offline build compiles.
 **Commit.**
 
 ## Phase 3 — Orchestrator: replace the improvisation loop
 
-**Files**: `harness.nim`, `session_manager.nim`, `evals.nim`, new
+**Files**: `harness.nim`, `session_manager.nim`, `unit.nim`, new
 `src/orchestrator.nim`.
 
 1. `orchestrator.nim`:
@@ -245,7 +252,7 @@ count-updated); harness/chat/generate spot-checked live.
      never terminates aborts — the evals already test this shape).
 3. `session_manager.nim`: session records the plan + checkpoints (new message
    kinds or a session-level plan field), so `/save` shows the run.
-4. `evals.nim`: rework `evalToolCalling`/`evalLoopTermination` to the new flow:
+4. `unit.nim`: rework `evalToolCalling`/`evalLoopTermination` to the new flow:
    - tool-calling eval → planner emission parse → plan compilation.
    - loop-termination eval → engine max-steps abort.
    - session-logging eval → user → steps → results → answer chain still holds.
@@ -273,7 +280,7 @@ count-updated); harness/chat/generate spot-checked live.
    with the project).
 
 **Done when**: `nimo story generate <premise>` streams a real chapter with
-validation; pipeline manifests are plans; evals green.
+validation; pipeline manifests are plans; unit suite green.
 **Commit.**
 
 ## Phase 5 — Skill bakes + memory pointed tool
@@ -335,14 +342,14 @@ artifacts; `nimo unit` unaffected.
 
 ## Risks / notes
 
-- **Evals coupling**: the harness rewrite touches exactly what `evals.nim`
+- **Unit-test coupling**: the harness rewrite touches exactly what `unit.nim`
   tests (tool loop, session logging). Update unit tests in the same commit as
   the harness change; keep the count truthful. Phase 0's decomposition makes
   this a behavior test, not an implementation test.
 - **Two Session types**: the crux of the composition problem. Phase 0 unifies
   them (or defines one explicit interface both provide) BEFORE anything else;
   the engine cannot be composed from two worlds. This is the highest-risk,
-  highest-value refactor — do it with evals green throughout.
+  highest-value refactor — do it with the unit suite green throughout.
 - **Streaming rides the refactor**: once `sampleReply` lives in one place
   (Phase 0 item 2), Phase 1 adds the sink there and everywhere is streaming.
 - **Learned planner is a bake**: the template registry ships first
