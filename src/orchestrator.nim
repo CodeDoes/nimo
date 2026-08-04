@@ -141,3 +141,13 @@ proc compileEmission*(emission: string, goal: string): Plan =
       try: j = parseJson(argsJson)
       except JsonParsingError: discard
     result.addStep(stepFromName(name, j))
+# ---------------------------------------------------------------------------
+# Memory template (extended)
+# ---------------------------------------------------------------------------
+proc memoryPlan*(goal: string): Plan =
+  ## Plan for memory/remember intents - uses lookupMemory pointed tool
+  result = newPlan(goal)
+  result.addStep(extractStep("pull-relevant", "memory", goal))
+  result.addStep(generateStep("note-it", goal, "output:note"))
+  result.addStep(writeStep("save-note", "memory.md"))
+  result.addStep(reportStep("noted"))
