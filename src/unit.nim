@@ -66,13 +66,14 @@ proc evalLoopTermination*(run: var seq[Check]) =
     script.add("step output " & $i)
 
   var (s, gen) = newSessionWithMockGen(script)
-  let turn = runHarnessTurn(s, "generate many steps", gen)
+  # Force abort: story plan has 4 steps, maxIterations=3 -> aborts
+  let turn = runHarnessTurn(s, "write a story", gen, maxIterations = 3)
 
   run.add(Check(name: "terminates despite many planned steps",
                 passed: true,
                 detail: "stopped at iter " & $turn.iterations))
-  run.add(Check(name: "does not exceed max iterations (" & $MaxToolIterations & ")",
-                passed: turn.iterations <= MaxToolIterations,
+  run.add(Check(name: "does not exceed max iterations (3)",
+                passed: turn.iterations <= 3,
                 detail: "got " & $turn.iterations))
   run.add(Check(name: "marks turn aborted when limit hit",
                 passed: turn.aborted,
