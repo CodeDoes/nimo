@@ -1,3 +1,6 @@
+import std/[os, strutils, osproc, times, strformat, sequtils]
+import ./config, ./workspace, ./story, ./bootstrap, ./orchestrator, ./program, ./harness
+
 
 # ---------------------------------------------------------------------------
 # Goal-first CLI commands (RFC 2000)
@@ -43,9 +46,6 @@ proc cmdPlan(rest: seq[string]): int =
 ## functions. (Standalone tool binaries like generate/quantize/chat/harness
 ## are spawned because each owns its own arg parse + bootstrap — see
 ## rfc/2000-cli.md "Conceptual only".)
-
-import std/[os, strutils, osproc, times, strformat, sequtils]
-import ./config, ./workspace, ./story, ./bootstrap, ./orchestrator, ./program, ./harness
 
 proc resolveWorkspace*(nameOrPath: string = ""): Workspace =
   ## Resolves the workspace for a story/workspace command: explicit name/path
