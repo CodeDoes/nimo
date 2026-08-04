@@ -40,6 +40,21 @@ The CLI exposes the same functions standalone (`nico extract ...`), so every
 part is also directly invokable (principle D) — but a real plan never spawns
 parts; the engine threads the handles.
 
+## Prefill (mostly for resumes)
+
+Every step carries an optional `prefill: string`. It is a **prefix the
+generator is continued from** — the already-produced tail / prior context that
+shapes the next output. Its primary use is **resume**: when the engine re-enters
+a mid-stream step at the cursor, it feeds the step's prefill into `generate`
+instead of redrawing the output from scratch, so a partial generation continues
+seamlessly (the same baked ``voice``/state carries through). `prefill` is data,
+so it is saved with the plan and is part of checkpoint/resume (RFC 3600).
+
+```
+Step …
+  prefill: string = ""   # e.g. "Chapter 1 continued: " — what to continue from
+```
+
 ## Step vocabulary
 
 ```nim

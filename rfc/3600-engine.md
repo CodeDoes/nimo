@@ -66,6 +66,9 @@ step-level:  "▶ extract characters" → [streaming tokens] → "✔ extract ch
 A checkpoint is the (plan, cursor, state, artifacts) trio. It supports:
 
 - **Resume** — reload plan + cursor + state, continue from exactly there.
+  A resuming step uses its **prefill** (RFC 3500): the engine feeds the step's
+  already-produced tail into `generate` so the generation continues instead of
+  restarting.
 - **Re-plan** — after pause, run a light planner pass over the remaining steps
   given what happened since the pause ("chapter 3 failed validation" → adjust).
 - **Interrupt** — stop the sink at any time (keypress / signal), snapshot the
