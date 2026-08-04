@@ -18,9 +18,14 @@ Done:
 - [x] Phase 0 item 6 (rename suite): evals.nim -> unit.nim, `nimo unit` (a409844).
 
 Remaining Phase 0 items:
-- [ ] one shared bootstrapSession(cfg) in src/bootstrap.nim
-- [ ] CLI delegates to libraries (nimo.nim inline workspace/story -> modules)
-- [ ] decompose runHarnessTurn; unit tests target the new primitives
+- [x] one shared bootstrapSession(cfg) in src/bootstrap.nim
+- [x] CLI delegates to libraries (nimo.nim inline workspace/story -> modules)
+- [x] decompose runHarnessTurn into recordTurnStart/parseReply/runCalls/
+      buildNextContext (unit suite now tests the primitives; harness.nim
+      main() stops re-dispatching generate/bake via execCmd)
+      + restored NIMO_SMOKE single-shot mode (smoke_test.sh path)
+      + fixed workspace.nim unexpanded-tilde bug (workspaces were created
+      under a literal ./~ in the cwd)
 
 (Row removed above: the session-nim vs session_manager duplication is resolved —
 session_manager.Session is the single canonical type.)

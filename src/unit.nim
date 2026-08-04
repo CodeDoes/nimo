@@ -429,6 +429,50 @@ proc evalValidate*(run: var seq[Check]) =
                 passed: repeats.repeatingSegments > 0))
 
 # ----------------------------------------------------------------------
+# Eval 10: harness turn primitives (Phase 0 decomposed loop)
+# ----------------------------------------------------------------------
+proc evalTurnPrimitives*(run: var seq[Check]) =
+  # recordTurnStart records the user message and returns the root parent id.
+  var s = newSession(".")
+  let rootId = recordTurnStart(s, "hello there")
+  run.add(Check(name: "recordTurnStart records a user message",
+                passed: s.messages.len == 1 and s.messages[0].role == mrUser and
+                        s.messages[0].id == rootId,
+                detail: "root=" & rootId))
+
+  # parseReply extracts tool calls from the 3 modeled forms.
+  let calls = parseReply("[tool] run_pipeline {\"intent\": \"one\"}")
+  run.add(Check(name: "parseReply extracts [tool] calls",
+                passed: calls.len == 1 and calls[0].name == "run_pipeline",
+                detail: "calls=" & $calls.len))
+  let calls2 = parseReply("{\"name\": \"x\", \"arguments\": {\"k\": 1}}")
+  run.add(Check(name: "parseReply handles bare JSON calls",
+                passed: calls2.len == 1 and calls2[0].name == "x",
+                detail: "calls=" & $calls2.len))
+
+  # runCalls executes against registered tools and records call+result.
+  var s2 = newSession(".")
+  let root2 = recordTurnStart(s2, "run it")
+  s2.registerTool("ping", proc(_: string): string = "pong")
+  let (feed, lastParent) = runCalls(s2, @[ToolCall(name: "ping", args: "{}")], root2)
+  run.add(Check(name: "runCalls records tool_call then tool_result",
+                passed: s2.messages.len == 3 and
+                        s2.messages[2].role == mrToolResult and
+                        s2.messages[2].parentId == s2.messages[1].id,
+                detail: "msgs=" & $s2.messages.len))
+  run.add(Check(name: "runCalls returns feedback + lastParentId",
+                passed: feed.contains("pong") and feed.contains("[tool_result for ping]") and
+                        lastParent == s2.messages[1].id,
+                detail: lastParent))
+
+  # buildNextContext strips markers and carries feedback.
+  let ctx = buildNextContext("[tool] run_pipeline {\"x\":1}", "[tool_result for ping]\npong\n\n")
+  run.add(Check(name: "buildNextContext strips markers, keeps feedback",
+                passed: (not ctx.contains("[tool]")) and ctx.contains("pong") and
+                        ctx.contains("Now answer"),
+                detail: ctx))
+
+# ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
 proc runAllEvals*(): int =
@@ -436,6 +480,7 @@ proc runAllEvals*(): int =
   evalToolCalling(run)
   evalLoopTermination(run)
   evalSessionLogging(run)
+  evalTurnPrimitives(run)
   evalGpuPolicy(run)
   evalModelCache(run)
   evalStateCache(run)

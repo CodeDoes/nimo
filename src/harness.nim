@@ -146,18 +146,50 @@ If no tool is needed, just answer directly in natural text."""
 proc buildUserPrompt*(userMsg: string): string =
   result = HarnessSystemPrompt & "\n\nUser: " & userMsg
 
-## ---- Core loop ----
+## ---- Core loop (composed primitives; unit-tested directly) ----
+proc recordTurnStart*(s: var Session, userMsg: string): string =
+  ## Records the user message that starts a turn; returns the root parentId
+  ## for the history chain.
+  return s.addText(userMsg, "", isThinking = false)
+
+proc parseReply*(reply: string): seq[ToolCall] =
+  ## Parses the model reply for tool calls (the 3 forms). This is a step toward
+  ## the planner-emission parser (RFC 1100): the same parse compiles `[step]`
+  ## lines into plan steps.
+  return parseToolCalls(reply)
+
+proc runCalls*(s: var Session, calls: seq[ToolCall], curParent: string): (string, string) =
+  ## Executes each parsed call against the session's registered tools, records
+  ## the tool_call + tool_result messages in the history, and returns:
+  ## (feedbackText, lastParentId) — the feedback feeds the next context.
+  var feedBack = ""
+  var lastParent = curParent
+  for call in calls:
+    let toolCallId = s.addToolCall(call.name, call.args, lastParent)
+    let toolResult = s.executeTool(toolCallId, call.name, call.args)
+    discard s.addToolResult(toolCallId, toolResult, isError = false, parentId = toolCallId)
+    feedBack.add("[tool_result for " & call.name & "]\n" & toolResult & "\n\n")
+    lastParent = toolCallId
+  return (feedBack, lastParent)
+
+proc buildNextContext*(reply: string, feedBack: string): string =
+  ## Strips tool markers from the reply, keeps natural text, appends the tool
+  ## results and a directive to answer. Returns the next generation prompt.
+  let natural = stripToolCallText(reply)
+  result = if natural.len > 0: natural & "\n\n" else: ""
+  result.add(feedBack & "Now answer the user's question with natural text.")
+
 proc runHarnessTurn*(s: var Session, userMsg: string,
                      generate: GenerateFn = nil,
                      maxIterations: int = MaxToolIterations,
                      maxTokens: int = 200): HarnessTurn =
-  ## Runs one full user turn through the harness loop.
-  ## `generate` is the model-generation seam (injected, not stored on the
-  ## session): nil = use the session's real model; a fn = test mock / offline.
+  ## Runs one full user turn through the harness loop, composing the primitives
+  ## above: recordTurnStart -> generate -> parseReply -> runCalls ->
+  ## buildNextContext. `generate` is the model-generation seam (injected, not
+  ## stored on the session): nil = use the session's real model; a fn = mock.
   result.userInput = userMsg
 
-  let parentId = s.addText(userMsg, "", isThinking = false)
-
+  let parentId = recordTurnStart(s, userMsg)
   var context: string = buildUserPrompt(userMsg)
   var curParent = parentId
 
@@ -166,7 +198,7 @@ proc runHarnessTurn*(s: var Session, userMsg: string,
     let reply = s.generateTurn(context, generate, DefaultTemp, DefaultTopP, maxTokens)
     result.generated = reply
 
-    let calls = parseToolCalls(reply)
+    let calls = parseReply(reply)
     if calls.len == 0:
       # No tool calls -> final text answer
       result.finalText = reply
@@ -174,20 +206,9 @@ proc runHarnessTurn*(s: var Session, userMsg: string,
       return
 
     result.toolCalls.add(calls)
-    var feedBack = ""
-    for call in calls:
-      let toolCallId = s.addToolCall(call.name, call.args, curParent)
-      let toolResult = s.executeTool(toolCallId, call.name, call.args)
-      discard s.addToolResult(toolCallId, toolResult, isError = false, parentId = toolCallId)
-      feedBack.add("[tool_result for " & call.name & "]\n" & toolResult & "\n\n")
-      curParent = toolCallId
-
-    # Strip tool markers, keep natural text if any, then append results
-    let natural = stripToolCallText(reply)
-    context = if natural.len > 0: natural & "\n\n" else: ""
-    context.add(feedBack & "Now answer the user's question with natural text.")
-    if context.len == 0:
-      break
+    let (feedBack, lastParent) = runCalls(s, calls, curParent)
+    curParent = lastParent
+    context = buildNextContext(reply, feedBack)
 
   result.aborted = true
   return
