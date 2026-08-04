@@ -204,3 +204,35 @@ proc runStoryPipeline*(ws: Workspace, session: var Session,
   
   echo "[pipeline] Story generation complete"
   return true
+
+# ---------------------------------------------------------------------------
+# Plan template for story generation (RFC 3200)
+# ---------------------------------------------------------------------------
+proc storyPlan*(premise: string): Plan =
+  ## Creates a Plan for story generation from a premise (RFC 3200 template).
+  ## The plan follows: outline -> character extraction -> wiki generation ->
+  ## per-chapter (outline+wiki slice -> generate) -> validate -> critique -> write.
+  result = newPlan(premise)
+  
+  # Step 1: Generate outline
+  result.addStep(generateStep("generate-outline", 
+    "Create a story outline for: " & premise, "output:outline"))
+  result.addStep(writeStep("save-outline", "outline.md"))
+  
+  # Step 2: Extract characters from outline
+  result.addStep(extractStep("pull-characters", "outline", "main characters"))
+  
+  # Step 3: Generate wiki entries for each character (loop placeholder)
+  result.addStep(generateStep("generate-wiki", 
+    "Generate wiki entries for: " & premise, "output:wiki"))
+  
+  # Step 4-6: Per-chapter generation (outline+wiki -> generate -> validate -> write)
+  for chNum in 1 .. 3:  # Default 3 chapters
+    result.addStep(generateStep("draft-chapter-" & $chNum,
+      "Draft Chapter " & $chNum & " for: " & premise, "output:chapter"))
+    result.addStep(validateStep("gate-chapter-" & $chNum, ""))
+    result.addStep(writeStep("save-chapter-" & $chNum, 
+      "chapter_" & $chNum & ".md"))
+  
+  # Step 7: Final report
+  result.addStep(reportStep("story complete"))
