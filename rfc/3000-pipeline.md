@@ -1,83 +1,65 @@
 # 3000 — Pipeline
 
-The `run_pipeline` tool. **Status: implemented** in `src/pipeline.nim`.
+Intent → plan → execute. **Status: superseded design — the single-step
+`run_pipeline` MVP (`src/pipeline.nim`) is being replaced by plan-based
+execution per [3500-plan-format.md](3500-plan-format.md).**
+
+> Today `src/pipeline.nim` still has the MVP: it turns an intent into **one**
+> generate step (plus dormant `summarizeStep`/`extractStep` helpers) and reports
+> the JSON pipeline id. The goal below is the target behavior.
 
 ## What it is
 
-`run_pipeline` is the one tool the harness gives the model. When the model
-wants to "write", "generate", or "produce content", it calls this tool with an
-intent, and the pipeline module turns that intent into a small set of steps
-that run through the model.
+When a user message has a goal, the planner compiles it into a **plan** — a
+flat list of pointed steps. `run_pipeline` / the engine executes that plan
+**deterministically**, streaming every token, checkpointing for resume.
 
-## How it works (step by step)
-
-### 1. The model emits a tool call
-
-The model outputs a line like:
+The old single-step behavior (`intent → one generate → output.txt`) is a stub;
+the intended behavior uses the real step vocabulary:
 
 ```
-[tool] run_pipeline {"intent": "write a poem about roses"}
+(template) story:
+  generate  outline                               → outline.md
+  extract   characters                            → characters[]
+  loop c in characters:
+      extract outline events relevant to c
+      generate wiki entry                          → wiki/{c}.md
+  loop ch in outline.chapters:
+      extract outline segment for ch
+      extract wiki slice for ch
+      generate chapter                             → chapters/{ch}.md
+  report   story finished
 ```
 
-The harness parses this (3 formats accepted — see
-[1100-message-format.md](1100-message-format.md)) and calls
-`pipelineTool(session, arguments)`.
+## How a plan executes (step by step)
 
-### 2. Parse the intent
+1. **Interpret** — planner emits a parseable plan (steps + filters).
+2. **Shuffle/validate** — the plan is parsed; a bad plan is rejected (parse
+   error, not weird prose).
+3. **Execute** — the engine walks the steps:
+   - `Extract` → pull the focused slice (model or memory lookup)
+   - `Summarize` → condense
+   - `Generate` → output-state, **streaming** through a sink
+   - `Validate` → deterministic gate
+   - `Write` → file output
+   - `Loop` → splice a sub-plan per extracted item
+   - `Report` → checkpoint
+4. **Save** — the plan + cursor + checkpoints are persisted (resumable).
+5. **Report** — final natural-text answer streams live.
 
-The arguments JSON is read. If it isn't valid JSON, the tool returns an error
-string. Otherwise the `intent` field is extracted (fallback: `"unknown task"`).
+## The manifest
 
-### 3. Create a pipeline
-
-A `Pipeline` object is created with a unique id
-(`pipe_<timestamp>`), a timestamp, and status `running`.
-
-### 4. Add and run steps
-
-The MVP runs one step per call:
-
-- `generateStep(name, prompt, target)` — asks the model to produce content for
-  the intent, writes the reply to `target` (default `output.txt`), marks the
-  step completed.
-
-Two more step helpers exist for longer pipelines:
-
-- `summarizeStep(name, input, length)` — asks the model to summarize input
-  (brief/medium/detailed).
-- `extractStep(name, input, filter)` — asks the model to pull out specific
-  facts from input.
-
-Each step: added as `pending` → started (`running`) → completed with output (or
-failed with an error message).
-
-### 5. Finish and report
-
-The pipeline status becomes `completed`. A JSON report is saved to
-`<cwd>/.nimo/<pipeline-id>.json` with the id, status, timestamp, and every step
-(id, name, status, output). The tool returns a short confirmation string which
-the harness feeds back to the model as the tool result.
-
-## The whole flow
-
-```
-model: [tool] run_pipeline {"intent": "write a poem about roses"}
-  → parse intent
-  → new pipeline (running)
-  → generateStep: model writes the poem → output.txt
-  → pipeline completed
-  → save .nimo/<id>.json
-  → tool result: "[nimo] Pipeline <id> completed with 1 steps"
-model: (reads the result) → answers the user in natural text
-```
+Each plan is saved as a JSON manifest (`.nimo/programs/<id>.json` or under a
+workspace) with the plan id, goal, cursor, step statuses, and outputs.
 
 ## Config interaction
 
-Steps use the generation defaults from config (`temperature`, `topP`, and the
-session's max tokens) — see [4000-config.md](4000-config.md).
+`Generate` steps use generation defaults from config (temperature, topP, max
+tokens) — see [4000-config.md](4000-config.md).
 
 ## See Also
 
-- [3400-agent.md](3400-agent.md) — the loop that executes this tool
-- [1100-message-format.md](1100-message-format.md) — tool-call text forms
-- [1000-session.md](1000-session.md) — how tool calls/results become messages
+- [3500-plan-format.md](3500-plan-format.md) — the plan artifact
+- [3600-engine.md](3600-engine.md) — the executor
+- [3400-agent.md](3400-agent.md) — the orchestration loop
+- [1100-message-format.md](1100-message-format.md) — planner emission format

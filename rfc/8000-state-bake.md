@@ -1,15 +1,32 @@
 # 8000 — State Bake
 
-Pre-compute model state from a context so later sessions resume instantly.
-**Status: implemented** in `src/state_cache.nim` and `src/rwkv/state/cache.nim`.
+Bake a context into model state so later sessions resume instantly, and **bake skills** — the state-tuning mechanism. **Status: implemented** in `src/state_cache.nim` / `src/rwkv/state/cache.nim` (context bake); the **skill** extension (`bake planner` / `bake output`) is planned.
 
-## Why
+## Two jobs of bake
 
-Evaluating the system prompt every run is wasted work. Baking runs it once,
-saves the resulting model state to disk, and later runs load the state directly
-— the model starts already "knowing" the context.
+Bake has two distinct uses, both cheap (no gradients) — this is the
+**state-tuning** idea: what big models get from expensive fine-tuning, a small
+model gets from baked states.
+
+| Bake | Job | Output | Status |
+|------|-----|--------|--------|
+| **Context** | pre-compute the fixed system context once, resume fast | a state vector | ✅ implemented |
+| **Skill (planner)** | make the model emit structured plans from fuzzy goals | a state vector that <br>yields parseable plans | planned |
+| **Skill (output)** | make the model produce a certain *sort* of prose | a state vector that <br>yields e.g. chapters/wikis | planned |
+
+A **skill** is a self-contained bundle (zip-like):
+
+```nim
+Skill:
+  name: string
+  bakedState: bytes      # the .state.bin — the "tuning"
+  template: string       # the pattern it resumes
+  example: string        # the demonstration it was baked from
+```
 
 ## How baking works (step by step)
+
+## Context bake (mechanisms)
 
 ### The cache key
 
@@ -62,3 +79,5 @@ nimo chat model.bin vocab.txt baked_state.bin
 
 - [8150-quantization.md](8150-quantization.md) — the model cache it pairs with
 - [4000-config.md](4000-config.md) — `systemPrompt`, `bakeContext`, `stateCacheDir`
+- [docs/architecture.md](../docs/architecture.md) — state-tuning as a principle
+- [1100-message-format.md](1100-message-format.md) — planner emission format

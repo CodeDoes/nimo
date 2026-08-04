@@ -5,21 +5,29 @@ The creative writing workflow. **Status: implemented** in `src/story.nim`
 
 ## What it is
 
-Story mode is a longer, quality-checked writing flow: premise → outline →
-chapters → validation → critique → saved to a workspace, with character memory
-for consistency.
+Story mode is a longer, quality-checked writing flow. It runs as a **plan
+template** executed by the engine (see [3500-plan-format.md](3500-plan-format.md)):
+premise → outline → extract characters → per-character wiki → per-chapter
+(extract focused outline+wiki slice → generate) → validation → critique → save.
+Every generate step streams; memory keeps characters consistent.
 
-## The flow
+## The flow (plan template)
 
 ```
 premise
-  └─> generateOutline() → outline.md
-        └─> per chapter:
-              generateChapter(wiki context + recap)
-              validateChapter() — words / paragraphs / repeats
-              fail → critiqueChapter() → one revision → re-validate
-              save → chapters/0N_....md
+  └─> outline → outline.md
+        └─> extract characters → per-character wiki (focused events)
+              └─> per chapter:
+                    extract outline slice + wiki slice for this chapter (focused)
+                    generate chapter (500+ words) STREAMING
+                    validateChapter() — words / paragraphs / repeats
+                    fail → critiqueChapter() → one revision → re-validate
+                    save → chapters/0N_....md
 ```
+
+> Current status: `src/story.nim` implements a hardcoded approximation (no
+> character-extraction stage, no streaming, no plan object). The target is the
+> plan-template form in [3200-story.md](3200-story.md).
 
 ## What makes it different from chat
 

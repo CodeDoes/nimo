@@ -1,71 +1,73 @@
 # 3400 — Agent
 
-The harness agent loop. **Status: implemented** in `src/harness.nim`.
+The orchestration loop. **Status: superseded design — the improvisation loop
+(`src/harness.nim`) is being replaced by planner → plan → engine.**
 
-## What it is
+> This RFC documents the **intended** architecture. Today `src/harness.nim`
+> still contains the old loop where the model improvises `[tool]` calls inside
+> its reply; that behavior contradicts the design and is being removed. Code in
+> transition is tracked in [analysis/status.md](../analysis/status.md).
 
-The harness is the "agent mode": instead of a one-shot answer, the model can
-call tools and continue working until it has a final answer. The loop is:
+## What it is now
+
+The user is **not** answered by an improviser. Their message is **compiled**:
 
 ```
-user -> generate -> tool_call? -> execute -> feed result back -> generate -> ... -> final text
+user message
+  → planner: interpret(message) → PLAN (data)      (src/orchestrator.nim, planned)
+  → engine:  run(plan, session, sink)              (src/engine.nim, planned)
+       each step: extract / summarize / generate / validate / write / report
+       streams tokens; checkpoints for resume; fans out over data-driven loops
+  → reporter: stream results && final report
 ```
 
-## How a turn works (step by step)
+### 1. Interpret
 
-### 1. Build the prompt
+The planner state takes the fuzzy message and emits a **flat list of pointed
+steps** (machine-readable — reuses the `[tool]`/JSON emission format, see
+[1100-message-format.md](1100-message-format.md)). The plan is **data** per
+[3500-plan-format.md](3500-plan-format.md).
 
-The user's message is wrapped with a system prompt (`HarnessSystemPrompt`)
-that explains the `run_pipeline` tool and shows an example of the exact
-`[tool]` line format the model must emit.
+### 2. Execute
 
-### 2. Generate a reply
+The engine walks the plan deterministically. Each `Generate` step streams every
+token through a sink. `Loop` steps splice sub-steps from extracted lists.
+Failures gate through `Validate`. See [3600-engine.md](3600-engine.md).
 
-The model produces text (up to the max tokens for this turn).
+### 3. Report
 
-### 3. Parse tool calls
+`Report` steps surface progress; the user sees live streaming text plus
+`▶/✔` step events. The final output is a natural-text answer.
 
-The reply is scanned for tool calls in **three** formats (see
-[1100-message-format.md](1100-message-format.md)):
+## Why not the old improvisation loop
 
-1. `[tool] run_pipeline {...}` lines
-2. `<tool_call>{...}</tool_call>` blocks
-3. bare JSON object lines like `{"name": ..., "arguments": ...}`
+The old model — "generate a reply, parse it for `[tool]` calls, feed results
+back, repeat ≤8×" — made the *model* the orchestrator, improvising tool calls
+mid-prose. That:
 
-### 4. Branch on the result
+- mixes "thinking about the plan" and "producing output" in one state (violates
+  *one kind at a time*),
+- is fragile and non-deterministic (needs a re-parse every iteration),
+- has no plan artifact to resume or observe.
 
-- **No tool call** → the reply is natural text. It is recorded as the final
-  answer and the turn ends.
-- **Tool call(s) found** → for each call:
-  1. Record the call as a message (role assistant, stopReason `toolUse`).
-  2. Run the tool (`executeTool` looks up the name in the session's registry;
-     `run_pipeline` is the one registered by the harness).
-  3. Record the result as a message (role toolResult, parented to the call).
-  4. Collect the results into a feedback block.
-  - Then strip tool markers from the reply, keep any natural text, append the
-    feedback, and go back to step 2 ("Now answer the user's question...").
-
-### 5. Iteration guard
-
-The loop runs at most **8 iterations** (`MaxToolIterations`). If the model
-keeps calling tools and never gives a final answer, the turn is marked
-`aborted = true` and stops — no infinite loop.
+The new model keeps the reasoning in the **plan**, the model as a focused,
+streaming executor.
 
 ## Session bookkeeping
 
-- The user message, tool calls, tool results, and final text are all recorded
-  in the session message tree (see [1000-session.md](1000-session.md)).
-- `/save <file>` writes the whole session as JSONL.
-- After each turn the harness prints the number of iterations and any tool
-  calls, plus the wall-clock time.
+The session message tree still records user → steps → results → answer (see
+[1000-session.md](1000-session.md)); it now also records the running plan and
+checkpoints.
 
 ## Offline mode
 
 With `-d:harnessOffline`, no model is loaded: the session uses a scripted
-generator (`genStub`) so the loop, parsing, and evals run without rwkv.cpp.
+generator (`genStub`) so interpretation, execution, and evals run without
+rwkv.cpp.
 
 ## See Also
 
-- [3000-pipeline.md](3000-pipeline.md) — the tool the loop executes
-- [1100-message-format.md](1100-message-format.md) — parsing the 3 formats
+- [3500-plan-format.md](3500-plan-format.md) — the plan artifact
+- [3600-engine.md](3600-engine.md) — the streaming executor
+- [3000-pipeline.md](3000-pipeline.md) — plumbing intent → steps
 - [1000-session.md](1000-session.md) — the message tree
