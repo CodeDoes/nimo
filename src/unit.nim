@@ -15,13 +15,14 @@ type
     passed*: bool
     detail*: string
 
-proc newSessionWithMockGen*(script: seq[string], registerPipeline: bool = true): Session =
-  ## A REAL session (real message tree, tools, bookkeeping) whose only mocked
-  ## part is the model-generation seam (`generate`) — it returns the scripted
-  ## replies in order. The session itself is never stubbed.
+proc newSessionWithMockGen*(script: seq[string], registerPipeline: bool = true): (Session, GenerateFn) =
+  ## Returns a REAL session (real message tree, tools, bookkeeping) plus a mock
+  ## generator that returns the scripted replies in order. Only the
+  ## model-generation is mocked, and it is injected at call sites (passed to
+  ## runHarnessTurn/generateTurn) — nothing about the session itself is stubbed.
   var s = newSession(".")
   var idx = 0
-  s.generate = proc(userMsg: string): string =
+  let gen = proc(userMsg: string): string =
     if idx < script.len:
       let r = script[idx]
       inc idx
@@ -30,8 +31,8 @@ proc newSessionWithMockGen*(script: seq[string], registerPipeline: bool = true):
   if registerPipeline:
     s.registerTool("run_pipeline", proc(args: string): string =
       var sess = s
-      return pipelineTool(sess, args))
-  return s
+      return pipelineTool(sess, args, gen))
+  return (s, gen)
 
 # ----------------------------------------------------------------------
 # Eval 1: Tool calling
@@ -48,13 +49,13 @@ proc evalToolCalling*(run: var seq[Check]) =
   except CatchableError as e:
     run.add(Check(name: "multi [tool] lines parse without crash",
                   passed: false, detail: e.msg))
-  var s = newSessionWithMockGen(@[
+  var (s, gen) = newSessionWithMockGen(@[
     "[tool] run_pipeline {\"intent\": \"write a poem about roses\"}",
     "pipeline: poem draft generated",
     "Here is your poem: roses are red."
   ])
 
-  let turn = runHarnessTurn(s, "write a poem about roses")
+  let turn = runHarnessTurn(s, "write a poem about roses", gen)
 
   run.add(Check(name: "detects tool call in output",
                 passed: turn.toolCalls.len == 1,
@@ -86,8 +87,8 @@ proc evalLoopTermination*(run: var seq[Check]) =
     script.add("[tool] run_pipeline {\"intent\":\"loop\"}")
   script.add("never reached")
 
-  var s = newSessionWithMockGen(script)
-  let turn = runHarnessTurn(s, "loop forever")
+  var (s, gen) = newSessionWithMockGen(script)
+  let turn = runHarnessTurn(s, "loop forever", gen)
 
   run.add(Check(name: "terminates despite continuous tool calls",
                 passed: true,
@@ -103,12 +104,12 @@ proc evalLoopTermination*(run: var seq[Check]) =
 # Eval 3: Session JSONL tree integrity
 # ----------------------------------------------------------------------
 proc evalSessionLogging*(run: var seq[Check]) =
-  var s = newSessionWithMockGen(@[
+  var (s, gen) = newSessionWithMockGen(@[
     "[tool] run_pipeline {\"intent\":\"log me\"}",
     "pipeline: logged",
     "Final response here."
   ])
-  discard runHarnessTurn(s, "please log")
+  discard runHarnessTurn(s, "please log", gen)
 
   let path = "logs/eval_session_test.jsonl"
   s.saveSession(path)

@@ -2,8 +2,9 @@
 ## Manages messages, tools, and JSONL logging.
 ##
 ## Build with `-d:harnessOffline` to strip the RWKV model backend, letting the
-## harness (and evals) run without rwkv.cpp / a GPU model. In offline mode the
-## session uses a scripted generator (genStub) instead of real inference.
+## harness (and unit tests) run without rwkv.cpp / a GPU model. Generation is
+## injected as a parameter (`generate: GenerateFn`); pass `nil` to use the real
+## model on this session (offline builds always get the placeholder).
 
 import std/[json, times, strutils, os, random, tables]
 import ./config
@@ -45,7 +46,6 @@ type
     branches*: seq[string]
     activeBranch*: int
     tools*: Table[string, ToolHandler]
-    generate*: GenerateFn  # model-generation seam; nil = use real model
     when not defined(harnessOffline):
       model*: RwkvModel
       tok*: WorldTokenizer
@@ -82,11 +82,13 @@ when not defined(harnessOffline):
       let cache = initStateCache(stateCacheDir)
       s.state = cache.bakeContext(s.model, s.tok, modelPath, vocabPath, systemPrompt)
 
-proc generateTurn*(s: var Session, userMsg: string, temp: float32 = DefaultTemp, topP: float32 = DefaultTopP, maxTokens: int = 200): string =
-  ## Generates a reply. If a `generate` seam is set, calls it (test mock /
-  ## offline); otherwise runs the real RWKV model.
-  if s.generate != nil:
-    return s.generate(userMsg)
+proc generateTurn*(s: var Session, userMsg: string, generate: GenerateFn = nil,
+                   temp: float32 = DefaultTemp, topP: float32 = DefaultTopP,
+                   maxTokens: int = 200): string =
+  ## Generates a reply. If a `generate` fn is supplied (test mock, offline
+  ## stub), call it; otherwise run the real RWKV model attached to this session.
+  if generate != nil:
+    return generate(userMsg)
   when not defined(harnessOffline):
     if s.model == nil:
       return "[nimo] Model not loaded"

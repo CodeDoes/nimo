@@ -3,7 +3,7 @@
 ## Emulates the pi agent loop: think -> text/tool_call, dispatch, feed result back.
 
 import std/[strutils, os, osproc, strformat, times, json, terminal]
-import ./session_manager, ./pipeline, ./config, ./cli, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv, ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend, ./rwkv/backend/vulkan/vulkan_backend
+import ./session_manager, ./pipeline, ./config, ./cli, ./gpu, ./bootstrap, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv, ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend, ./rwkv/backend/vulkan/vulkan_backend
 
 const
   MaxToolIterations* = 8
@@ -148,9 +148,12 @@ proc buildUserPrompt*(userMsg: string): string =
 
 ## ---- Core loop ----
 proc runHarnessTurn*(s: var Session, userMsg: string,
+                     generate: GenerateFn = nil,
                      maxIterations: int = MaxToolIterations,
                      maxTokens: int = 200): HarnessTurn =
   ## Runs one full user turn through the harness loop.
+  ## `generate` is the model-generation seam (injected, not stored on the
+  ## session): nil = use the session's real model; a fn = test mock / offline.
   result.userInput = userMsg
 
   let parentId = s.addText(userMsg, "", isThinking = false)
@@ -160,7 +163,7 @@ proc runHarnessTurn*(s: var Session, userMsg: string,
 
   for i in 1 .. maxIterations:
     result.iterations = i
-    let reply = s.generateTurn(context, DefaultTemp, DefaultTopP, maxTokens)
+    let reply = s.generateTurn(context, generate, DefaultTemp, DefaultTopP, maxTokens)
     result.generated = reply
 
     let calls = parseToolCalls(reply)
@@ -196,94 +199,19 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
   echo "Type /quit to exit, /save <file> to save session."
   echo ""
 
-  var s = newSession(cwd)
-  when defined(harnessOffline):
-    echo "[nimo] offline mode: no model loaded; generation will return placeholder text"
-    s.generate = proc(userMsg: string): string = "[nimo offline] no model"
-  else:
-    # Backend selection (RFC 7500): config > runtime flags > rwkv default > backend libs.
-    # selectBackend is the single controlled switch point; bind it ONCE here
-    # for the whole process, then GPU policy runs per backend kind.
-    let backend = selectBackend(cfg)
-    try:
-      bindBackend(backend.libPath)
-    except RwkvException as e:
-      printError "Backend error: " & e.msg
-      echo ""
-      echo "To run a different backend, set backend/lib in nimo.json or:"
-      echo "  ./harness --backend cpu|cuda|vulkan --lib <librwkv.so path>"
-      return
-    echo "[backend] " & backend.name & "  lib=" & backend.libPath
+  # One canonical bootstrap (bind backend -> GPU policy -> quant cache -> load).
+  let bs = bootstrapSession(cfg, cwd)
+  for line in bs.lines:
+    echo line
+  if not bs.ok:
+    return
+  var s = bs.session
 
-    # raw -> quantize -> cache: resolve the model actually loaded
-    var modelToLoad = cfg.modelPath
-    if cfg.quantFormat.len > 0 and fileExists(cfg.modelPath):
-      let mc = initModelCache(cfg.modelCacheDir)
-      let (p, cached) = mc.ensureQuantized(cfg.modelPath, cfg.quantFormat)
-      modelToLoad = p
-      if not cached:
-        echo "[model] quantized " & cfg.modelPath & " -> " & p
-      elif p != cfg.modelPath:
-        echo "[model] using cached " & cfg.quantFormat & ": " & p
-
-    # Load strategy validation — fail explicitly if desired config won't work.
-    var layers = cfg.gpuLayers
-    case backend.kind
-    of bkCuda:
-      let gpu = gpuProbe()
-      echo "[gpu] " & gpu.describe()
-      let gpuDecision = decideGpu(gpu, cfg.gpuLayers)
-      if gpuDecision.decision == gdBlocked:
-        printError "Cannot start: the GPU is unusable."
-        echo ""
-        echo "Options:"
-        echo "  1. Fix the GPU (see the [gpu] message above), or"
-        echo "  2. Use a non-CUDA backend:"
-        echo "       nimo.json -> { \"backend\": \"cpu\" }"
-        echo "       or       -> ./harness --backend cpu"
-        return
-      echo "[gpu] using " & $layers & " GPU layer(s)."
-      let err = checkCudaLoad(backend, modelToLoad, "default", layers)
-      if err.len > 0:
-        printError &"CUDA load check failed: {err}"
-        return
-    of bkCpu:
-      layers = 0
-      echo "[gpu] CPU backend: gpuLayers=0."
-      let err = checkCpuLoad(backend, modelToLoad, "default")
-      if err.len > 0:
-        printError &"CPU load check failed: {err}"
-        return
-    of bkVulkan:
-      echo "[gpu] Vulkan backend: using " & $layers & " GPU layer(s)."
-      let err = checkVulkanLoad(backend, modelToLoad, "default", layers)
-      if err.len > 0:
-        printError &"Vulkan load check failed: {err}"
-        return
-
-    try:
-      s.initModel(modelToLoad, cfg.vocabPath, layers,
-                  cfg.systemPrompt, cfg.stateCacheDir, cfg.bakeContext)
-      echo "[model] loaded."
-      if cfg.bakeContext and cfg.systemPrompt.len > 0:
-        echo "[model] cached state for system prompt (" & cfg.stateCacheDir & ")."
-    except Exception as e:
-      let upper = e.msg.toUpperAscii()
-      printError "Failed to load model: " & e.msg
-      if upper.contains("CUDA") or upper.contains("GPU") or upper.contains("DEVICE"):
-        echo ""
-        echo "This looks like a GPU/CUDA init failure. The driver may report \"GPU requires reset\":" 
-        echo "  reboot, or: sudo modprobe -r nvidia_uvm nvidia_drm nvidia_modeset nvidia && sudo modprobe nvidia"
-        echo "Then retry. Or use a different backend:"
-        echo "  ./harness --backend cpu"
-      return
-
-    # Smoke/benchmark mode: no agent loop, no system prompt.
-    # Just one short generation to prove the backend computes.
+  # Smoke/benchmark mode: no agent loop, no system prompt.
 
   s.registerTool("run_pipeline", proc(args: string): string =
     var sess = s
-    return pipelineTool(sess, args))
+    return pipelineTool(sess, args, bs.generate))
 
   while true:
     stdout.write("\n> ")

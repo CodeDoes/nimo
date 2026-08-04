@@ -2,7 +2,7 @@
 ## Implements a basic pipeline that can be called by the model.
 
 import std/[json, strutils, os, times]
-import ./session_manager, ./config
+import ./session_manager, ./config  # config provides GenerateFn
 
 type
   PipelineStep* = object
@@ -65,13 +65,13 @@ proc failStep*(p: var Pipeline, stepId: string, error: string) =
 proc finishPipeline*(p: var Pipeline, status: string = "completed") =
   p.status = status
 
-proc generateStep*(pipeline: var Pipeline, session: var session_manager.Session, name: string, prompt: string, target: string = "", temp: float32 = DefaultTemp, topP: float32 = DefaultTopP): string =
+proc generateStep*(pipeline: var Pipeline, session: var session_manager.Session, name: string, prompt: string, target: string = "", temp: float32 = DefaultTemp, topP: float32 = DefaultTopP, generate: GenerateFn = nil): string =
   ## Generate content for a pipeline step
   let stepId = pipeline.addStep(name, target)
   pipeline.startStep(stepId)
   
   try:
-    let reply = session.generateTurn(name & ": " & prompt, temp, topP)
+    let reply = session.generateTurn(name & ": " & prompt, generate, temp, topP)
     
     pipeline.completeStep(stepId, reply)
     
@@ -87,35 +87,35 @@ proc generateStep*(pipeline: var Pipeline, session: var session_manager.Session,
     pipeline.failStep(stepId, "Generation failed")
     return stepId
 
-proc summarizeStep*(pipeline: var Pipeline, session: var session_manager.Session, name: string, input: string, length: string = "brief"): string =
+proc summarizeStep*(pipeline: var Pipeline, session: var session_manager.Session, name: string, input: string, length: string = "brief", generate: GenerateFn = nil): string =
   ## Summarize content for a pipeline step
   let stepId = pipeline.addStep(name)
   pipeline.startStep(stepId)
   
   try:
     let prompt = "Summarize the following text (" & length & "): " & input
-    let reply = session.generateTurn(prompt)
+    let reply = session.generateTurn(prompt, generate)
     pipeline.completeStep(stepId, reply)
     return stepId
   except:
     pipeline.failStep(stepId, "Summarization failed")
     return stepId
 
-proc extractStep*(pipeline: var Pipeline, session: var session_manager.Session, name: string, input: string, filter: string): string =
+proc extractStep*(pipeline: var Pipeline, session: var session_manager.Session, name: string, input: string, filter: string, generate: GenerateFn = nil): string =
   ## Extract specific content from input
   let stepId = pipeline.addStep(name)
   pipeline.startStep(stepId)
   
   try:
     let prompt = "Extract the following from the text: " & filter & "\n\nText: " & input
-    let reply = session.generateTurn(prompt)
+    let reply = session.generateTurn(prompt, generate)
     pipeline.completeStep(stepId, reply)
     return stepId
   except:
     pipeline.failStep(stepId, "Extraction failed")
     return stepId
 
-proc pipelineTool*(session: var session_manager.Session, arguments: string): string =
+proc pipelineTool*(session: var session_manager.Session, arguments: string, generate: GenerateFn = nil): string =
   ## Tool handler for run_pipeline
   var args: JsonNode
   try:
@@ -129,7 +129,7 @@ proc pipelineTool*(session: var session_manager.Session, arguments: string): str
   var pipeline = newPipeline()
   
   # Add steps based on intent (simplified for MVP)
-  discard pipeline.generateStep(session, "Generate", intent, target = "output.txt")
+  discard pipeline.generateStep(session, "Generate", intent, target = "output.txt", generate = generate)
   
   # Complete pipeline
   pipeline.finishPipeline()
