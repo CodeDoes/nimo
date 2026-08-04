@@ -526,6 +526,7 @@ proc evalSessionRecording*(run: var seq[Check]) =
     removeFile(path)
 
 # ----------------------------------------------------------------------
+
 # Runner
 # ----------------------------------------------------------------------
 proc runAllEvals*(): int =
@@ -558,6 +559,10 @@ proc runAllEvals*(): int =
   echo "  exit=" & $(if passCount == run.len: 0 else: 1)
   return if passCount == run.len: 0 else: 1
 
+when isMainModule:
+  quit(runAllEvals())
+
+# ----------------------------------------------------------------------
 when isMainModule:
   quit(runAllEvals())
 
