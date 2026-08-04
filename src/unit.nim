@@ -154,6 +154,7 @@ proc evalSessionLogging*(run: var seq[Check]) =
   else:
     run.add(Check(name: "session file written", passed: false, detail: "missing " & path))
 
+# ----------------------------------------------------------------------
 # Eval 4: GPU policy (explicit only — no fallbacks)
 # ----------------------------------------------------------------------
 proc evalGpuPolicy*(run: var seq[Check]) =
