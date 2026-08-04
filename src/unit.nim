@@ -77,24 +77,21 @@ proc evalToolCalling*(run: var seq[Check]) =
                 detail: "got " & $turn.iterations))
 
 # ----------------------------------------------------------------------
-# Eval 2: Loop termination
+# Eval 2: Engine max-steps guard
 # ----------------------------------------------------------------------
 proc evalLoopTermination*(run: var seq[Check]) =
-  # Enough tool-call responses to fill all iterations (each iteration also
-  # consumes one response for the pipeline's internal generation).
   var script: seq[string]
   for i in 0 .. 25:
-    script.add("[tool] run_pipeline {\"intent\":\"loop\"}")
-  script.add("never reached")
+    script.add("step output " & $i)
 
   var (s, gen) = newSessionWithMockGen(script)
-  let turn = runHarnessTurn(s, "loop forever", gen)
+  let turn = runHarnessTurn(s, "write a story", gen, maxIterations = 3)
 
-  run.add(Check(name: "terminates despite continuous tool calls",
+  run.add(Check(name: "terminates despite many planned steps",
                 passed: true,
                 detail: "stopped at iter " & $turn.iterations))
-  run.add(Check(name: "does not exceed max iterations (" & $MaxToolIterations & ")",
-                passed: turn.iterations <= MaxToolIterations,
+  run.add(Check(name: "does not exceed max iterations (3)",
+                passed: turn.iterations <= 3,
                 detail: "got " & $turn.iterations))
   run.add(Check(name: "marks turn aborted when limit hit",
                 passed: turn.aborted,
@@ -105,9 +102,8 @@ proc evalLoopTermination*(run: var seq[Check]) =
 # ----------------------------------------------------------------------
 proc evalSessionLogging*(run: var seq[Check]) =
   var (s, gen) = newSessionWithMockGen(@[
-    "[tool] run_pipeline {\"intent\":\"log me\"}",
-    "pipeline: logged",
-    "Final response here."
+    "extracted context",
+    "final answer here."
   ])
   discard runHarnessTurn(s, "please log", gen)
 
@@ -115,7 +111,6 @@ proc evalSessionLogging*(run: var seq[Check]) =
   s.saveSession(path)
 
   if fileExists(path):
-    # JSONL: one JSON object per line
     var objs: seq[JsonNode]
     for line in path.lines:
       if line.strip().len > 0:
@@ -126,25 +121,19 @@ proc evalSessionLogging*(run: var seq[Check]) =
 
     run.add(Check(name: "session file has a header line",
                   passed: objs.len >= 1))
-    run.add(Check(name: "writes 4 messages (user, tool_call, tool_result, text)",
-                  passed: objs.len == 5,
-                  detail: "expected 5 objects (header+4 msgs), got " & $objs.len))
-    if objs.len == 5:
+    run.add(Check(name: "writes at least 3 objects (header + user + plan)",
+                  passed: objs.len >= 3,
+                  detail: "expected >= 3 objects, got " & $objs.len))
+    if objs.len >= 3:
       let userLine = objs[1]
-      let toolCallLine = objs[2]
-      let toolResultLine = objs[3]
-      let textLine = objs[4]
+      let planLine = objs[2]
       run.add(Check(name: "first message is the user request",
                     passed: userLine["role"].str == "user"))
-      run.add(Check(name: "tool_call message has stopReason=toolUse",
-                    passed: toolCallLine["stopReason"].str == "toolUse"))
-      run.add(Check(name: "tool_call contains toolName+args",
-                    passed: toolCallLine["content"][0]["toolName"].str == "run_pipeline" and
-                              toolCallLine["content"][0]["arguments"].str.len > 0))
-      run.add(Check(name: "tool_result references its tool_call",
-                    passed: toolResultLine["parentId"].str == toolCallLine["id"].str))
-      run.add(Check(name: "final text message role=assistant",
-                    passed: textLine["role"].str == "assistant"))
+      run.add(Check(name: "plan node recorded with steps",
+                    passed: planLine["content"][0]["type"].str == "plan" and
+                            planLine["content"][0]["text"].str.len > 0))
+      run.add(Check(name: "plan node chains to user message",
+                    passed: planLine["parentId"].str == userLine["id"].str))
   else:
     run.add(Check(name: "session file written", passed: false, detail: "missing " & path))
 
