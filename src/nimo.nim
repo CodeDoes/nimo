@@ -41,7 +41,7 @@ proc cmdPlan(rest: seq[string]): int =
 ## are spawned because each owns its own arg parse + bootstrap — see
 ## rfc/2000-cli.md "Conceptual only".)
 
-import std/[os, strutils, osproc, times, strformat]
+import std/[os, strutils, osproc, times, strformat, sequtils]
 import ./config, ./workspace, ./story, ./bootstrap, ./orchestrator, ./program
 
 proc resolveWorkspace*(nameOrPath: string = ""): Workspace =
