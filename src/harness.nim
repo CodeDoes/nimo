@@ -183,35 +183,37 @@ proc runHarnessTurn*(s: var Session, userMsg: string,
                      generate: GenerateFn = nil,
                      maxIterations: int = MaxToolIterations,
                      maxTokens: int = 200): HarnessTurn =
-  ## Runs one full user turn through the harness loop, composing the primitives
-  ## above: recordTurnStart -> generate -> parseReply -> runCalls ->
-  ## buildNextContext. `generate` is the model-generation seam (injected, not
-  ## stored on the session): nil = use the session's real model; a fn = mock.
+  ## Runs one full user turn through the orchestrator + engine:
+  ## recordTurnStart -> interpret -> addPlan -> engine.run -> addReport.
+  ## `generate` is the model-generation seam (injected, not stored on the
+  ## session): nil = use the session's real model; a fn = mock.
   result.userInput = userMsg
 
-  let parentId = recordTurnStart(s, userMsg)
-  var context: string = buildUserPrompt(userMsg)
-  var curParent = parentId
+  let rootId = recordTurnStart(s, userMsg)
 
-  for i in 1 .. maxIterations:
-    result.iterations = i
-    let reply = s.generateTurn(context, generate, DefaultTemp, DefaultTopP, maxTokens)
-    result.generated = reply
+  # Compile the goal into a plan (orchestrator seam).
+  let plan = interpret(userMsg)
+  discard s.addPlan(planToJson(plan), rootId)
 
-    let calls = parseReply(reply)
-    if calls.len == 0:
-      # No tool calls -> final text answer
-      result.finalText = reply
-      discard s.addText(reply, curParent)
-      return
+  # Run the plan through the engine; collect emitted text.
+  var sinkText = ""
+  let r = plan.run(generate, sink = proc(t: string) = sinkText.add(t),
+                   interrupt = nil, maxSteps = maxIterations)
+  result.iterations = r.stepsRun
+  result.aborted = r.aborted
+  result.generated = sinkText
 
-    result.toolCalls.add(calls)
-    let (feedBack, lastParent) = runCalls(s, calls, curParent)
-    curParent = lastParent
-    context = buildNextContext(reply, feedBack)
-
-  result.aborted = true
-  return
+  # Capture the final text: prefer the Report step's title, otherwise sink.
+  var lastReport = ""
+  for i in countdown(s.messages.len - 1, 0):
+    let m = s.messages[i]
+    for p in m.content:
+      if p.kind == ckReport and p.reportKind == "finished":
+        lastReport = p.text
+  if lastReport.len > 0:
+    result.finalText = lastReport
+  else:
+    result.finalText = sinkText.strip()
 
 ## ---- CLI entry ----
 type
@@ -278,9 +280,9 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".",
     else:
       echo "[nimo] No final answer produced."
 
-    var stats = "  (" & $turn.iterations & " iterations"
-    if turn.toolCalls.len > 0:
-      stats.add(", " & $turn.toolCalls.len & " tool call(s): " & turn.toolCalls[0].name)
+    var stats = "  (" & $turn.iterations & " steps"
+    if turn.aborted:
+      stats.add(", aborted")
     stats.add(", " & elapsed.formatFloat(ffDecimal, 1) & "s)")
     setForegroundColor(fgYellow, true)
     echo stats
