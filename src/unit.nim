@@ -130,6 +130,33 @@ proc evalSessionLogging*(run: var seq[Check]) =
   else:
     run.add(Check(name: "session file written", passed: false, detail: "missing " & path))
 
+    # JSONL: one JSON object per line
+    var objs: seq[JsonNode]
+    for line in path.lines:
+      if line.strip().len > 0:
+        try:
+          objs.add(parseJson(line))
+        except JsonParsingError:
+          discard
+
+    run.add(Check(name: "session file has a header line",
+                  passed: objs.len >= 1))
+    run.add(Check(name: "writes at least 3 objects (header + user + plan)",
+                  passed: objs.len >= 3,
+                  detail: "expected >= 3 objects, got " & $objs.len))
+    if objs.len >= 3:
+      let userLine = objs[1]
+      let planLine = objs[2]
+      run.add(Check(name: "first message is the user request",
+                    passed: userLine["role"].str == "user"))
+      run.add(Check(name: "plan node recorded with steps",
+                    passed: planLine["content"][0]["type"].str == "plan" and
+                            planLine["content"][0]["text"].str.len > 0))
+      run.add(Check(name: "plan node chains to user message",
+                    passed: planLine["parentId"].str == userLine["id"].str))
+  else:
+    run.add(Check(name: "session file written", passed: false, detail: "missing " & path))
+
 proc evalSessionLogging*(run: var seq[Check]) =
   var (s, gen) = newSessionWithMockGen(@[
     "[tool] run_pipeline {\"intent\":\"log me\"}",
@@ -458,30 +485,3 @@ proc evalValidate*(run: var seq[Check]) =
 # ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
-proc runAllEvals*(): int =
-  var run: seq[Check]
-  evalToolCalling(run)
-  evalLoopTermination(run)
-  evalSessionLogging(run)
-  evalGpuPolicy(run)
-  evalModelCache(run)
-  evalStateCache(run)
-  evalPlanArtifact(run)
-  evalEngine(run)
-  evalValidate(run)
-
-  echo "\n=== nimo unit tests (stub, no model) ==="
-  var passCount = 0
-  for c in run:
-    let mark = if c.passed: "[PASS]" else: "[FAIL]"
-    echo mark & " " & c.name
-    if c.detail.len > 0:
-      echo "       " & c.detail
-    if c.passed: inc passCount
-  echo ""
-  echo "  " & $passCount & "/" & $run.len & " passed"
-  echo "  exit=" & $(if passCount == run.len: 0 else: 1)
-  return if passCount == run.len: 0 else: 1
-
-when isMainModule:
-  quit(runAllEvals())
