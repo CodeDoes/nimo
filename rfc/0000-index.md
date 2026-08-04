@@ -35,6 +35,8 @@ status of the whole project is tracked in [analysis/status.md](../analysis/statu
 | 3200 | [story.md](3200-story.md) | ✅ implemented | Story loop: outline → chapters → validate → critique |
 | 3300 | [workspace.md](3300-workspace.md) | ✅ implemented | `src/workspace.nim` — workspace creation flow |
 | 3400 | [agent.md](3400-agent.md) | ✅ implemented | `src/harness.nim` — the agent loop (max 8 iterations) |
+| 3500 | [plan-format.md](3500-plan-format.md) | Design ref | The plan artifact: step vocabulary, data-driven loops, plan-as-data |
+| 3600 | [engine.md](3600-engine.md) | Design ref | The streaming executor: sink, infinite loop, checkpoint/resume |
 | 4000 | [config.md](4000-config.md) | ✅ implemented | `src/config.nim` — `nimo.json` + `NIMO_*` env overrides |
 | 5000 | [workspace.md](5000-workspace.md) | ✅ implemented | Workspace commands in `src/nimo.nim` + `src/workspace.nim` |
 | 6000 | [src.md](6000-src.md) | ✅ implemented | Actual source layout (no more "desired" layout) |

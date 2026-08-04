@@ -36,6 +36,7 @@ The detailed walk-through is in [how-it-works.md](how-it-works.md).
 
 - [Getting started](getting-started.md) — install, build, first commands
 - [How it works](how-it-works.md) — the full request flow, step by step
+- [Architecture](architecture.md) — the design principles (program, baked states, engine)
 - [Story writing](story-writing.md) — outline → chapters → validation → critique
 - [Memory & notes](memory.md) — how the model remembers characters and facts
 
