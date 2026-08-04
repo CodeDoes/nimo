@@ -1,16 +1,79 @@
 # Plan: Make src/ follow the plan/engine intent
 
-## Status: NOT STARTED — Phase 0 (refactor) is the prerequisite
+## Status: NOT STARTED — Phase 0 (architecture refactor) is the prerequisite
 
 Design is formalized in `rfc/3500-plan-format.md` + `rfc/3600-engine.md`
 (commit `7271b86`). This plan evaluates the current code and lays out the
-migration. Each phase is a commit and must leave `nimo eval` green.
+migration. Each phase is a commit and must keep the unit suite green.
 
 > **Phase 0 first**: the *architecture* above the model layer lacks clean
 > abstraction/composition — two `Session` types, triplicated bootstrap, CLI/dispatcher
 > monoliths. Migrations must NOT build on top of that. Phase 0 unifies the session
-> abstraction and shares bootstrap (behavior-identical, evals green), so Phase 2/3
+> abstraction and shares bootstrap (behavior-identical, unit-green), so Phase 2/3
 > build on clean primitives. (`rwkv.nim` itself is already well-abstracted.)
+
+## Guiding principles (the "why" behind every phase)
+
+These are the non-negotiable criteria each phase is checked against.
+
+### A. Unit tests vs Model evals — two separate things
+
+- **Unit tests** (today `src/evals.nim`, `nimo eval`): verify OUR deterministic
+  machinery — parser, caches, GPU policy, loop bookkeeping. Offline, scripted,
+  must always be green. **Renamed to `nimo unit`** so the word is precise.
+- **Model evals** (planned, `nimo model-eval`): probe the **black-box model** in
+  a controlled environment to check whether our assumptions about its
+  mechanisms are accurate. The model cannot be changed; we only run it and
+  observe. Probabilistic — report **rates over N fixed-seed trials**, not hard
+  pass/fail.
+
+The design rests on beliefs about the model; model evals are the only way to
+falsify them. Belief + the probe that tests it:
+
+| Belief | Probe (rate over N trials) |
+|--------|---------------------------|
+| resumes a pattern forever | long single-mode run; measure pattern-held / drift |
+| a baked state encodes a "sort of output" that generalizes | bake an output-state; generate on an unrelated topic; measure if the shape/quality carries over |
+| planner emits parseable structure, not prose | varied goals → parse → % valid plans of expected step types |
+| mixes/forgets heterogeneous content → "one kind at a time" | focused slice vs mixed blob; measure mixing/forgetting on each |
+
+Model evals are also the **distillation feedback loop**: a distilled planner
+passes only when its output parses as a valid plan at an acceptable rate.
+
+### B. Behavior over internals
+
+A test is *behavioral* when it asserts the **contract / observable outcome** and
+survives re-wiring of *how* it's done. It tests *internals* when it records the
+machinery and breaks when that machinery changes (today's `turn.iterations
+== 2`-style asserts are internals tests). Unit tests and model evals both
+assert outcomes at the contract level. We achieve this by giving every
+capability a public interface (see D), so there is a contract to test against.
+
+### C. Top-level interface ≤ 6 concepts
+
+The whole codebase must be explainable by holding these in your head:
+
+```
+Session             — the one thing you talk to (messages + model + state)
+Plan                — a list of Steps; the unit of work (data: resumable)
+Step                — Extract / Generate / Validate / Write / Loop / Report
+Engine.run          — the one loop: advance → execute → stream → checkpoint
+bootstrapSession(cfg) — how you get a Session
+Pointed tools       — extract / summarize / lookupMemory / ... (each a Step)
+```
+
+Every phase keeps this to ≤6 terms. Violations to avoid: two things named
+"Session"; "dispatcher" meaning two things; CLI containing business logic;
+entry points that don't all go through the same bootstrap + engine.
+
+### D. Capability ⇒ interface (no capabilities reachable only via internals)
+
+Any capability that should be usable must be reachable through a public Step /
+public command — never only through its implementation. Today `memory.nim` /
+`story.nim` / `pipeline.nim` violate this (implemented but no top-level
+interface). The rule: make the capability a pointed tool or a plan template;
+then it is both usable and testable as behavior. If a capability isn't meant
+to be public, make it private.
 
 ## Code evaluation — what contradicts the intent today
 
@@ -79,12 +142,15 @@ src/skills/           # baked skill bundles (planner + output states)
    own arg parse + `bootstrapSession` + run loop.
 5. **Decompose `runHarnessTurn`** into composed procs (`recordTurnStart`,
    `parseReply`, `runCalls`, `buildNextContext`) — see original plan text below.
-6. **evals** follow the code: update imports to the single `Session`, push
+6. **Rename the unit suite**: `src/evals.nim` / `nimo eval` → **`nimo unit`**
+   (guiding principle A: the word "eval" belongs to model-behavior probes).
+   Update `rfc/9300-eval.md` (becomes "unit tests") and any references.
+7. **Unit tests follow the code**: update imports to the single `Session`, push
    tests onto the composed primitives. `check()` helper optional; count stays
-   truthful in `rfc/9300-eval.md`.
+   truthful.
 
 **Done when**: exactly one session type (or one explicit interface); one
-`sampleReply`, one `bootstrapSession`; `nimo eval` green (34/34 or
+`sampleReply`, one `bootstrapSession`; `nimo unit` green (34/34 or
 count-updated); harness/chat/generate spot-checked live.
 **Commit.**
 
@@ -105,7 +171,7 @@ count-updated); harness/chat/generate spot-checked live.
 5. `harness.nim`/`pipeline.nim`/`story.nim` generation call sites: pass sinks
    (progress/echo) once Phase 3/4 reshape them.
 
-**Done when**: chat streams token-by-token; generate unchanged; `nimo eval` 34/34.
+**Done when**: chat streams token-by-token; generate unchanged; `nimo unit` green.
 **Commit.**
 
 ## Phase 2 — program.nim + engine.nim (the runtime)
@@ -160,7 +226,7 @@ count-updated); harness/chat/generate spot-checked live.
    - loop-termination eval → engine max-steps abort.
    - session-logging eval → user → steps → results → answer chain still holds.
 
-**Done when**: harness runs planner→plan→engine; evals green (count updated).
+**Done when**: harness runs planner→plan→engine; unit suite green (count updated).
 **Commit.**
 
 ## Phase 4 — Story + pipeline as plan templates
@@ -203,7 +269,7 @@ validation; pipeline manifests are plans; evals green.
    template registry — the distillation target from frontier traces.
 
 **Done when**: bake writes skills; memory lookup works as a plan step; offline
-evals green.
+unit suite green.
 **Commit.**
 
 ## Phase 6 — CLI surface + docs alignment
@@ -218,25 +284,43 @@ evals green.
    planner→plan→engine model and streaming; docs already carry
    `docs/architecture.md`.
 
-**Done when**: `nimo eval` green; docs describe the real code.
+**Done when**: `nimo unit` green; docs describe the real code.
+**Commit.**
+
+## Phase 7 — Model eval harness (black-box probes)
+
+**Files**: `src/model_evals.nim` (new), `nimo.nim`, `rfc/9700-model-eval.md` (new).
+
+1. `nimo model-eval` + `src/model_evals.nim`: controlled probes of the **real
+   model** (black box — we can't change it, we only observe). Deterministic
+   conditions: fixed seeds, fixed prompt sets, fixed metrics, raw outputs saved
+   to `.nimo/model-evals/`. Reports **rates over N trials**, not pass/fail:
+   - planner emission: N goals → % that parse as valid plans
+   - output-state generalization: bake a state → generate on unrelated topics →
+     measure whether the "sort" carries over (the falsifiable state-tuning bet)
+   - one-kind-at-a-time: focused slice vs mixed blob → mixing/forgetting rate
+   - pattern-resume: long single-mode run → drift over tokens
+2. Gate for learned pieces: the distilled planner (Phase 5) ships only when its
+   emission rate clears the bar. Model evals are the distillation feedback loop.
+3. Unlike the unit suite (offline, deterministic), model evals need the model
+   and GPU/backend — they run separately: `nimo unit` vs `nimo model-eval`.
+
+**Done when**: `nimo model-eval` runs on the real backend, prints rates, saves
+artifacts; `nimo unit` unaffected.
 **Commit.**
 
 ## Risks / notes
 
 - **Evals coupling**: the harness rewrite touches exactly what `evals.nim`
-  tests (tool loop, session logging). Update evals in the same commit as the
-  harness change; keep the count truthful in `rfc/9300-eval.md`. Phase 0's
-  decomposition makes this a behavior test, not an implementation test.
+  tests (tool loop, session logging). Update unit tests in the same commit as
+  the harness change; keep the count truthful. Phase 0's decomposition makes
+  this a behavior test, not an implementation test.
 - **Two Session types**: the crux of the composition problem. Phase 0 unifies
   them (or defines one explicit interface both provide) BEFORE anything else;
   the engine cannot be composed from two worlds. This is the highest-risk,
   highest-value refactor — do it with evals green throughout.
 - **Streaming rides the refactor**: once `sampleReply` lives in one place
   (Phase 0 item 2), Phase 1 adds the sink there and everywhere is streaming.
-- **Evals coupling**: the harness rewrite touches exactly what `evals.nim`
-  tests (tool loop, session logging). Update evals in the same commit as the
-  harness change; keep the count truthful in `rfc/9300-eval.md`. Phase 0's
-  decomposition makes this a behavior test, not an implementation test.
 - **Learned planner is a bake**: the template registry ships first
   (deterministic, no model), so the system works before the skill bakes exist;
   the planner state is the swap-in later (distillation target).
