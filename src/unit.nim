@@ -181,8 +181,6 @@ proc evalModelCache*(run: var seq[Check]) =
 # ----------------------------------------------------------------------
 proc evalStateCache*(run: var seq[Check]) =
   let tmpDir = getTempDir() / "nimo_scache_test"
-  # Clean up test file
-  removeFile(memPath)
   createDir(tmpDir)
 
   writeFile(tmpDir / "model.bin", "fake-model-contents")
@@ -205,8 +203,6 @@ proc evalStateCache*(run: var seq[Check]) =
   run.add(Check(name: "state round-trips through cache file",
                 passed: loadStateFromFile(loaded, stPath) and loaded == state))
 
-  # Clean up test file
-  removeFile(memPath)
 
 # ----------------------------------------------------------------------
 # Eval 7: Plan artifact
@@ -397,8 +393,6 @@ proc evalStoryPlan*(run: var seq[Check]) =
 proc evalMemory*(run: var seq[Check]) =
   # Create a test memory file
   let tmpDir = getTempDir() / "nimo_memory_test"
-  # Clean up test file
-  removeFile(memPath)
   createDir(tmpDir)
   
   let memDir = tmpDir / ".nimo" / "memory"
@@ -418,8 +412,6 @@ proc evalMemory*(run: var seq[Check]) =
   run.add(Check(name: "lookupMemory handles no matches",
                 passed: empty.len == 0 or empty.contains("nonexistent") == false))
   
-  # Clean up test file
-  removeFile(memPath)
 
 
 proc evalEngineMemory*(run: var seq[Check]) =
@@ -458,8 +450,6 @@ proc evalEngineMemory*(run: var seq[Check]) =
                 passed: p.steps[0].output.contains("lighthouse") or debugResult.contains("lighthouse"),
                 detail: "output=" & p.steps[0].output & " debug=" & debugResult))
   
-  # Clean up test file
-  removeFile(memPath)
 
 
 proc runAllEvals*(): int =
