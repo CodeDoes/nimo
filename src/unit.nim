@@ -283,7 +283,7 @@ proc evalValidate*(run: var seq[Check]) =
   run.add(Check(name: "countWords counts words",
                 passed: validate.countWords("one two three") == 3))
   run.add(Check(name: "countLines counts non-empty lines",
-                passed: validate.countLines("a
+                passed: validate.countLines("a" & chr(10) & chr(10) & "b" & chr(10) & "c") == 3))
 
 b
 c") == 3))
