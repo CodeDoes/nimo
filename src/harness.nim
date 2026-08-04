@@ -192,7 +192,7 @@ proc runHarnessTurn*(s: var Session, userMsg: string,
   let rootId = recordTurnStart(s, userMsg)
 
   # Compile the goal into a plan (orchestrator seam).
-  let plan = interpret(userMsg)
+  var plan = interpret(userMsg)
   discard s.addPlan(planToJson(plan), rootId)
 
   # Run the plan through the engine; collect emitted text.
