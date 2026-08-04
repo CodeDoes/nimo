@@ -3,6 +3,7 @@
 
 import std/[json, strutils, os, times, strformat]
 import ./session_manager, ./config, ./workspace
+import ./program
 
 type
   StoryQuality* = enum
