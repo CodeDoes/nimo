@@ -14,7 +14,10 @@ Example:
 """
     return 1
 
-  let goal = rest.join(" ")
+  var goal = ""
+  for i, a in rest:
+    if i > 0: goal.add(" ")
+    goal.add(a)
   let plan = interpret(goal)
 
   echo "[planner] Goal: " & plan.goal
