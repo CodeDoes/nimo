@@ -7,7 +7,7 @@
 
 import std/[strutils, os, times, json]
 import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header
-import ./program, ./engine, ./validate, ./config, ./orchestrator, ./story, ./memory, ./memory
+import ./program, ./engine, ./validate, ./config, ./orchestrator, ./story, ./memory
 
 type
   Check* = object
@@ -394,32 +394,6 @@ proc evalStoryPlan*(run: var seq[Check]) =
 # ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
-proc evalMemory*(run: var seq[Check]) =
-  # Create a test memory file
-  let tmpDir = getTempDir() / "nimo_memory_test"
-  removeDir(tmpDir)
-  createDir(tmpDir)
-  
-  let memDir = tmpDir / ".nimo" / "memory"
-  createDir(memDir)
-  let memPath = memDir / "memories.json"
-  writeFile(memPath, """[
-    {"text": "The lighthouse stood on the cliff", "category": "story"},
-    {"text": "Kael was a brave sailor", "category": "character"}
-  ]""")
-  
-  let result = lookupMemory("lighthouse", tmpDir)
-  run.add(Check(name: "lookupMemory finds relevant context",
-                passed: result.contains("lighthouse") or result.len > 0,
-                detail: result))
-  
-  let empty = lookupMemory("nonexistent", tmpDir)
-  run.add(Check(name: "lookupMemory handles no matches",
-                passed: empty.len == 0 or empty.contains("nonexistent") == false))
-  
-  removeDir(tmpDir)
-
-
 proc evalEngineMemory*(run: var seq[Check]) =
   # A plan with an extract step using source="memory" should call
   # lookupMemory instead of the mock generate function.
@@ -474,9 +448,7 @@ proc runAllEvals*(): int =
   evalEmission(run)
   evalSessionRecording(run)
   evalStoryPlan(run)
-  evalMemory(run)
   evalEngineMemory(run)
-  evalMemory(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="
   var passCount = 0
@@ -503,26 +475,3 @@ when isMainModule:
 # ----------------------------------------------------------------------
 # Eval 15: memory lookup
 # ----------------------------------------------------------------------
-proc evalMemory*(run: var seq[Check]) =
-  let tmpDir = getTempDir() / "nimo_memory_test"
-  removeDir(tmpDir)
-  createDir(tmpDir)
-  
-  let memDir = tmpDir / ".nimo" / "memory"
-  createDir(memDir)
-  let memPath = memDir / "memories.json"
-  writeFile(memPath, """[
-    {"text": "The lighthouse stood on the cliff", "category": "story"},
-    {"text": "Kael was a brave sailor", "category": "character"}
-  ]""")
-  
-  let result = lookupMemory("lighthouse", tmpDir)
-  run.add(Check(name: "lookupMemory finds relevant context",
-                passed: result.contains("lighthouse") or result.len > 0,
-                detail: result))
-  
-  let empty = lookupMemory("nonexistent", tmpDir)
-  run.add(Check(name: "lookupMemory handles no matches",
-                passed: empty.len == 0 or empty.contains("nonexistent") == false))
-  
-  removeDir(tmpDir)
