@@ -13,7 +13,7 @@ when not defined(harnessOffline):
 
 type
   ContentKind* = enum
-    ckText, ckThinking, ckToolCall, ckToolResult
+    ckText, ckThinking, ckToolCall, ckToolResult, ckPlan, ckReport
 
   ContentPart* = object
     kind*: ContentKind
@@ -22,6 +22,7 @@ type
     toolName*: string
     arguments*: string
     thinkingSignature*: string
+    reportKind*: string      # planner | step | finished (RFC 1000 report)
 
   MessageRole* = enum
     mrUser, mrAssistant, mrToolResult
@@ -161,6 +162,36 @@ proc addText*(s: var Session, text: string, parentId: string, isThinking: bool =
   ))
   return msgId
 
+proc addPlan*(s: var Session, planJson: JsonNode, parentId: string = ""): string =
+  ## Records a `plan` node in the history (RFC 1000) — the compiled program.
+  let msgId = "msg_" & $s.messages.len
+  s.messages.add(Message(
+    id: msgId, parentId: parentId, timestamp: nowStr(), role: mrAssistant,
+    content: @[ContentPart(kind: ckPlan, text: $planJson)],
+    stopReason: "toolUse"
+  ))
+  return msgId
+
+proc addReport*(s: var Session, reportKind: string, text: string, parentId: string = ""): string =
+  ## Records a `report` event (RFC 1000): kind is planner | step | finished.
+  let msgId = "msg_" & $s.messages.len
+  s.messages.add(Message(
+    id: msgId, parentId: parentId, timestamp: nowStr(), role: mrAssistant,
+    content: @[ContentPart(kind: ckReport, reportKind: reportKind, text: text)],
+    stopReason: "stop"
+  ))
+  return msgId
+
+proc addModelEvent*(s: var Session, modelPath: string, sig: string = "") =
+  ## Records a `model` bind/switch event (RFC 1000).
+  let msgId = "msg_" & $s.messages.len
+  s.messages.add(Message(
+    id: msgId, parentId: "", timestamp: nowStr(), role: mrAssistant,
+    content: @[ContentPart(kind: ckText, text: "model bound: " & modelPath &
+                        (if sig.len > 0: " (" & sig & ")" else: ""))],
+    stopReason: "stop"
+  ))
+
 proc registerTool*(s: var Session, name: string, handler: ToolHandler) =
   s.tools[name] = handler
 
@@ -184,6 +215,8 @@ proc kindToStr*(k: ContentKind): string =
   of ckThinking: "thinking"
   of ckToolCall: "toolCall"
   of ckToolResult: "toolResult"
+  of ckPlan: "plan"
+  of ckReport: "report"
 
 proc saveSession*(s: Session, path: string) =
   let dir = parentDir(path)
@@ -221,6 +254,8 @@ proc saveSession*(s: Session, path: string) =
         p["toolName"] = %part.toolName
       if part.arguments.len > 0:
         p["arguments"] = %part.arguments
+      if part.reportKind.len > 0:
+        p["reportKind"] = %part.reportKind
       content.add(p)
     j["content"] = content
 

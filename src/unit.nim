@@ -531,6 +531,54 @@ Some prose the planner should not include.
                 passed: pEmpty.steps.len == 0))
 
 # ----------------------------------------------------------------------
+# Eval 12: session plan/report/model recording (RFC 1000)
+# ----------------------------------------------------------------------
+proc evalSessionRecording*(run: var seq[Check]) =
+  var s = newSession(".")
+  let rootId = recordTurnStart(s, "write a story")
+  var plan = newPlan("write a story")
+  plan.addStep(generateStep("draft", "premise", "output:story"))
+  plan.addStep(reportStep("done"))
+  let planId = s.addPlan(planToJson(plan), rootId)
+  let reportId = s.addReport("finished", "Story complete!", planId)
+
+  run.add(Check(name: "addPlan records a plan node in history",
+                passed: s.messages.len == 3 and
+                        s.messages[1].role == mrAssistant and
+                        s.messages[1].content.len == 1 and
+                        s.messages[1].content[0].kind == ckPlan))
+  run.add(Check(name: "addReport records a report with kind",
+                passed: s.messages[2].content[0].kind == ckReport and
+                        s.messages[2].content[0].reportKind == "finished" and
+                        s.messages[2].content[0].text == "Story complete!"))
+  run.add(Check(name: "plan and report chain by parentId",
+                passed: s.messages[1].parentId == rootId and
+                        s.messages[2].parentId == planId))
+
+  # saveSession round-trip preserves the new kinds
+  let path = getTempDir() / "nimo_session_rec_test.jsonl"
+  s.saveSession(path)
+  if fileExists(path):
+    var planLines = 0
+    var reportLines = 0
+    for line in path.lines:
+      let trimmed = line.strip()
+      if trimmed.len == 0: continue
+      try:
+        let j = parseJson(trimmed)
+        if j.hasKey("content"):
+          for p in j["content"]:
+            if p.hasKey("type"):
+              if p["type"].str == "plan": inc planLines
+              elif p["type"].str == "report": inc reportLines
+      except JsonParsingError: discard
+    run.add(Check(name: "saveSession persists plan nodes",
+                  passed: planLines > 0, detail: "plan=" & $planLines))
+    run.add(Check(name: "saveSession persists report nodes",
+                  passed: reportLines > 0, detail: "report=" & $reportLines))
+    removeFile(path)
+
+# ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
 proc runAllEvals*(): int =
@@ -546,6 +594,7 @@ proc runAllEvals*(): int =
   evalEngine(run)
   evalValidate(run)
   evalOrchestrator(run)
+  evalSessionRecording(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="
   var passCount = 0

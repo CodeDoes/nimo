@@ -173,6 +173,19 @@ proc save*(p: Plan, path: string) =
   writeFile(path, $j)
   writeFile(path & ".cursor", $p.cursor)
 
+proc planToJson*(p: Plan): JsonNode =
+  ## Full plan as JSON (id, goal, cursor, status, timestamp, steps) — used by
+  ## the session to record a `plan` node in the history (RFC 1000).
+  result = newJObject()
+  result["id"] = %p.id
+  result["goal"] = %p.goal
+  result["cursor"] = %p.cursor
+  result["status"] = %($p.status)
+  result["timestamp"] = %p.timestamp
+  var steps = newJArray()
+  for s in p.steps: steps.add(stepToJson(s))
+  result["steps"] = steps
+
 proc jstr(j: JsonNode, key: string): string =
   ## String field accessor that returns "" when absent.
   if key in j and j[key].kind == JString: j[key].str else: ""
