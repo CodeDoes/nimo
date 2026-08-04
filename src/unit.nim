@@ -7,7 +7,7 @@
 
 import std/[strutils, os, times, json]
 import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header
-import ./program, ./engine, ./validate, ./config, ./orchestrator, ./story
+import ./program, ./engine, ./validate, ./config, ./orchestrator, ./story, ./memory
 
 type
   Check* = object
