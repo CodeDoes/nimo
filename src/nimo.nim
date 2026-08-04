@@ -227,7 +227,7 @@ Example:
     echo "Error: plan not found: " & planPath
     return 1
 
-  let plan = loadPlan(planPath)
+  var plan = loadPlan(planPath)
   echo "[run] Plan: " & plan.id
   echo "[run] Goal: " & plan.goal
   echo "[run] Steps: " & $plan.steps.len
