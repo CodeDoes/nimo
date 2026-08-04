@@ -1,6 +1,22 @@
 # Plan: Make src/ follow the plan/engine intent
 
-## Status: NOT STARTED — Phase 0 (architecture refactor) is the prerequisite
+## Status: IN PROGRESS
+
+Done:
+- [x] Phase 0 step 1: rename evals -> unit (a409844)
+- [x] Phase 2: program.nim + engine.nim + validate.nim runtime, unit suite
+  34 -> 58 checks (1005670); caught 2 real latent bugs (countWords always 0,
+  repeating-segment check never fired)
+
+Remaining Phase 0 (riskier, online-only verification):
+- [ ] one Session type (unify session.nim object + session_manager.nim ref)
+- [ ] one shared bootstrapSession(cfg)
+- [ ] CLI delegates to libraries (nimo.nim inline workspace/story -> modules)
+- [ ] decompose runHarnessTurn; unit tests target the new primitives
+
+Note: Phase 2 was pulled ahead of the remaining Phase 0 items deliberately —
+its work is fully offline/unit-verifiable, which matches "unit tests first".
+The session unification is online-only risk and is gated to Phase 3 wiring.
 
 Design is formalized in `rfc/3500-plan-format.md` + `rfc/3600-engine.md`
 (commit `7271b86`). This plan evaluates the current code and lays out the
