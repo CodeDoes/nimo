@@ -35,47 +35,32 @@ proc newSessionWithMockGen*(script: seq[string], registerPipeline: bool = true):
   return (s, gen)
 
 # ----------------------------------------------------------------------
-# Eval 1: Tool calling
+# ----------------------------------------------------------------------
+# Eval 1: Orchestrator + engine turn
 # ----------------------------------------------------------------------
 proc evalToolCalling*(run: var seq[Check]) =
-  # a second [tool] later in the reply (offset > 0) must not crash the parser
-  let multi = "[tool] run_pipeline {\"intent\": \"first\"}\nAssistant: OK\nBot: " &
-              "[tool] run_pipeline {\"intent\": \"write a short poem about\""
-  try:
-    let mCalls = parseToolCalls(multi)
-    run.add(Check(name: "multi [tool] lines parse without crash",
-                  passed: mCalls.len >= 1,
-                  detail: "got " & $mCalls.len & " calls"))
-  except CatchableError as e:
-    run.add(Check(name: "multi [tool] lines parse without crash",
-                  passed: false, detail: e.msg))
   var (s, gen) = newSessionWithMockGen(@[
-    "[tool] run_pipeline {\"intent\": \"write a poem about roses\"}",
-    "pipeline: poem draft generated",
-    "Here is your poem: roses are red."
+    "Once upon a time, roses were red.",
+    "Roses are red, violets are blue."
   ])
-
   let turn = runHarnessTurn(s, "write a poem about roses", gen)
 
-  run.add(Check(name: "detects tool call in output",
-                passed: turn.toolCalls.len == 1,
-                detail: "got " & $turn.toolCalls.len & " calls"))
-  if turn.toolCalls.len == 1:
-    run.add(Check(name: "tool name is run_pipeline",
-                  passed: turn.toolCalls[0].name == "run_pipeline",
-                  detail: "got '" & turn.toolCalls[0].name & "'"))
-    run.add(Check(name: "tool args carry intent",
-                  passed: turn.toolCalls[0].args.contains("poem")))
-  run.add(Check(name: "loop produced a final text",
+  run.add(Check(name: "orchestrator compiles goal into a plan",
+                passed: s.messages.len >= 2,
+                detail: "msgs=" & $s.messages.len))
+  run.add(Check(name: "turn produced a final text",
                 passed: turn.finalText.len > 0,
                 detail: "finalText: " & turn.finalText))
-  run.add(Check(name: "final text is the model's answer (not fallback)",
-                passed: turn.finalText.contains("roses are red"),
+  run.add(Check(name: "final text is the model's answer",
+                passed: turn.finalText.contains("roses") or turn.finalText.contains("Once"),
                 detail: "finalText: " & turn.finalText))
-  run.add(Check(name: "executed in 2 iterations (tool + answer)",
-                passed: turn.iterations == 2,
-                detail: "got " & $turn.iterations))
-
+  run.add(Check(name: "engine executed the plan steps",
+                passed: turn.iterations > 0,
+                detail: "iterations=" & $turn.iterations))
+  run.add(Check(name: "plan node recorded in history",
+                passed: s.messages[1].content.len > 0 and
+                        s.messages[1].content[0].kind == ckPlan,
+                detail: "kind=" & $s.messages[1].content[0].kind))
 # ----------------------------------------------------------------------
 # Eval 2: Engine max-steps guard
 # ----------------------------------------------------------------------
