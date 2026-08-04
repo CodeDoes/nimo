@@ -504,6 +504,32 @@ proc evalOrchestrator*(run: var seq[Check]) =
   run.add(Check(name: "interpret: memory writes a memory file",
                 passed: interpret("remember the plan").steps[2].path == "memory.md"))
 
+  # planner-emission compilation (RFC 1100)
+  let emission =
+    """[step] extract {"source": "memory", "filter": "the story so far"}
+[step] generate {"skill": "output:story", "context": "premise: a lighthouse"}
+Some prose the planner should not include.
+[step] report {"title": "story ready"}
+{"step": "write", "path": "story.md"}"""
+  let pEmit = compileEmission(emission, "write a story")
+  run.add(Check(name: "compileEmission: builds steps in order, drops prose",
+                passed: pEmit.steps.len == 4 and
+                        pEmit.steps[0].kind == skExtract and
+                        pEmit.steps[0].source == "memory" and
+                        pEmit.steps[1].kind == skGenerate and
+                        pEmit.steps[1].skill == "output:story" and
+                        pEmit.steps[2].kind == skReport and
+                        pEmit.steps[3].kind == skWrite and
+                        pEmit.steps[3].path == "story.md",
+                detail: "steps=" & $pEmit.steps.len))
+  run.add(Check(name: "compileEmission: bare JSON step form compiles",
+                passed: pEmit.steps[3].kind == skWrite))
+  run.add(Check(name: "compileEmission: goal is carried",
+                passed: pEmit.goal == "write a story"))
+  let pEmpty = compileEmission("just talking, no steps", "hi")
+  run.add(Check(name: "compileEmission: prose-only emission -> empty plan",
+                passed: pEmpty.steps.len == 0))
+
 # ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
