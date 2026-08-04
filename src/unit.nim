@@ -7,6 +7,7 @@
 
 import std/[strutils, os, times, json]
 import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header
+import ./program, ./engine, ./validate
 
 type
   Check* = object
@@ -266,6 +267,165 @@ proc evalStateCache*(run: var seq[Check]) =
   removeDir(tmpDir)
 
 # ----------------------------------------------------------------------
+# Eval 7: Plan artifact (RFC 3500) — construction, navigation, persistence
+# ----------------------------------------------------------------------
+proc evalPlanArtifact*(run: var seq[Check]) =
+  var p = newPlan("write a story")
+  run.add(Check(name: "new plan starts running at cursor 0",
+                passed: p.status == psRunning and p.cursor == 0 and
+                        p.goal == "write a story",
+                detail: p.id))
+
+  p.addStep(generateStep("outline", "premise: a robot gardener"))
+  p.addStep(extractStep("characters", "outline", "the characters"))
+  p.addStep(reportStep("outline ready"))
+
+  run.add(Check(name: "plan has the steps added",
+                passed: p.steps.len == 3 and p.steps[1].kind == skExtract and
+                        p.steps[2].kind == skReport))
+  run.add(Check(name: "currentStep follows the cursor",
+                passed: p.currentStep.kind == skGenerate))
+
+  p.advance()
+  run.add(Check(name: "advance moves the cursor",
+                passed: p.cursor == 1 and p.currentStep.kind == skExtract))
+  p.advance(); p.advance()
+  run.add(Check(name: "plan done at end, status set",
+                passed: p.isDone and p.status == psDone))
+
+  # splice: data-driven fan-out inserts steps at a position
+  var p2 = newPlan("loops")
+  p2.addStep(extractStep("extract-chars", "outline", "characters"))
+  p2.addStep(reportStep("end"))
+  p2.splice(@[generateStep("wiki-a", "events for A"),
+              generateStep("wiki-b", "events for B")], 1)
+  run.add(Check(name: "splice inserts sub-steps at the position",
+                passed: p2.steps.len == 4 and p2.steps[1].name == "wiki-a" and
+                        p2.steps[2].name == "wiki-b" and
+                        p2.steps[3].kind == skReport))
+
+  # persistence round-trip
+  let tmp = getTempDir() / "nimo_plan_test"
+  removeDir(tmp); createDir(tmp)
+  let path = tmp / "plan.json"
+  p.save(path)
+  let loaded = loadPlan(path)
+  run.add(Check(name: "plan save/load round-trips steps and goal",
+                passed: loaded.goal == p.goal and loaded.steps.len == p.steps.len and
+                        loaded.steps[1].kind == skExtract and
+                        loaded.steps[1].source == "outline",
+                detail: path))
+  run.add(Check(name: "plan load restores the cursor (resume point)",
+                passed: loaded.cursor == p.cursor,
+                detail: "cursor=" & $loaded.cursor))
+  let cp = p.checkpoint()
+  run.add(Check(name: "checkpoint carries id + cursor + status",
+                passed: cp["id"].str == p.id and cp["cursor"].getInt == p.cursor))
+  removeDir(tmp)
+
+# ----------------------------------------------------------------------
+# Eval 8: Engine (RFC 3600) — execute, abort, interrupt, resume
+# ----------------------------------------------------------------------
+proc evalEngine*(run: var seq[Check]) =
+  # scripted generator: deterministic model stand-in
+  var calls = newSeq[string]()
+  let gen: GenerateFn = proc(prompt: string): string =
+    calls.add(prompt)
+    "generated:" & prompt
+
+  var p = newPlan("run me")
+  p.addStep(generateStep("step1", "hello"))
+  p.addStep(extractStep("step2", "outline", "characters", "Kael"))
+  p.addStep(reportStep("done"))
+
+  var sinkText = ""
+  let r = p.run(gen, sink = proc(t: string) = sinkText.add(t), maxSteps = 10)
+  run.add(Check(name: "engine completes a small plan",
+                passed: r.completed and r.stepsRun == 3 and p.status == psDone,
+                detail: "stepsRun=" & $r.stepsRun))
+  run.add(Check(name: "generate step calls the model with context",
+                passed: calls.len == 2 and calls[0] == "hello",
+                detail: calls[0]))
+  run.add(Check(name: "extract builds a pointed prompt (filter/source/for)",
+                passed: calls[1].contains("characters") and
+                        calls[1].contains("outline") and calls[1].contains("Kael")))
+  run.add(Check(name: "step outputs are recorded on the plan",
+                passed: p.steps[0].output.startsWith("generated:") and
+                        p.steps[1].output.len > 0))
+  run.add(Check(name: "report emits a checkpoint to the sink",
+                passed: sinkText.contains("done") and sinkText.contains("▶")))
+
+  # validate gate: short text fails, long passes
+  var pv = newPlan("validate")
+  pv.addStep(validateStep("check", "too short"))
+  let rv = pv.run(gen, maxSteps = 10)
+  run.add(Check(name: "validate fails short text and records issues",
+                passed: pv.steps[0].status == ssFailed and
+                        pv.steps[0].output.contains("passed=false")))
+
+  # write step creates the file
+  let tmp = getTempDir() / "nimo_engine_test"
+  removeDir(tmp); createDir(tmp)
+  let fpath = tmp / "out.txt"
+  var pw = newPlan("write")
+  pw.addStep(writeStep("save", fpath, "hello file"))
+  discard pw.run(gen, maxSteps = 10)
+  run.add(Check(name: "write step creates the target file",
+                passed: fileExists(fpath) and readFile(fpath) == "hello file"))
+
+  # max-steps guard: a plan that never terminates aborts
+  var pl = newPlan("looper")
+  for i in 0 .. 9: pl.addStep(generateStep("g" & $i, "x"))
+  let rl = pl.run(gen, maxSteps = 3)
+  run.add(Check(name: "engine aborts a plan that exceeds max steps",
+                passed: rl.aborted and rl.stoppedAt <= 3 and
+                        pl.status != psDone, detail: "stoppedAt=" & $rl.stoppedAt))
+
+  # interrupt + resume from the stopped cursor
+  var pi = newPlan("interruptible")
+  pi.addStep(generateStep("a", "1"))
+  pi.addStep(generateStep("b", "2"))
+  pi.addStep(generateStep("c", "3"))
+  var ticks = 0
+  let ri = pi.run(gen, interrupt = proc (): bool =
+    inc ticks
+    ticks > 1, maxSteps = 10)
+  run.add(Check(name: "interrupt stops the engine and pauses the plan",
+                passed: ri.interrupted and pi.status == psInterrupted and
+                        ri.stoppedAt == 1, detail: "stoppedAt=" & $ri.stoppedAt))
+  let r2 = pi.run(gen, maxSteps = 10)
+  run.add(Check(name: "resume continues from the interrupted cursor",
+                passed: r2.completed and pi.cursor == pi.steps.len and
+                        pi.steps[1].output.len > 0 and pi.steps[2].output.len > 0))
+  removeDir(tmp)
+
+# ----------------------------------------------------------------------
+# Eval 9: deterministic validation (validate.nim)
+# ----------------------------------------------------------------------
+proc evalValidate*(run: var seq[Check]) =
+  run.add(Check(name: "countWords counts words",
+                passed: validate.countWords("one two three") == 3 and
+                        validate.countWords("") == 0))
+  run.add(Check(name: "countLines counts non-empty lines",
+                passed: validate.countLines("a\n\nb\nc") == 3))
+  let short = validateText("too short")
+  run.add(Check(name: "validateText fails short text",
+                passed: not short.passed and short.wordCount == 2 and
+                        short.issues.len > 0))
+  var long = "The fierce wind tore across the empty valley.\n" &
+             "Kael tightened his coat and watched the storm roll in.\n" &
+             "The old lighthouse flickered once, then steadied.\n" &
+             "Far below, the harbor lights began to blink awake.\n" &
+             "He had not expected to return here, not after all this time.\n" &
+             "The sea swallowed the horizon in a single grey breath.\n"
+  let ok = validateText(long, minWords = 10, minParagraphs = 5)
+  run.add(Check(name: "validateText passes a long multi-paragraph text",
+                passed: ok.passed))
+  let repeats = validateText("a b c a b c a b c")
+  run.add(Check(name: "validateText catches repeating segments",
+                passed: repeats.repeatingSegments > 0))
+
+# ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
 proc runAllEvals*(): int =
@@ -276,6 +436,9 @@ proc runAllEvals*(): int =
   evalGpuPolicy(run)
   evalModelCache(run)
   evalStateCache(run)
+  evalPlanArtifact(run)
+  evalEngine(run)
+  evalValidate(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="
   var passCount = 0
