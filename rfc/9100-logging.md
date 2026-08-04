@@ -1,6 +1,6 @@
 # 9100 — Logging
 
-JSONL files. One per session, one per pipeline run.
+JSONL files. **Status: implemented** in `src/session_manager.nim` (sessions) and `src/pipeline.nim` (pipeline reports).
 
 ## Example log line
 

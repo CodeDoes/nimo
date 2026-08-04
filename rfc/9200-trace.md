@@ -1,6 +1,6 @@
 # 9200 — Trace
 
-What user sees in CLI during execution.
+What user sees in CLI during execution. **Status: partial** — the harness and tools print `[nimo]` progress lines and per-turn stats; the `▶/✔` step rendering below is the target style.
 
 ## Example output
 

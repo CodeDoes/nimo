@@ -1,6 +1,6 @@
 # 1100 — Message Format
 
-Raw text format for each content type.
+Raw text format for each content type. **Status: implemented** in `src/harness.nim` (`parseToolCalls`, `stripToolCallText`).
 
 ## Text
 

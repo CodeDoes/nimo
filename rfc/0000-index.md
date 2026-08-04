@@ -1,92 +1,69 @@
 # RFC Index
 
-Recommendations for future features. Not implemented unless accepted.
+Design documents for the NIMO project. Each RFC below has been aligned with
+the **actual code** in `src/` and includes an implementation status. The
+status of the whole project is tracked in [analysis/status.md](../analysis/status.md).
 
 ## Numbering Scheme
 
 | Thousand | Major Category |
 |----------|---------------|
-| 0 | Meta (index, this file) |
+| 0 | Meta (index, vision) |
 | 1 | Core — Session & Messages |
 | 2 | CLI — User Interface |
-| 3 | Pipeline — DSL & Execution |
-| 4 | Config — Settings & Personas |
+| 3 | Pipeline — Execution & Tools |
+| 4 | Config — Settings |
 | 5 | Workspace — Project Isolation |
 | 6 | Architecture — Source Structure |
 | 7 | Environment — Build & Runtime |
 | 8 | Model — RWKV & Quantization |
-| 9 | Infrastructure — Logging, Test, Eval |
-
-| Hundred | Minor Category |
-|---------|---------------|
-| 00 | Meta / Index |
-| 00 | Session model |
-| 10 | Message format |
-| 00 | CLI commands |
-| 00 | Pipeline core DSL |
-| 10 | Pipeline — Chat |
-| 20 | Pipeline — Story |
-| 30 | Pipeline — Workspace |
-| 40 | Pipeline — Agent |
-| 00 | Configuration |
-| 00 | Workspace ops |
-| 00 | Source structure |
-| 00 | Environment |
-| 00 | State baking |
-| 10 | RWKV model details |
-| 00 | Infrastructure |
-| 10 | Logging |
-| 20 | Trace |
-| 30 | Eval |
-| 40 | Test |
+| 9 | Infrastructure — Logging, Eval, Test |
 
 ## RFCs
 
-| # | RFC | Category | Purpose |
-|---|-----|----------|---------|
-| 0000 | [index.md](0000-index.md) | Meta | This file |
-| 0001 | [vision.md](0001-vision.md) | Meta | Product vision and examples |
-| 1000 | [session.md](1000-session.md) | Core | Conversation model: messages, branches, parts |
-| 1100 | [message-format.md](1100-message-format.md) | Core | Message format specs: tool calling, think blocks |
-| 1200 | [chat.md](1200-chat.md) | Workload | Chat workflow (low temp, tool integration) |
-| 1300 | [story.md](1300-story.md) | Workload | Story workflow (high temp, memory retrieval) |
-| 2000 | [cli.md](2000-cli.md) | CLI | Commands, workspace flow, intent extraction |
-| 3000 | [pipeline.md](3000-pipeline.md) | Pipeline | Core DSL, execution model |
-| 3100 | [chat.md](3100-chat.md) | Pipeline | Chat pipeline (tool calls, think blocks) |
-| 3200 | [story.md](3200-story.md) | Pipeline | Story generation pipeline |
-| 3300 | [workspace.md](3300-workspace.md) | Pipeline | Workspace management pipeline |
-| 3400 | [agent.md](3400-agent.md) | Pipeline | Autonomous agent pipeline |
-| 4000 | [config.md](4000-config.md) | Config | Personas, model params, BNF settings |
-| 5000 | [workspace.md](5000-workspace.md) | Workspace | Create, list, dev vs release modes |
-| 6000 | [src.md](6000-src.md) | Architecture | Desired source layout: lib/, app/, protocol/ |
-| 7000 | [env.md](7000-env.md) | Environment | Engines, memory, storage, model paths |
-| 7500 | [gpu.md](7500-gpu.md) | Environment | GPU detection, fallback, VRAM clamp |
-| 8000 | [state-bake.md](8000-state-bake.md) | Model | State caching with model/vocab/prompt hash |
-| 8100 | [rwkv.md](8100-rwkv.md) | Model | Quantization, model formats |
-| 8150 | [quantization.md](8150-quantization.md) | Model | Quant formats, VRAM budget, workflows |
-| 9100 | [logging.md](9100-logging.md) | Infrastructure | Log levels, targets, format |
-| 9200 | [trace.md](9200-trace.md) | Infrastructure | Execution tracing, debug info |
-| 9300 | [eval.md](9300-eval.md) | Infrastructure | Model evaluation, benchmarks |
-| 9400 | [test.md](9400-test.md) | Infrastructure | Test suite, CI integration |
+| # | RFC | Status | What it describes (in code) |
+|---|-----|--------|------------------------------|
+| 0000 | [index.md](0000-index.md) | — | This file |
+| 0001 | [vision.md](0001-vision.md) | Guide | Product vision: harness around a model |
+| 1000 | [session.md](1000-session.md) | ✅ implemented | `src/session_manager.nim` — message tree, roles, parts |
+| 1100 | [message-format.md](1100-message-format.md) | ✅ implemented | `src/harness.nim` `parseToolCalls` — the 3 tool-call forms |
+| 1200 | [chat.md](1200-chat.md) | ✅ implemented | `src/chat.nim` — interactive REPL chat |
+| 1300 | [story.md](1300-story.md) | ✅ implemented | `src/story.nim` — creative writing workflow |
+| 2000 | [cli.md](2000-cli.md) | ✅ implemented | `src/nimo.nim` — the command surface |
+| 3000 | [pipeline.md](3000-pipeline.md) | ✅ implemented | `src/pipeline.nim` — the `run_pipeline` tool |
+| 3100 | [chat.md](3100-chat.md) | ✅ implemented | Chat loop: user → model → tools → answer |
+| 3200 | [story.md](3200-story.md) | ✅ implemented | Story loop: outline → chapters → validate → critique |
+| 3300 | [workspace.md](3300-workspace.md) | ✅ implemented | `src/workspace.nim` — workspace creation flow |
+| 3400 | [agent.md](3400-agent.md) | ✅ implemented | `src/harness.nim` — the agent loop (max 8 iterations) |
+| 4000 | [config.md](4000-config.md) | ✅ implemented | `src/config.nim` — `nimo.json` + `NIMO_*` env overrides |
+| 5000 | [workspace.md](5000-workspace.md) | ✅ implemented | Workspace commands in `src/nimo.nim` + `src/workspace.nim` |
+| 6000 | [src.md](6000-src.md) | ✅ implemented | Actual source layout (no more "desired" layout) |
+| 7000 | [env.md](7000-env.md) | ✅ implemented | Build/runtime requirements, backend libraries |
+| 7500 | [gpu.md](7500-gpu.md) | ✅ implemented | `src/gpu.nim` — GPU probe + backend policy |
+| 8000 | [state-bake.md](8000-state-bake.md) | ✅ implemented | `src/state_cache.nim` — bake context once, resume fast |
+| 8100 | [rwkv.md](8100-rwkv.md) | ✅ implemented | RWKV model details, sampling, quant formats |
+| 8150 | [quantization.md](8150-quantization.md) | ✅ implemented | `src/model_cache.nim` — raw→quantize→cache policy |
+| 9100 | [logging.md](9100-logging.md) | ✅ implemented | JSONL session files (`src/session_manager.nim`) |
+| 9200 | [trace.md](9200-trace.md) | Partial | CLI progress output style (basic echo today) |
+| 9300 | [eval.md](9300-eval.md) | ✅ implemented | `src/evals.nim` — 34 offline checks |
+| 9400 | [test.md](9400-test.md) | ✅ implemented | Unit tests for tokenizer/model |
 
 ## Cross-References
 
 ```
-2000-cli.md ──▶ 3000-pipeline.md (intent extraction produces pipeline.nim)
-2000-cli.md ──▶ 5000-workspace.md (workspace is central to all commands)
-1000-session.md ──▶ 1100-message-format.md (part types defined in session, used in chat)
-3000-pipeline.md ──▶ 4000-config.md (pipeline uses config for model params)
-6000-src.md ──▶ 1000-session.md (protocol/session.nim implements message model)
-6000-src.md ──▶ 3000-pipeline.md (protocol/user_intent.nim = pipeline system)
-7000-env.md ──▶ 8100-rwkv.md (engines map to lib/rwkv_*.so)
-7000-env.md ──▶ 7500-gpu.md (engine chosen at runtime by GPU probe)
-7500-gpu.md ──▶ 8150-quantization.md (model size vs VRAM budget)
-7500-gpu.md ──▶ 4000-config.md (allowCpuFallback / gpuLayers)
-8000-state-bake.md ──▶ 8150-quantization.md (model cache complements state cache)
-9100-logging.md ──▶ 9200-trace.md (trace uses logging infrastructure)
-9300-eval.md ──▶ 9400-test.md (eval uses test infrastructure)
+2000-cli.md ──▶ 5000-workspace.md + 3300-workspace.md (workspace commands)
+1000-session.md ──▶ 1100-message-format.md (message parts used by tool calls)
+3400-agent.md ──▶ 3000-pipeline.md (the agent loop executes the pipeline tool)
+3000-pipeline.md ──▶ 4000-config.md (pipeline uses config for generation params)
+3200-story.md ──▶ 1000-session.md (story generation runs through sessions)
+3200-story.md ──▶ 3300-workspace.md (chapters/wikis live in a workspace)
+8000-state-bake.md ──▶ 8150-quantization.md (model cache + state cache both live in .nimo/)
+7500-gpu.md ──▶ 4000-config.md (backend / gpuLayers config keys)
+9300-eval.md ──▶ 9400-test.md (evals build on the same offline harness)
 ```
 
 ## Implementation Status
 
-See [analysis/status.md](../analysis/status.md) for gap analysis.
+All RFCs marked ✅ are implemented in `src/` and covered by the offline test
+suite (`nimo eval`, 34 checks). See [analysis/status.md](../analysis/status.md)
+for the module-by-module map and known gaps.

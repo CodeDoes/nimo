@@ -1,101 +1,53 @@
 # 8150 — Quantization
 
-Model quantization policy: which formats we ship, why Q4_K is the default,
-and how the harness keeps the model inside the GPU's VRAM budget.
+Model quantization policy and the model cache. **Status: implemented** in
+`src/model_cache.nim` / `src/rwkv/quant/cache.nim` and `src/quantize.nim`.
 
-## Status
+## The default model
 
-Implemented (commit: Q4_K default model + VRAM clamp). Evals cover the clamp.
+**Q4_K** (~2.2 GB for the 2.9B model). It fits the 4 GB RTX 2050 VRAM, leaving
+room for activations and the 16K-context state, and is ~7× faster than CPU.
 
-## Decision
+| Format | Size (2.9B) | Fits 4 GB fully? | Notes |
+|--------|-------------|------------------|-------|
+| FP16   | 5.9 GB      | No (partial)     | Reference; source of all quants |
+| Q8_0   | ~2.9 GB     | Yes              | Near-FP16 quality |
+| Q5_K   | ~2.5 GB     | Yes              | Good quality |
+| **Q4_K** | **2.2 GB** | **Yes**          | **Default — best quality per bit** |
+| Q4_1   | ~2.1 GB     | Yes              | Legacy 4-bit |
+| Q4_0   | ~2.0 GB     | Yes              | Legacy 4-bit, lowest quality |
 
-**Default runtime model is Q4_K.** The RTX 2050 has 4 GB VRAM. The FP16 model
-is 5.9 GB and cannot be fully offloaded; Q4_K is ~2.2 GB and fits with room
-for activations + the 16K-context state. GPU generation is ~7.5× faster than
-CPU on this machine (7.1 s vs 53 s for a short answer).
-
-| Format | Size (this 2.9B) | Fits 4 GB fully? | Notes |
-|--------|------------------|------------------|-------|
-| FP16   | 5.9 GB            | No (partial)     | Reference; source of all quants |
-| Q8_0   | ~2.9 GB           | Yes              | Near-FP16 quality |
-| Q5_K   | ~2.5 GB           | Yes              | Good quality |
-| **Q4_K** | **2.2 GB**      | **Yes**          | **Default — best quality per bit of 4-bit** |
-| Q4_1   | ~2.1 GB           | Yes              | Legacy 4-bit |
-| Q4_0   | ~2.0 GB           | Yes              | Legacy 4-bit, lowest quality |
-
-## Formats supported by rwkv.cpp
-
-`python/quantize.py` accepts: `Q4_0`, `Q4_1`, `Q4_K`, `Q5_0`, `Q5_1`, `Q5_K`,
-`Q8_0` (see `rwkv_cpp_shared_library.QUANTIZED_FORMAT_NAMES`).
-
-## Workflow
-
-```bash
-# 1. .pth -> FP16 GGML (needs devenv python + torch; numpy broken -> preload OpenBLAS)
-LD_PRELOAD=/nix/store/*openblas*/lib/libopenblas.so devenv shell python3 \
-  rwkv.cpp/python/convert_pytorch_to_ggml.py src.pth models/rwkv7-...-f16.bin FP16
-
-# 2. FP16 -> Q4_K (needs librwkv.so on the loader path; it is at rwkv.cpp/librwkv.so)
-devenv shell python3 rwkv.cpp/python/quantize.py \
-  models/rwkv7-...-f16.bin models/rwkv7-...-q4k.bin Q4_K
-```
-
-Keep the FP16 file as the canonical artifact; quants are derived, reproducible
-outputs (record command + tool version in commit messages).
-
-## File format (header)
-
-`rwkv.cpp` models start with a flat header of 6 little-endian u32 (24 bytes):
-
-| Offset | Field       |
-|--------|-------------|
-| 0      | magic = `0x67676d66` (`ggmf`, bytes `f m g g`) |
-| 4      | version     |
-| 8      | n_vocab     |
-| 12     | n_embed     |
-| 16     | **n_layer** |
-| 20     | data_type   |
-
-The harness reads `n_layer` + file size straight off disk (no library load) to
-compute VRAM needs — see `modelFileInfo` in `src/gpu.nim`.
-
-## VRAM budgeting
-
-`safeGpuLayers(modelPath, requested, freeVram)`:
-
-1. If model size + 1.5 GiB headroom ≤ free VRAM → use requested layers.
-2. Otherwise clamp proportionally: `layers = (freeVRAM − headroom) / perLayer`
-   where `perLayer ≈ modelMiB / n_layer`.
-
-Headroom (1536 MiB) covers activations, the RWKV state/KV cache, and
-ggml workspace. rwkv.cpp **SIGSEGVs** (null deref) if `cudaMalloc` OOMs, so the
-clamp runs before `initRwkvModel` — never raise `gpuLayers` past what fits.
-
-Free VRAM comes from `cuMemGetInfo` (driver API, `freeVramMiB` in `src/gpu.nim`).
-
-## Model file naming
+## The workflow
 
 ```
-models/rwkv7-<arch>-<size>-<yyyymmdd>-ctx<ctxlen>-<quant>.bin
-models/rwkv7-g1i-2.9b-20260729-ctx16384-f16.bin   # 5.9 GB, canonical FP16
-models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin   # 2.2 GB, default
+.pth (PyTorch) -> convert_pytorch_to_ggml.py -> FP16 .bin -> quantize.py -> Q4_K .bin
 ```
 
-## Configuration
+`nimo quantize <input> <format> <output>`:
+1. Read the 24-byte GGML header (magic `ggmf`, version, n_vocab, n_embed,
+   n_layer, data_type).
+2. Reject non-raw input ("already quantized") and invalid headers.
+3. Bind the backend library, run `quantizeModelFile`, report sizes + ratio.
 
-`src/config.nim` default: `models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin`.
-Override per-run with `nimo.json` (`"model"`, `"gpuLayers"`) or `NIMO_MODEL` /
-`NIMO_GPU_LAYERS`.
+## The model cache (raw → quantize → cache)
 
-## Evals
+`ensureQuantized(rawPath, format)` — used by the harness before loading:
 
-`src/evals.nim`, GPU policy group (24 checks total):
+1. Read the header. **Already quantized** → use the file as-is.
+2. **Raw** → compute a fast content signature (size + mtime + first 512 bytes
+   hashed — hashing a multi-GB file every run is too slow).
+3. Cached file `<cacheDir>/<sig12>-<format>.bin` exists → reuse it.
+4. Not cached → quantize the raw model into the cache once, then use it.
 
-- ample VRAM keeps requested layers
-- tight VRAM clamps layers down (synthetic `ggmf` header on disk)
+The cache is content-addressed and idempotent: re-runs skip quantization.
+
+## VRAM budget
+
+`src/gpu.nim` queries free VRAM (`cuMemGetInfo`) and the model header (n_layer)
+so GPU layers can be clamped to fit — rwkv.cpp SIGSEGVs on VRAM overcommit.
 
 ## See Also
 
-- [8100-rwkv.md](8100-rwkv.md) — RWKV engine details
-- [4000-config.md](4000-config.md) — model params in config
-- [9300-eval.md](9300-eval.md) — eval suite
+- [8000-state-bake.md](8000-state-bake.md) — the state cache that pairs with this
+- [7500-gpu.md](7500-gpu.md) — GPU probe + layer policy
+- [4000-config.md](4000-config.md) — `quant`, `modelCacheDir`

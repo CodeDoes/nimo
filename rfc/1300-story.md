@@ -1,63 +1,47 @@
 # 1300 — Story
 
-Creative writing workflow. High context preservation, memory retrieval, longer outputs.
+The creative writing workflow. **Status: implemented** in `src/story.nim`
+(pipeline logic) + `src/workspace.nim` (storage).
 
-## Config
+## What it is
 
-```toml
-[workload.story]
-temperature = 0.8
-top_p = 0.95
-max_tokens = 2000
-context_pruning = "minimal"  # preserve global context
-tool_integration = "memory"  # read/write files, retrieve context
-```
+Story mode is a longer, quality-checked writing flow: premise → outline →
+chapters → validation → critique → saved to a workspace, with character memory
+for consistency.
 
-## Flow
+## The flow
 
 ```
-user intent → pipeline → wiki generation → chapter writing → summary → next chapter
+premise
+  └─> generateOutline() → outline.md
+        └─> per chapter:
+              generateChapter(wiki context + recap)
+              validateChapter() — words / paragraphs / repeats
+              fail → critiqueChapter() → one revision → re-validate
+              save → chapters/0N_....md
 ```
 
-## Example Session
+## What makes it different from chat
 
-```jsonl
-{"type":"session","version":3,"id":"...","cwd":"/home/kit/dev/nimo","workload":"story"}
-{"type":"message","id":"msg1","role":"user","content":[{"type":"text","text":"Write a cyberpunk story about Max"}]}
-{"type":"message","id":"msg2","role":"assistant","content":[{"type":"thinking","thinking":"I should create a pipeline to generate this story."},{"type":"toolCall","id":"call1","name":"run_pipeline","arguments":{"intent":"Write a cyberpunk story about Max"}}],"stopReason":"toolUse"}
-{"type":"message","id":"msg3","role":"toolResult","toolCallId":"call1","content":[{"type":"text","text":"[nimo] ▶ 1/10 Generating wiki: Max...\n[nimo] ✔ 1/10 (0.8s)\n...\n[nimo] ✔ 10/10 (45.2s)"}],"isError":false}
-{"type":"message","id":"msg4","role":"assistant","content":[{"type":"text","text":"Your story is ready! Check wiki/max.md and chapters/01.md"}]}
-```
+| Aspect | Chat | Story |
+|--------|------|-------|
+| Output length | short replies | 500+ word chapters |
+| Consistency | conversation state | wiki context + previous recap |
+| Quality control | none | validate → critique → revise |
+| Storage | session JSONL | workspace `chapters/` + `wiki/` |
+| Memory | none | character memory (see [memory docs](../docs/memory.md)) |
 
-## Memory System
+## Supporting pieces
 
-- **Wiki**: Character/world entries stored in `wiki/`
-- **Context Buffers**: Extracted key details from wiki
-- **Chapter Summaries**: Brief recaps for continuity
-- **Outline**: Plot structure for long-term planning
-
-## Pipeline Steps
-
-```
-1. Generate wiki entries (parallel)
-2. Extract context buffers
-3. Write Chapter 1 (with wiki context)
-4. Summarize Chapter 1
-5. Write Chapter 2 (with recap + partner context)
-6. ...
-7. Finalize outline
-```
-
-## Interruption
-
-User can interrupt mid-story and adjust:
-```
-User: "Actually, make Max more stoic"
-→ Pipeline resumes with updated character profile
-```
+- **Wiki entries** (`generateWikiEntry`) — structured character pages.
+- **Summaries** (`summarizeChapter`) — 3–5 bullets per chapter for continuity.
+- **Character memory** (`src/memory.nim`) — `rememberCharacter` /
+  `getCharacterMemory` so facts persist.
+- **Workspace** — chapters, wikis, outline, caches all live in the workspace
+  folder (see [3300-workspace.md](3300-workspace.md)).
 
 ## See Also
 
-- [0001-vision.md](0001-vision.md) — workload contexts
-- [3000-pipeline.md](3000-pipeline.md) — pipeline execution
-- [3200-story.md](3200-story.md) — story pipeline example
+- [3200-story.md](3200-story.md) — the story pipeline in detail (validation rules)
+- [3300-workspace.md](3300-workspace.md) — where story files live
+- [docs/story-writing.md](../docs/story-writing.md) — user-facing guide
