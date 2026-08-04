@@ -228,7 +228,13 @@ Example:
     return 1
 
   let plan = loadPlan(planPath)
-  echo "[run] Loaded plan: " & plan.id
+  echo "[run] Plan: " & plan.id
+  echo "[run] Goal: " & plan.goal
+  echo "[run] Steps: " & $plan.steps.len
+  
+  # For now, report - full execution needs bootstrap + engine
+  echo "[run] To execute with model, bootstrap a session first."
+  return 0
 
 proc cmdNew(rest: seq[string]): int =
   ## `nimo new <goal>` — open a session, compile goal, run plan
