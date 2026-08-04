@@ -182,7 +182,6 @@ proc evalModelCache*(run: var seq[Check]) =
 proc evalStateCache*(run: var seq[Check]) =
   let tmpDir = getTempDir() / "nimo_scache_test"
   createDir(tmpDir)
-
   writeFile(tmpDir / "model.bin", "fake-model-contents")
   writeFile(tmpDir / "vocab.txt", "token vocab 65536")
 
@@ -205,7 +204,6 @@ proc evalStateCache*(run: var seq[Check]) =
 
 
 # ----------------------------------------------------------------------
-# Eval 7: Plan artifact
 # ----------------------------------------------------------------------
 proc evalPlanArtifact*(run: var seq[Check]) =
   var p = newPlan("write a story")
@@ -397,7 +395,6 @@ proc evalMemory*(run: var seq[Check]) =
   
   let memDir = tmpDir / ".nimo" / "memory"
   createDir(memDir)
-  let memPath = memDir / "memories.json"
   writeFile(memPath, """[
     {"text": "The lighthouse stood on the cliff", "category": "story"},
     {"text": "Kael was a brave sailor", "category": "character"}
