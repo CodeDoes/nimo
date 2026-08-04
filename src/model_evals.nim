@@ -20,52 +20,94 @@ type
     fail*: int
 
 const
-  FixedPrompts* = @[
-    ("planner", "write a story about a lighthouse"),
-    ("planner", "remember that the sky is blue"),
-    ("planner", "summarize the history of Rome"),
-    ("planner", "create a poem about roses"),
-    ("planner", "what is the capital of France?")
-  ]
+  # Pattern continuation: does the model continue a repeating pattern?
+  PatternPrompt* = "1, 2, 3, 4, 5, "
+  
+  # State retention: does the model remember context from earlier in generation?
+  StatePrompt* = "The quick brown fox jumped over the lazy dog. Now tell me what animal was lazy: "
+  
+  # Planner emission: can the model emit parseable plan structure?
+  PlannerPrompt* = "Create a plan for writing a story about a lighthouse. Output your plan as [step] lines."
+  
+  # Natural response: does the model respond naturally to simple prompts?
+  NaturalPrompt* = "Say hello in exactly 3 words."
+  
+  # Multi-turn coherence: can the model maintain coherence across turns?
+  CoherencePrompt* = "Once upon a time there was a lighthouse keeper. The keeper was lonely."
 
-proc runEval*(cfg: NimoConfig, cwd: string = ".", trials: int = 10): int =
-  ## Runs model evals and reports rates.
-  echo "[model-eval] Running $1 trials per prompt" % [$trials]
+proc runPatternEval*(cfg: NimoConfig, cwd: string, trials: int): EvalResult =
+  ## Tests: can the model continue a numerical pattern?
+  result = EvalResult(name: "pattern_continuation", trials: trials)
+  for i in 1 .. trials:
+    let reply = cfg.session.generateTurn(PatternPrompt, cfg.generate, DefaultTemp, DefaultTopP, 10)
+    if reply.len > 0 and ("6" in reply or "six" in reply.toLowerAscii()):
+      inc result.success
+    else:
+      inc result.fail
+  result.rate = if result.success + result.fail > 0: result.success.float / (result.success + result.fail).float else: 0.0
+
+proc runStateEval*(cfg: NimoConfig, cwd: string, trials: int): EvalResult =
+  ## Tests: does the model retain state from earlier context?
+  result = EvalResult(name: "state_retention", trials: trials)
+  for i in 1 .. trials:
+    let reply = cfg.session.generateTurn(StatePrompt, cfg.generate, DefaultTemp, DefaultTopP, 20)
+    if "dog" in reply.toLowerAscii() or "lazy" in reply.toLowerAscii():
+      inc result.success
+    else:
+      inc result.fail
+  result.rate = if result.success + result.fail > 0: result.success.float / (result.success + result.fail).float else: 0.0
+
+proc runPlannerEval*(cfg: NimoConfig, cwd: string, trials: int): EvalResult =
+  ## Tests: can the model emit parseable plan structure?
+  result = EvalResult(name: "planner_emission", trials: trials)
+  for i in 1 .. trials:
+    let reply = cfg.session.generateTurn(PlannerPrompt, cfg.generate, DefaultTemp, DefaultTopP, 100)
+    # Check for [step] or structured output
+    if reply.contains("[step]") or reply.contains("step") and reply.contains("{"):
+      inc result.success
+    else:
+      inc result.fail
+  result.rate = if result.success + result.fail > 0: result.success.float / (result.success + result.fail).float else: 0.0
+
+proc runNaturalEval*(cfg: NimoConfig, cwd: string, trials: int): EvalResult =
+  ## Tests: does the model respond naturally?
+  result = EvalResult(name: "natural_response", trials: trials)
+  for i in 1 .. trials:
+    let reply = cfg.session.generateTurn(NaturalPrompt, cfg.generate, DefaultTemp, DefaultTopP, 15)
+    # Should be short and contain hello/greeting
+    if reply.len > 0 and reply.len < 50 and ("hello" in reply.toLowerAscii() or "hi" in reply.toLowerAscii()):
+      inc result.success
+    else:
+      inc result.fail
+  result.rate = if result.success + result.fail > 0: result.success.float / (result.success + result.fail).float else: 0.0
+
+proc runEval*(cfg: NimoConfig, cwd: string = ".", trials: int = 5): int =
+  ## Runs all model evals and reports rates.
+  echo "[model-eval] Running $1 trials per eval" % [$trials]
   echo ""
   
-  var results: seq[EvalResult] = @[]
+  echo "[model-eval] Pattern continuation (expect '6' or 'six'):"
+  let pattern = runPatternEval(cfg, cwd, trials)
+  echo "  rate=$1% ($2/$3)" % [$pattern.rate.formatFloat(ffDecimal, 0), $pattern.success, $pattern.trials]
   
-  for (category, prompt) in FixedPrompts:
-    echo "[model-eval] Testing: $1" % [prompt]
-    
-    var success = 0
-    var fail = 0
-    
-    for i in 1 .. trials:
-      # Compile plan from prompt
-      let plan = interpret(prompt)
-      
-      # Check: plan has at least one step
-      if plan.steps.len > 0:
-        inc success
-      else:
-        inc fail
-    
-    let rate = if success + fail > 0: success.float / (success + fail).float else: 0.0
-    echo "  rate=$1 ($2/$3 successful)" % [$rate.formatFloat(ffDecimal, 2), $success, $trials]
-    
-    results.add(EvalResult(
-      name: prompt,
-      rate: rate,
-      trials: trials,
-      success: success,
-      fail: fail
-    ))
+  echo "[model-eval] State retention (expect 'dog' or 'lazy'):"
+  let state = runStateEval(cfg, cwd, trials)
+  echo "  rate=$1% ($2/$3)" % [$state.rate.formatFloat(ffDecimal, 0), $state.success, $state.trials]
+  
+  echo "[model-eval] Planner emission (expect structured output):"
+  let planner = runPlannerEval(cfg, cwd, trials)
+  echo "  rate=$1% ($2/$3)" % [$planner.rate.formatFloat(ffDecimal, 0), $planner.success, $planner.trials]
+  
+  echo "[model-eval] Natural response (expect short greeting):"
+  let natural = runNaturalEval(cfg, cwd, trials)
+  echo "  rate=$1% ($2/$3)" % [$natural.rate.formatFloat(ffDecimal, 0), $natural.success, $natural.trials]
   
   echo ""
   echo "[model-eval] Summary:"
-  for r in results:
-    echo "  $1: $2" % [r.name[0 .. min(40, r.name.len - 1)], "$1%".format(r.rate * 100.0)]
+  let total = pattern.success + state.success + planner.success + natural.success
+  let totalTrials = pattern.trials + state.trials + planner.trials + natural.trials
+  let overall = if totalTrials > 0: total.float / totalTrials.float else: 0.0
+  echo "  overall: $1% ($2/$3)" % [overall.formatFloat(ffDecimal, 0), $total, $totalTrials]
   
   return 0
 
@@ -78,12 +120,12 @@ Runs fixed prompts through the model and reports success rates.
 Unlike unit tests, these probe the MODEL's behavior.
 
 Usage:
-  nimo model-eval                    # Run with defaults (10 trials)
-  nimo model-eval --trials 20        # Set number of trials
+  nimo model-eval                    # Run all evals (5 trials)
+  nimo model-eval --trials 10        # Set number of trials
 """
     quit(0)
   
-  var trials = 10
+  var trials = 5
   for i, a in args:
     if a == "--trials" and i + 1 < args.len:
       try: trials = parseInt(args[i + 1])
