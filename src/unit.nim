@@ -283,7 +283,10 @@ proc evalValidate*(run: var seq[Check]) =
   run.add(Check(name: "countWords counts words",
                 passed: validate.countWords("one two three") == 3))
   run.add(Check(name: "countLines counts non-empty lines",
-                passed: validate.countLines("a\\n\\nb\\nc") == 3))
+                passed: validate.countLines("a
+
+b
+c") == 3))
   let short = validateText("too short")
   run.add(Check(name: "validateText fails short text",
                 passed: not short.passed))
