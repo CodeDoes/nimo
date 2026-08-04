@@ -311,10 +311,7 @@ proc evalTurnPrimitives*(run: var seq[Check]) =
   run.add(Check(name: "runCalls records tool_call then tool_result",
                 passed: s2.messages.len == 3))
 
-  let ctx = buildNextContext("[tool] run_pipeline {}", "[tool_result for ping]
-pong
-
-")
+  let ctx = buildNextContext("[tool] run_pipeline {}", "[tool_result for ping]\npong\n\n")
   run.add(Check(name: "buildNextContext strips markers, keeps feedback",
                 passed: (not ctx.contains("[tool]")) and ctx.contains("pong")))
 
