@@ -6,9 +6,11 @@ Design is formalized in `rfc/3500-plan-format.md` + `rfc/3600-engine.md`
 (commit `7271b86`). This plan evaluates the current code and lays out the
 migration. Each phase is a commit and must leave `nimo eval` green.
 
-> **Phase 0 first**: the harness and evals are not DRY and lack composition.
-> Migrations must NOT build on top of that. Phase 0 refactors them (behavior-
-> identical, evals green), so Phase 2/3 build on clean primitives.
+> **Phase 0 first**: the *architecture* above the model layer lacks clean
+> abstraction/composition — two `Session` types, triplicated bootstrap, CLI/dispatcher
+> monoliths. Migrations must NOT build on top of that. Phase 0 unifies the session
+> abstraction and shares bootstrap (behavior-identical, evals green), so Phase 2/3
+> build on clean primitives. (`rwkv.nim` itself is already well-abstracted.)
 
 ## Code evaluation — what contradicts the intent today
 
@@ -44,37 +46,46 @@ src/orchestrator.nim  # interpret(userMsg) -> Plan — template registry first,
 src/skills/           # baked skill bundles (planner + output states)
 ```
 
-## Phase 0 — Refactor harness + evals (DRY & composition) — PREREQUISITE
+## Phase 0 — Architecture refactor: one Session, shared bootstrap (PREREQUISITE)
 
-> Why before the engine work: the engine and orchestrator must be composed from
-> clean primitives. Refactoring now (behavior-identical, evals green) makes
-> Phase 2/3 a clean build rather than more surgery on muddy code.
+> Why before the engine work: the codebase currently has **two parallel "Session"
+> abstractions** (`session.nim` object + `session_manager.nim` ref), **triplicated
+> model bootstrap** across `harness`/`chat`/`generate` `main()`, and **monolithic
+> CLI/dispatcher/harness procs**. The engine and orchestrator must be composed
+> from clean, single primitives — not from two worlds held together by
+> duplication. `rwkv.nim` is already well-abstracted; the surgery is above it.
 
-**Files**: `harness.nim`, `session_manager.nim`, `session.nim`, `cli.nim`, `evals.nim`.
+**Files**: `session.nim`, `session_manager.nim`, `bootstrap.nim` (new),
+`harness.nim`, `chat.nim`, `generate.nim`, `nimo.nim`, `workspace.nim`, `evals.nim`.
 
-1. **De-duplicate the tool-call predicate** in `harness.nim`: one
-   `isToolCallJson(j: JsonNode): bool` + a `toolCallName(j): string`; both
-   `parseToolCalls` and `stripToolCallText` call them. Removes drift risk.
-2. **Decompose `runHarnessTurn`** into small composed procs:
-   - `recordTurnStart(s, userMsg) -> parentId`
-   - `parseReply(reply) -> (calls, naturalText)`
-   - `runCalls(s, calls, curParent, ...) -> feedback, nextParent`
-   - `buildNextContext(natural, feedback)`
-   - `runHarnessTurn` becomes ~6 lines composing them.
-3. **Unify model bootstrap**: extract `bootstrapSession(cfg, opts) -> Session`
-   (bind backend → GPU policy → quant cache → init model → seed) used by
-   `harness`, `chat`, `generate` instead of three independent copies.
-4. **One token loop**: extract `sampleReply(s, prompt, temp, topP, maxTokens,
-   sink) -> string` shared by `session.nim` and `session_manager.nim`
-   (per-token `sink`, collected into the returned string). This is also the
-   seam Phase 1 turns fully streaming.
-5. **evals**: add `check(run, name, passed, detail="")` helper; push the
-   predicate/parsing tests onto the new primitives (`isToolCallJson`,
-   `parseReply`) so evals test composed behavior. Count must stay truthful in
-   `rfc/9300-eval.md`.
+1. **One `Session` type.** Make `session_manager.Session` (ref, with
+   messages/tools/**and** model/state) the single canonical session. Either:
+   - fold the low-level fields in cleanly, or
+   - define an explicit `SessionModel` trait/record that both provide, so
+     `sampleReply` (below) and every tool accept **one** session type.
+   `generate.nim`/`chat.nim` move onto that type; `session.nim` keeps only the
+   raw model/state helpers (`initRwkvModel`, `newState`, `loadState`, …). No
+   two near-identical `generateTurn` procs anymore.
+2. **One shared token loop**: `sampleReply(s, prompt, temp, topP, maxTokens,
+   sink) -> string` in one place; both `session` and `session_manager`
+   generation use it. Per-token `sink` is the seam Phase 1 turns fully
+   streaming. (This subsumes the old `sampleReply` in the plan.)
+3. **One shared bootstrap**: new `src/bootstrap.nim` with
+   `bootstrapSession(cfg, opts) -> Session` — bind backend → GPU policy →
+   quant cache → init model → seed — used by `harness`, `chat`, `generate`.
+4. **CLI delegates to libraries.** `nimo.nim` stops embedding workspace/story
+   logic inline and calls `workspace.nim`/`story.nim` functions. `harness.nim`'s
+   `main()` stops re-dispatching generate/bake/chat; every binary owns only its
+   own arg parse + `bootstrapSession` + run loop.
+5. **Decompose `runHarnessTurn`** into composed procs (`recordTurnStart`,
+   `parseReply`, `runCalls`, `buildNextContext`) — see original plan text below.
+6. **evals** follow the code: update imports to the single `Session`, push
+   tests onto the composed primitives. `check()` helper optional; count stays
+   truthful in `rfc/9300-eval.md`.
 
-**Done when**: evals green (34/34, same names or renamed-with-count-updated);
-harness behaves identically (spot-check one live generate).
+**Done when**: exactly one session type (or one explicit interface); one
+`sampleReply`, one `bootstrapSession`; `nimo eval` green (34/34 or
+count-updated); harness/chat/generate spot-checked live.
 **Commit.**
 
 ## Phase 1 — Streaming foundation
@@ -216,14 +227,20 @@ evals green.
   tests (tool loop, session logging). Update evals in the same commit as the
   harness change; keep the count truthful in `rfc/9300-eval.md`. Phase 0's
   decomposition makes this a behavior test, not an implementation test.
-- **Two Session types** (`session.nim` object vs `session_manager.nim` ref):
-  don't unify in this pass — just give both a streaming variant. Unification
-  is a separate cleanup, but Phase 0 extracts the *shared token loop* so the
-  duplication lives in one place.
+- **Two Session types**: the crux of the composition problem. Phase 0 unifies
+  them (or defines one explicit interface both provide) BEFORE anything else;
+  the engine cannot be composed from two worlds. This is the highest-risk,
+  highest-value refactor — do it with evals green throughout.
+- **Streaming rides the refactor**: once `sampleReply` lives in one place
+  (Phase 0 item 2), Phase 1 adds the sink there and everywhere is streaming.
+- **Evals coupling**: the harness rewrite touches exactly what `evals.nim`
+  tests (tool loop, session logging). Update evals in the same commit as the
+  harness change; keep the count truthful in `rfc/9300-eval.md`. Phase 0's
+  decomposition makes this a behavior test, not an implementation test.
 - **Learned planner is a bake**: the template registry ships first
   (deterministic, no model), so the system works before the skill bakes exist;
   the planner state is the swap-in later (distillation target).
-- **Interrupt on GPU**: token loop must check the interrupt flag between
+- **Interrupt on GPU**: the token loop must check the interrupt flag between
   `eval` calls so Ctrl-C behaves mid-generation without corrupting state.
 
 ## See also
