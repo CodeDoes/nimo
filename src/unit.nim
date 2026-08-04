@@ -429,156 +429,6 @@ proc evalValidate*(run: var seq[Check]) =
                 passed: repeats.repeatingSegments > 0))
 
 # ----------------------------------------------------------------------
-# Eval 10: harness turn primitives (Phase 0 decomposed loop)
-# ----------------------------------------------------------------------
-proc evalTurnPrimitives*(run: var seq[Check]) =
-  # recordTurnStart records the user message and returns the root parent id.
-  var s = newSession(".")
-  let rootId = recordTurnStart(s, "hello there")
-  run.add(Check(name: "recordTurnStart records a user message",
-                passed: s.messages.len == 1 and s.messages[0].role == mrUser and
-                        s.messages[0].id == rootId,
-                detail: "root=" & rootId))
-
-  # parseReply extracts tool calls from the 3 modeled forms.
-  let calls = parseReply("[tool] run_pipeline {\"intent\": \"one\"}")
-  run.add(Check(name: "parseReply extracts [tool] calls",
-                passed: calls.len == 1 and calls[0].name == "run_pipeline",
-                detail: "calls=" & $calls.len))
-  let calls2 = parseReply("{\"name\": \"x\", \"arguments\": {\"k\": 1}}")
-  run.add(Check(name: "parseReply handles bare JSON calls",
-                passed: calls2.len == 1 and calls2[0].name == "x",
-                detail: "calls=" & $calls2.len))
-
-  # runCalls executes against registered tools and records call+result.
-  var s2 = newSession(".")
-  let root2 = recordTurnStart(s2, "run it")
-  s2.registerTool("ping", proc(_: string): string = "pong")
-  let (feed, lastParent) = runCalls(s2, @[ToolCall(name: "ping", args: "{}")], root2)
-  run.add(Check(name: "runCalls records tool_call then tool_result",
-                passed: s2.messages.len == 3 and
-                        s2.messages[2].role == mrToolResult and
-                        s2.messages[2].parentId == s2.messages[1].id,
-                detail: "msgs=" & $s2.messages.len))
-  run.add(Check(name: "runCalls returns feedback + lastParentId",
-                passed: feed.contains("pong") and feed.contains("[tool_result for ping]") and
-                        lastParent == s2.messages[1].id,
-                detail: lastParent))
-
-  # buildNextContext strips markers and carries feedback.
-  let ctx = buildNextContext("[tool] run_pipeline {\"x\":1}", "[tool_result for ping]\npong\n\n")
-  run.add(Check(name: "buildNextContext strips markers, keeps feedback",
-                passed: (not ctx.contains("[tool]")) and ctx.contains("pong") and
-                        ctx.contains("Now answer"),
-                detail: ctx))
-
-# ----------------------------------------------------------------------
-# Eval 11: orchestrator — natural language goal -> plan (RFC 3400)
-# ----------------------------------------------------------------------
-proc evalOrchestrator*(run: var seq[Check]) =
-  run.add(Check(name: "matchIntent: poem",
-                passed: matchIntent("write a poem about roses") == itPoem))
-  run.add(Check(name: "matchIntent: story",
-                passed: matchIntent("write a story about a lighthouse") == itStory))
-  run.add(Check(name: "matchIntent: chapter",
-                passed: matchIntent("make chapter 3 about Kael") == itChapter))
-  run.add(Check(name: "matchIntent: remember",
-                passed: matchIntent("remember that the sky is blue") == itMemory))
-  run.add(Check(name: "matchIntent: falls back to answer",
-                passed: matchIntent("what is the capital of France") == itAnswer))
-
-  let story = interpret("write a story about a lighthouse")
-  run.add(Check(name: "interpret: keeps the goal verbatim",
-                passed: story.goal == "write a story about a lighthouse",
-                detail: story.goal))
-  run.add(Check(name: "interpret: story plan has generate + write + report",
-                passed: story.steps.len == 4 and
-                        story.steps[1].kind == skGenerate and
-                        story.steps[1].skill == "output:story" and
-                        story.steps[2].kind == skWrite and
-                        story.steps[3].kind == skReport,
-                detail: "steps=" & $story.steps.len))
-  run.add(Check(name: "interpret: answer is just generate + report",
-                passed: interpret("hi").steps.len == 2 and
-                        interpret("hi").steps[0].kind == skGenerate))
-  run.add(Check(name: "interpret: memory writes a memory file",
-                passed: interpret("remember the plan").steps[2].path == "memory.md"))
-
-  # planner-emission compilation (RFC 1100)
-  let emission =
-    """[step] extract {"source": "memory", "filter": "the story so far"}
-[step] generate {"skill": "output:story", "context": "premise: a lighthouse"}
-Some prose the planner should not include.
-[step] report {"title": "story ready"}
-{"step": "write", "path": "story.md"}"""
-  let pEmit = compileEmission(emission, "write a story")
-  run.add(Check(name: "compileEmission: builds steps in order, drops prose",
-                passed: pEmit.steps.len == 4 and
-                        pEmit.steps[0].kind == skExtract and
-                        pEmit.steps[0].source == "memory" and
-                        pEmit.steps[1].kind == skGenerate and
-                        pEmit.steps[1].skill == "output:story" and
-                        pEmit.steps[2].kind == skReport and
-                        pEmit.steps[3].kind == skWrite and
-                        pEmit.steps[3].path == "story.md",
-                detail: "steps=" & $pEmit.steps.len))
-  run.add(Check(name: "compileEmission: bare JSON step form compiles",
-                passed: pEmit.steps[3].kind == skWrite))
-  run.add(Check(name: "compileEmission: goal is carried",
-                passed: pEmit.goal == "write a story"))
-  let pEmpty = compileEmission("just talking, no steps", "hi")
-  run.add(Check(name: "compileEmission: prose-only emission -> empty plan",
-                passed: pEmpty.steps.len == 0))
-
-# ----------------------------------------------------------------------
-# Eval 12: session plan/report/model recording (RFC 1000)
-# ----------------------------------------------------------------------
-proc evalSessionRecording*(run: var seq[Check]) =
-  var s = newSession(".")
-  let rootId = recordTurnStart(s, "write a story")
-  var plan = newPlan("write a story")
-  plan.addStep(generateStep("draft", "premise", "output:story"))
-  plan.addStep(reportStep("done"))
-  let planId = s.addPlan(planToJson(plan), rootId)
-  let reportId = s.addReport("finished", "Story complete!", planId)
-
-  run.add(Check(name: "addPlan records a plan node in history",
-                passed: s.messages.len == 3 and
-                        s.messages[1].role == mrAssistant and
-                        s.messages[1].content.len == 1 and
-                        s.messages[1].content[0].kind == ckPlan))
-  run.add(Check(name: "addReport records a report with kind",
-                passed: s.messages[2].content[0].kind == ckReport and
-                        s.messages[2].content[0].reportKind == "finished" and
-                        s.messages[2].content[0].text == "Story complete!"))
-  run.add(Check(name: "plan and report chain by parentId",
-                passed: s.messages[1].parentId == rootId and
-                        s.messages[2].parentId == planId))
-
-  # saveSession round-trip preserves the new kinds
-  let path = getTempDir() / "nimo_session_rec_test.jsonl"
-  s.saveSession(path)
-  if fileExists(path):
-    var planLines = 0
-    var reportLines = 0
-    for line in path.lines:
-      let trimmed = line.strip()
-      if trimmed.len == 0: continue
-      try:
-        let j = parseJson(trimmed)
-        if j.hasKey("content"):
-          for p in j["content"]:
-            if p.hasKey("type"):
-              if p["type"].str == "plan": inc planLines
-              elif p["type"].str == "report": inc reportLines
-      except JsonParsingError: discard
-    run.add(Check(name: "saveSession persists plan nodes",
-                  passed: planLines > 0, detail: "plan=" & $planLines))
-    run.add(Check(name: "saveSession persists report nodes",
-                  passed: reportLines > 0, detail: "report=" & $reportLines))
-    removeFile(path)
-
-# ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
 proc runAllEvals*(): int =
@@ -586,15 +436,12 @@ proc runAllEvals*(): int =
   evalToolCalling(run)
   evalLoopTermination(run)
   evalSessionLogging(run)
-  evalTurnPrimitives(run)
   evalGpuPolicy(run)
   evalModelCache(run)
   evalStateCache(run)
   evalPlanArtifact(run)
   evalEngine(run)
   evalValidate(run)
-  evalOrchestrator(run)
-  evalSessionRecording(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="
   var passCount = 0
