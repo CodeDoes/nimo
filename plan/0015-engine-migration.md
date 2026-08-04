@@ -251,7 +251,10 @@ count-updated); harness/chat/generate spot-checked live.
    - Keep `MaxToolIterations` as the engine's max-steps guard (a plan that
      never terminates aborts — the evals already test this shape).
 3. `session_manager.nim`: session records the plan + checkpoints (new message
-   kinds or a session-level plan field), so `/save` shows the run.
+   kinds or a session-level plan field) AND **provenance** (RFC 1000): a
+   session-level `modelRef` (model used last) and per-message `modelRef` +
+   `bakeRef` (which baked skill state produced each generated message). The
+   saveSession JSONL header carries the refs.
 4. `unit.nim`: rework `evalToolCalling`/`evalLoopTermination` to the new flow:
    - tool-calling eval → planner emission parse → plan compilation.
    - loop-termination eval → engine max-steps abort.
@@ -310,6 +313,10 @@ unit suite green.
 1. `nimo plan <goal>` — compile to a plan (show the steps, save to
    `.nimo/programs/`).
 2. `nimo run <plan> [--resume]` — execute with streaming.
+3. Goal-first surface (RFC 2000): `nimo new <goal>` opens a session
+   (bootstrap + compile + run); `nimo list/open/continue` manage sessions;
+   `story`/`chat`/`harness` nouns are dropped from the everyday surface.
+   `nimo story ...` becomes reachable only through goals, never as a verb.
 3. `harness` = the engine chat (Phase 3 result).
 4. Update `docs/how-it-works.md` / `getting-started.md` / `status.md` to the
    planner→plan→engine model and streaming; docs already carry

@@ -25,11 +25,11 @@ status of the whole project is tracked in [analysis/status.md](../analysis/statu
 |---|-----|--------|------------------------------|
 | 0000 | [index.md](0000-index.md) | — | This file |
 | 0001 | [vision.md](0001-vision.md) | Guide | Product vision: harness around a model |
-| 1000 | [session.md](1000-session.md) | ✅ implemented | `src/session_manager.nim` — message tree, roles, parts |
+| 1000 | [session.md](1000-session.md) | ⏳ re-scoped | thin session: history + refs; provenance (model/bake per message) |
 | 1100 | [message-format.md](1100-message-format.md) | ✅ implemented | `src/harness.nim` `parseToolCalls` — the 3 tool-call forms |
 | 1200 | [chat.md](1200-chat.md) | ✅ implemented | `src/chat.nim` — interactive REPL chat (streaming migration pending, RFC 3600) |
 | 1300 | [story.md](1300-story.md) | Partial | Story flow — hardcoded approx.; target is the plan-template form |
-| 2000 | [cli.md](2000-cli.md) | ✅ implemented | `src/nimo.nim` — the command surface (story wiring + plan commands planned) |
+| 2000 | [cli.md](2000-cli.md) | ⏳ re-scoped | goal-first verbs (new/open/continue/plan/run); no content-type nouns |
 | 3000 | [pipeline.md](3000-pipeline.md) | Partial | `src/pipeline.nim` — intent → plan → execute (MVP step superseded) |
 | 3100 | [chat.md](3100-chat.md) | Superseded | Target: every message compiles into a streaming engine (code in transition) |
 | 3200 | [story.md](3200-story.md) | Partial | Story plan template: outline → extract → wiki → chapters → validate |

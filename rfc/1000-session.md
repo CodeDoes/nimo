@@ -1,81 +1,90 @@
 # 1000 — Session
 
-The conversation model. **Status: implemented** in `src/session_manager.nim`.
+The conversation container. **Status: RE-SCOPED (planned).** `src/session_manager.nim`
+currently carries model/tokenizer/state + tool registry and the CLI exposes
+content-typed verbs (`chat`, `story`, `pipeline`). The target shape below makes
+a Session **thin**: it is the history plus references — never the model, never
+a content type.
 
 ## What a session is
 
-A session is the full conversation: a list of messages, each with an id, a
-parent id (forming a tree), a timestamp, a role, content parts, and a stop
-reason. The harness builds this tree as it talks to the model.
-
-## Data model (as coded)
-
-```nim
-Session = ref object
-  id: string            # "sess_20260729..."
-  timestamp: string
-  cwd: string
-  messages: seq[Message]
-  branches: seq[string]       # branch ids (see session_branch.nim)
-  activeBranch: int
-  tools: Table[string, ToolHandler]  # registered tools
-  # (online builds also carry model, tokenizer, state, logits, rng)
-
-Message = object
-  id: string            # "msg_0", "msg_1", ...
-  parentId: string      # links this message to its parent (tree)
-  timestamp: string
-  role: MessageRole     # user | assistant | toolResult
-  content: seq[ContentPart]
-  stopReason: string    # "stop" | "toolUse"
-
-ContentPart = object
-  kind: ContentKind     # text | thinking | toolCall | toolResult
-  text: string
-  toolCallId: string    # links a toolResult to its toolCall
-  toolName: string
-  arguments: string
-  thinkingSignature: string
-```
-
-## How a turn builds the tree (step by step)
-
-1. The user message is recorded: `addText(userMsg)` → `msg0` (role user).
-2. The model replies. If the reply contains a tool call, it is recorded with
-   `addToolCall(name, args, parentId)` → `msg1` (role assistant,
-   stopReason `toolUse`), parented to `msg0`.
-3. The tool runs. Its result is recorded with `addToolResult(...)` → `msg2`
-   (role toolResult), parented to the tool call `msg1`.
-4. The model is asked to continue. Its natural-text answer is recorded via
-   `addText(reply, parentId)` → `msg3` (role assistant), parented to `msg2`.
-
-The chain looks like:
+A session is the unit of work you perceive: start it with a goal, watch it run
+a plan against a workspace, pause/resume/branch, save and reopen. In data
+space it is deliberately small:
 
 ```
-msg0 (user)
-  └─ msg1 (assistant, toolCall: run_pipeline)
+Session (persisted, one per "conversation on a workspace")
+  id             "sess_20260729..."
+  goal           the natural-language intent   ("create a story about a lighthouse")
+  history        the message tree (JSONL) — the conversation
+  workspaceRef   which workspace is mounted (path/id)
+  activePlanRef  optional — the program in flight (.nimo/programs/<id>.json)
+  modelRef       the model file used for the last generation (path + signature)
+  createdAt / updatedAt
+```
+
+### What deliberately does NOT live on a Session
+
+| Thing | Where it lives instead | Why |
+|-------|------------------------|-----|
+| model / tokenizer / model state | workspace caches (state cache keyed by context, model cache) | session is conversation, not compute |
+| tool registry | built per-session from the workspace + engine | reached by capability/interface (principle D) |
+| content type ("story", "memory", …) | nowhere — chosen by the orchestrator from the goal | the user never picks machinery |
+| the plan itself | `.nimo/programs/<id>.json` in the workspace | shareable, resume-able, separate from the conversation |
+
+A session is **not** a "story session" or "chat session." It is a goal, a
+conversation, and a mounted workspace — the plan runs in the workspace, the
+model state is a cache, and the content type is inferred.
+
+## Provenance: what produced what
+
+Sessions are reproducible: they record which model and which baked skill state
+turned each input into each output.
+
+- **Session-level `modelRef`** — the model file used for the last generation
+  (path + signature, the same signature that keys the model/state caches).
+  Reopening a session reloads this model, so `continue` keeps the same
+  behavior.
+- **Per-message `modelRef` + `bakeRef`** — each generated message records the
+  model that produced it and the baked state (skill) that was active at the
+  time, referenced by its cache key (e.g. `planner`, `output:chapter`), never
+  by a state blob.
+
+The header and each message carry these refs (optional fields in the JSONL).
+`bakeRef` is the auditable link for state-tuning: given a message you can name
+the skill that shaped it.
+
+## History — the message tree
+
+The history is the pi-agent JSONL message tree (one JSON object per line):
+
+1. Header line: `{"type":"session","id":...,"goal":...,"workspaceRef":...,"activePlanRef":...,"modelRef":...}`.
+2. One line per message: user, assistant (text/toolCall), toolResult —
+   linked by `parentId`, terminated by a `stopReason` (`stop` | `toolUse`).
+   Generated messages also carry `modelRef` and `bakeRef` (which model +
+   which baked skill state produced them).
+
+A typical chain:
+
+```
+msg0 (user, goal)
+  └─ msg1 (assistant, toolCall: Extract memory)
        └─ msg2 (toolResult)
-            └─ msg3 (assistant, text)   <- final answer
+            └─ msg3 (assistant, text: ...)   <- partial prose / report
 ```
 
-## Saving to disk
+The tree IS the observable record of the run. Saving is one object per line.
+## How the user perceives it
 
-`saveSession(path)` writes one JSON object per line (JSONL):
-
-1. First line: the session header `{"type":"session","version":3,"id":...,"cwd":...}`.
-2. One line per message, with role, parentId, content parts, and stopReason.
-
-This is what the evals check: header + a user → toolCall → toolResult → text
-chain with correct parent ids.
-
-## Branching
-
-Alternative conversation paths live in `src/session_branch.nim` (see
-[0006 plan](../plan/0006-session-branching.md)): a session can fork into
-branches, each with its own id, parent message, and timestamp.
+| Context | The session is |
+|---------|----------------|
+| Running app (TUI) | the thing you're working in right now: history + plan progress + streaming tokens + files it writes into the mounted workspace; pause/resume/branch/save |
+| CLI | a named, resumable container: `new <goal>` opens one, `list`/`open`/`continue`/`run` manage it (see 2000-cli) |
+| Not running | just the persisted `{history, workspaceRef, activePlanRef}` above |
 
 ## See Also
 
-- [1100-message-format.md](1100-message-format.md) — how tool calls appear in text
-- [3400-agent.md](3400-agent.md) — the loop that builds this tree
-- [3000-pipeline.md](3000-pipeline.md) — the tool that gets called
+- [1100-message-format.md](1100-message-format.md) — the history's message format
+- [3500-plan-format.md](3500-plan-format.md) — the plan artifact it points at
+- [2000-cli.md](2000-cli.md) — session verbs (`new`/`open`/`continue`/`run`)
+- [3600-engine.md](3600-engine.md) — the executor that runs the plan
