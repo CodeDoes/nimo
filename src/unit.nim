@@ -5,7 +5,7 @@
 ##   2. Loop termination - does it stop on a final text answer / hit max-iteration guard?
 ##   3. Session logging - is the JSONL message tree (user -> tool_call -> tool_result -> text) well-formed?
 
-import std/[strutils, os, times, json]
+import std/[strutils, os, json]
 import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header
 import ./program, ./engine, ./validate, ./config, ./orchestrator, ./memory
 
