@@ -175,8 +175,6 @@ proc evalModelCache*(run: var seq[Check]) =
   run.add(Check(name: "already-quantized model is used directly",
                 passed: qp == qraw and qcached))
 
-  # Clean up test file
-  removeFile(memPath)
 
 # ----------------------------------------------------------------------
 # Eval 6: State cache
