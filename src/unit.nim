@@ -7,7 +7,7 @@
 
 import std/[strutils, os, times, json]
 import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header
-import ./program, ./engine, ./validate
+import ./program, ./engine, ./validate, ./config
 
 type
   Check* = object
@@ -15,11 +15,13 @@ type
     passed*: bool
     detail*: string
 
-proc stubSession*(script: seq[string], registerPipeline: bool = true): Session =
-  ## Session whose generator returns the scripted responses in order.
+proc newSessionWithMockGen*(script: seq[string], registerPipeline: bool = true): Session =
+  ## A REAL session (real message tree, tools, bookkeeping) whose only mocked
+  ## part is the model-generation seam (`generate`) — it returns the scripted
+  ## replies in order. The session itself is never stubbed.
   var s = newSession(".")
   var idx = 0
-  s.genStub = proc(userMsg: string): string =
+  s.generate = proc(userMsg: string): string =
     if idx < script.len:
       let r = script[idx]
       inc idx
@@ -46,7 +48,7 @@ proc evalToolCalling*(run: var seq[Check]) =
   except CatchableError as e:
     run.add(Check(name: "multi [tool] lines parse without crash",
                   passed: false, detail: e.msg))
-  var s = stubSession(@[
+  var s = newSessionWithMockGen(@[
     "[tool] run_pipeline {\"intent\": \"write a poem about roses\"}",
     "pipeline: poem draft generated",
     "Here is your poem: roses are red."
@@ -84,7 +86,7 @@ proc evalLoopTermination*(run: var seq[Check]) =
     script.add("[tool] run_pipeline {\"intent\":\"loop\"}")
   script.add("never reached")
 
-  var s = stubSession(script)
+  var s = newSessionWithMockGen(script)
   let turn = runHarnessTurn(s, "loop forever")
 
   run.add(Check(name: "terminates despite continuous tool calls",
@@ -101,7 +103,7 @@ proc evalLoopTermination*(run: var seq[Check]) =
 # Eval 3: Session JSONL tree integrity
 # ----------------------------------------------------------------------
 proc evalSessionLogging*(run: var seq[Check]) =
-  var s = stubSession(@[
+  var s = newSessionWithMockGen(@[
     "[tool] run_pipeline {\"intent\":\"log me\"}",
     "pipeline: logged",
     "Final response here."

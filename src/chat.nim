@@ -2,7 +2,7 @@
 ## Usage: nimo chat --backend cuda --model <path> [--device gpu-0]
 
 import std/[os, strutils, strformat, terminal, options]
-import cli, ./session, ./config, ./tokenizer, ./rwkv, ./logger,
+import cli, ./session_manager, ./config, ./tokenizer, ./rwkv, ./logger,
        ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend,
        ./rwkv/backend/vulkan/vulkan_backend
 
@@ -140,7 +140,8 @@ proc main() =
     echo "  --lib <path to librwkv.so>"
     quit(1)
 
-  var s = initSession(modelPath, vocabPath, backend.defaultGpuLayers)
+  var s = newSession(".")
+  s.initModel(modelPath, vocabPath, backend.defaultGpuLayers)
 
   if bakedStatePath.len > 0 and fileExists(bakedStatePath):
     printWarn &"Loading baked state from '{bakedStatePath}'"
@@ -170,7 +171,8 @@ proc main() =
       printWarn "Goodbye!"
       break
     elif inputLine == "/reset":
-      s = initSession(modelPath, vocabPath, backend.defaultGpuLayers)
+      s = newSession(".")
+      s.initModel(modelPath, vocabPath, backend.defaultGpuLayers)
       let sysPrompt = "User: hi\n\nBot: Hello! How can I help you today?\n\n"
       let sysTokens = s.tok.encode(sysPrompt)
       if sysTokens.len > 0:

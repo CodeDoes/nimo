@@ -2,7 +2,7 @@
 ## Usage: nimo generate --device gpu-0 --backend cuda --quant q4k --model <path> --prompt "Hello"
 
 import std/[os, strutils, strformat, times, options]
-import cli, ./session, ./config, ./tokenizer, ./rwkv, ./sampling, ./logger, ./macros,
+import cli, ./session_manager, ./config, ./tokenizer, ./rwkv, ./sampling, ./logger, ./macros,
        ./rwkv/model/header, ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend,
        ./rwkv/backend/vulkan/vulkan_backend
 
@@ -212,9 +212,9 @@ proc generateCmd(args: seq[string]) =
     quit(1)
 
   # Load model
-  var s: Session
+  var s = newSession(".")
   try:
-    s = initSession(modelPath, cfg.vocabPath, backend.defaultGpuLayers)
+    s.initModel(modelPath, cfg.vocabPath, backend.defaultGpuLayers)
   except Exception as e:
     printError &"Failed to load model: {e.msg}"
     quit(1)

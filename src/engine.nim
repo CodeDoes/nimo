@@ -11,12 +11,12 @@
 ## into per-token streaming by wiring the sink through generateTurnStream.
 
 import std/[os, strutils]
-import ./program, ./validate
+import ./config, ./program, ./validate
 
 type
   TokenSink* = proc(text: string)                 # emit produced text, immediately
-  GenerateFn* = proc(prompt: string): string      # the model call (pluggable)
   InterruptCheck* = proc (): bool                 # nil = never interrupt
+  # GenerateFn (the model-generation seam) is defined in ./config
 
   RunResult* = object
     stepsRun*: int

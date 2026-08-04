@@ -199,7 +199,7 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".") =
   var s = newSession(cwd)
   when defined(harnessOffline):
     echo "[nimo] offline mode: no model loaded; generation will return placeholder text"
-    s.genStub = proc(userMsg: string): string = "[nimo offline] no model"
+    s.generate = proc(userMsg: string): string = "[nimo offline] no model"
   else:
     # Backend selection (RFC 7500): config > runtime flags > rwkv default > backend libs.
     # selectBackend is the single controlled switch point; bind it ONCE here

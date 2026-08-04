@@ -34,7 +34,8 @@ type
     stopReason*: string
 
   ToolHandler* = proc(args: string): string
-  GenStub* = proc(userMsg: string): string
+  # GenerateFn is defined in ./config — the model-generation seam that tests
+  # mock with precanned replies. The session itself is never stubbed.
 
   Session* = ref object
     id*: string
@@ -44,7 +45,7 @@ type
     branches*: seq[string]
     activeBranch*: int
     tools*: Table[string, ToolHandler]
-    genStub*: GenStub  # scripted generator (evals/tests); nil = use real model
+    generate*: GenerateFn  # model-generation seam; nil = use real model
     when not defined(harnessOffline):
       model*: RwkvModel
       tok*: WorldTokenizer
@@ -82,10 +83,10 @@ when not defined(harnessOffline):
       s.state = cache.bakeContext(s.model, s.tok, modelPath, vocabPath, systemPrompt)
 
 proc generateTurn*(s: var Session, userMsg: string, temp: float32 = DefaultTemp, topP: float32 = DefaultTopP, maxTokens: int = 200): string =
-  ## Generates a reply. In offline mode (or with a genStub set) returns the
-  ## scripted output; otherwise runs the real RWKV model.
-  if s.genStub != nil:
-    return s.genStub(userMsg)
+  ## Generates a reply. If a `generate` seam is set, calls it (test mock /
+  ## offline); otherwise runs the real RWKV model.
+  if s.generate != nil:
+    return s.generate(userMsg)
   when not defined(harnessOffline):
     if s.model == nil:
       return "[nimo] Model not loaded"

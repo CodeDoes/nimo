@@ -2,6 +2,13 @@
 
 import std/[os, strutils, json]
 
+# The model-generation seam. It is the ONE pluggable boundary a session or
+# engine calls to produce text. Unit tests mock precisely this (with precanned
+# responses); everything else — session bookkeeping, plan execution, tool
+# dispatch — runs for real against this seam.
+type
+  GenerateFn* = proc(prompt: string): string
+
 const
   DefaultModelPath* = "models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin"
   DefaultVocabPath* = "rwkv.cpp/python/rwkv_cpp/rwkv_vocab_v20230424.txt"

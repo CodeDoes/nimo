@@ -3,7 +3,7 @@
 
 import std/[os, strutils, strformat, times, random, terminal, unicode]
 import illwave as iw
-import cli, ./session, ./config, ./tokenizer, ./rwkv, ./logger
+import cli, ./session_manager, ./config, ./tokenizer, ./rwkv, ./logger
 
 # ── Box-drawing character constants ───────────────────────────────────────────
 const
@@ -30,7 +30,8 @@ proc formatTimeNow(): string = now().format("HH:mm:ss")
 
 proc initDashboard(modelPath, vocabPath: string): DashboardState =
   result.statusText = "Loading model..."
-  result.session = initSession(modelPath, vocabPath)
+  result.session = newSession(".")
+  result.session.initModel(modelPath, vocabPath)
 
   let sysPrompt = "User: hi\n\nBot: Hello! How can I help you today?\n\n"
   let sysTokens = result.session.tok.encode(sysPrompt)

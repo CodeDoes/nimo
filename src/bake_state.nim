@@ -1,7 +1,7 @@
 ## RWKV State Baker — CLI with session management
 
 import std/[os, strutils, strformat, times]
-import cli, ./session, ./config, ./tokenizer, ./rwkv, ./logger, ./macros
+import cli, ./session_manager, ./config, ./tokenizer, ./rwkv, ./logger, ./macros
 
 proc main() =
   let modelPath = resolveModelPath(if paramCount() > 0: paramStr(1) else: DefaultModelPath)
@@ -22,7 +22,8 @@ proc main() =
     printError &"Model not found: {modelPath}"
     return
 
-  var s = initSession(modelPath, vocabPath)
+  var s = newSession(".")
+  s.initModel(modelPath, vocabPath)
 
   var promptTokens = s.tok.encode(promptText)
   if promptTokens.len == 0:
