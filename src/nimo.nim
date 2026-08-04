@@ -227,7 +227,7 @@ Example:
     echo "Error: plan not found: " & planPath
     return 1
 
-  let plan = loadP
+  let plan = loadPlan
 
 proc cmdNew(rest: seq[string]): int =
   ## `nimo new <goal>` — open a session, compile goal, run plan
