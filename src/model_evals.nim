@@ -35,7 +35,7 @@ const
   # Multi-turn coherence: can the model maintain coherence across turns?
   CoherencePrompt* = "Once upon a time there was a lighthouse keeper. The keeper was lonely."
 
-proc runPatternEval*(var session: Session, generate: GenerateFn, trials: int): EvalResult =
+proc runPatternEval*(session: var Session, generate: GenerateFn, trials: int): EvalResult =
   ## Tests: can the model continue a numerical pattern?
   result = EvalResult(name: "pattern_continuation", trials: trials)
   for i in 1 .. trials:
@@ -46,7 +46,7 @@ proc runPatternEval*(var session: Session, generate: GenerateFn, trials: int): E
       inc result.fail
   result.rate = if result.success + result.fail > 0: result.success.float / (result.success + result.fail).float else: 0.0
 
-proc runStateEval*(var session: Session, generate: GenerateFn, trials: int): EvalResult =
+proc runStateEval*(session: var Session, generate: GenerateFn, trials: int): EvalResult =
   ## Tests: does the model retain state from earlier context?
   result = EvalResult(name: "state_retention", trials: trials)
   for i in 1 .. trials:
@@ -57,7 +57,7 @@ proc runStateEval*(var session: Session, generate: GenerateFn, trials: int): Eva
       inc result.fail
   result.rate = if result.success + result.fail > 0: result.success.float / (result.success + result.fail).float else: 0.0
 
-proc runPlannerEval*(var session: Session, generate: GenerateFn, trials: int): EvalResult =
+proc runPlannerEval*(session: var Session, generate: GenerateFn, trials: int): EvalResult =
   ## Tests: can the model emit parseable plan structure?
   result = EvalResult(name: "planner_emission", trials: trials)
   for i in 1 .. trials:
@@ -69,7 +69,7 @@ proc runPlannerEval*(var session: Session, generate: GenerateFn, trials: int): E
       inc result.fail
   result.rate = if result.success + result.fail > 0: result.success.float / (result.success + result.fail).float else: 0.0
 
-proc runNaturalEval*(var session: Session, generate: GenerateFn, trials: int): EvalResult =
+proc runNaturalEval*(session: var Session, generate: GenerateFn, trials: int): EvalResult =
   ## Tests: does the model respond naturally?
   result = EvalResult(name: "natural_response", trials: trials)
   for i in 1 .. trials:
