@@ -3,7 +3,7 @@
 ## Emulates the pi agent loop: think -> text/tool_call, dispatch, feed result back.
 
 import std/[strutils, os, osproc, strformat, times, json, terminal]
-import ./session_manager, ./pipeline, ./config, ./cli, ./gpu, ./bootstrap, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv, ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend, ./rwkv/backend/vulkan/vulkan_backend, ./orchestrator, ./program
+import ./session_manager, ./pipeline, ./config, ./cli, ./gpu, ./bootstrap, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv, ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend, ./rwkv/backend/vulkan/vulkan_backend, ./orchestrator, ./program, ./engine
 
 const
   MaxToolIterations* = 8
