@@ -1,4 +1,4 @@
-## NIMO Eval Harness
+## NIMO Unit Test Suite
 ## Tests the harness loop deterministically with a scripted generator (no real model needed).
 ## Covers three dimensions from RFC 9300-eval:
 ##   1. Tool calling   - does the loop detect, dispatch, and feed back tool results?
@@ -277,7 +277,7 @@ proc runAllEvals*(): int =
   evalModelCache(run)
   evalStateCache(run)
 
-  echo "\n=== nimo harness evals (stub, no model) ==="
+  echo "\n=== nimo unit tests (stub, no model) ==="
   var passCount = 0
   for c in run:
     let mark = if c.passed: "[PASS]" else: "[FAIL]"

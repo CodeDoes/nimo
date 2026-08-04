@@ -17,7 +17,9 @@ Commands:
   bake         Bake model state
   workspace    Workspace management
   story        Story pipeline
-  eval         Run evals
+  unit         Run the unit test suite
+  eval         (alias) Run the unit test suite
+  model-eval   Run model behavior evals (planned)
 
 Usage:
   nimo generate --backend cuda --model <path> --prompt "Hello"
@@ -26,7 +28,7 @@ Usage:
   nimo chat --backend cuda <model>
   nimo workspace create <name>
   nimo story generate <premise> --workspace <name>
-  nimo eval
+  nimo unit
 """
     quit(0)
 
@@ -164,13 +166,13 @@ Usage:
     else:
       echo "Error: unknown story command '" & storyCmd & "'"
       quit(1)
-  of "eval":
-    let binary = baseDir / "evals"
+  of "unit", "eval":
+    let binary = baseDir / "unit"
     if fileExists(binary):
       let rc = execCmd(binary)
       quit(rc)
     else:
-      echo "Error: evals binary not found. Run 'nimble build' first."
+      echo "Error: unit binary not found. Run 'nimble build' first."
       quit(1)
   else:
     echo "Error: unknown command '" & cmd & "'"

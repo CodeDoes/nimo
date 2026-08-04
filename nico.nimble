@@ -40,10 +40,13 @@ task build_all, "Build all Nim executables into build/":
   exec "nim c -o:build/quantize src/quantize.nim"
   exec "nim c -o:build/nimo src/nimo.nim"
 
-task eval, "Run harness evals (offline, no model needed)":
+task unit, "Run the unit test suite (offline, no model needed)":
   mkdir "build"
-  exec "nim c -d:harnessOffline -o:build/evals src/evals.nim"
-  exec "build/evals"
+  exec "nim c -d:harnessOffline -o:build/unit src/unit.nim"
+  exec "build/unit"
+
+task eval, "Alias for the unit test suite (legacy name)":
+  unitTask()
 
 task bake_state, "Bake model state from prompt":
   if not fileExists("rwkv.cpp/librwkv.so"):
