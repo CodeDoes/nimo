@@ -220,6 +220,7 @@ Commands:
   chat         Simple chat
   bake         Bake model state
   workspace    Workspace management
+  planner      Show plan for a goal
   story        Story pipeline
   unit         Run the unit test suite
   eval         (alias) Run the unit test suite
