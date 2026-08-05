@@ -525,6 +525,25 @@ proc evalJules*(run: var seq[Check]) =
                         resolveKey(inline = "k4") == "k4",
                 detail: "stripped=" & resolveKey(inline = "\"AQabc…\"")))
 
+  # feedbackHint tells the user whether to approve a plan or answer a question.
+  let planWait = parseJson("""[
+     {"planGenerated":{}},
+     {"progressUpdated":{}}]
+  """)
+  let answered = parseJson("""[
+     {"planGenerated":{}},
+     {"planApproved":{}},
+     {"progressUpdated":{}}]
+  """)
+  let question = parseJson("""[{"agentMessaged":{"agentMessage":"which dir?"}}]""")
+  run.add(Check(name: "jules: feedbackHint distinguishes plan vs question",
+                passed: "jules approve" in feedbackHint("s1", planWait) and
+                        "jules send" in feedbackHint("s1", answered) and
+                        "jules send" in feedbackHint("s1", question) and
+                        "jules approve" notin feedbackHint("s1", answered),
+                detail: "plan=" & $feedbackHint("s1", planWait).splitLines()[0] &
+                         " | answered=" & $feedbackHint("s1", answered).splitLines()[0]))
+
 # ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------

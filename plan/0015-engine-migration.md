@@ -3,6 +3,11 @@
 ## Status: IN PROGRESS
 
 Done:
+- [x] Jules CLI (`build/jules`, src/jules.nim): spawn/watch/queue/activities/
+  prs/send/approve with a local queue (.jules.json), sibling .env key fallback,
+  offline-tested pure helpers (feedbackHint tells approve-vs-send). Verified
+  live end-to-end on a real session (9867720725085672108: COMPLETED, changeSet).
+  Unit suite 70/70 (added 6 jules checks).
 - [x] Phase 0 step 1: rename evals -> unit (a409844)
 - [x] Phase 2: program.nim + engine.nim + validate.nim runtime, unit suite
   34 -> 58 checks (1005670); unit tests caught 2 real latent bugs

@@ -277,6 +277,24 @@ proc activityStream*(acts: JsonNode): string =
     lines.add(activityLine(a))
   lines.join("\n")
 
+proc feedbackHint*(sessionId: string, acts: JsonNode): string =
+  ## Decide what an AWAITING_USER_FEEDBACK session is blocked on: a pending
+  ## plan (needs `jules approve`) or a question (needs `jules send`).
+  var lastPlan = -1
+  var lastApproval = -1
+  if not acts.isNil and acts.kind == JArray:
+    for i in 0 ..< acts.len:
+      let a = acts[i]
+      if not a{"planGenerated"}.isNil: lastPlan = i
+      elif not a{"planApproved"}.isNil: lastApproval = i
+  if lastPlan > lastApproval:  # a plan exists that was never approved
+    result = "📋 session " & sessionId & " has a PLAN waiting for your approval.\n" &
+             "   approve it with:    jules approve " & sessionId & "\n" &
+             "   redirect the plan:  jules send " & sessionId & " \"<what to change>\""
+  else:
+    result = "💬 session " & sessionId & " is waiting for your input.\n" &
+             "   respond with:       jules send " & sessionId & " \"<msg>\""
+
 # ---------------------------------------------------------------------------
 # Command implementations
 # ---------------------------------------------------------------------------
@@ -339,6 +357,10 @@ proc cmdStatus(req: RequestFn, id: string) =
   echo ""
   let acts = parseOrErr(req("GET", "/sessions/" & id & "/activities?pageSize=12", nil))
   echo activityStream(acts{"activities"})
+  let st = j{"state"}.getStr("")
+  if st.toLowerAscii() in ["awaiting_user_feedback", "awaiting user feedback"]:
+    echo ""
+    echo feedbackHint(id, acts{"activities"})
 
 proc cmdActivities(req: RequestFn, id: string, limit: int) =
   let j = parseOrErr(req("GET", "/sessions/" & id & "/activities?pageSize=" & $limit, nil))
@@ -378,11 +400,15 @@ proc cmdWatch(req: RequestFn, idOrNil: string, pollSec: int) =
       echo "  (poll error: " & e.msg & ")"
       st = ""
 
-    done = st.len > 0 and st.toLowerAscii() notin ["scheduled", "queued", "running", "active"]
+    done = st.len > 0 and st.toLowerAscii() notin ["scheduled", "queued", "running", "active", "in_progress", "in progress"]
     if not done:
       sleep(pollSec * 1000)
 
   echo ""
+  if st.toLowerAscii() in ["awaiting_user_feedback", "awaiting user feedback"]:
+    let acts = parseOrErr(req("GET", "/sessions/" & id & "/activities?pageSize=30", nil)){"activities"}
+    echo feedbackHint(id, acts)
+    return
   echo "📦 session " & id & " finished (state: " & st & ")"
   let fin = parseOrErr(req("GET", "/sessions/" & id, nil))
   for pr in extractPrs(fin):
