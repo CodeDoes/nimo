@@ -144,6 +144,36 @@ proc evalGpuPolicy*(run: var seq[Check]) =
   run.add(Check(name: "no CUDA driver -> blocked",
                 passed: decideGpu(none, 99).decision == gdBlocked))
 
+  # layer derivation: from model shape (no magic default), clamped by VRAM
+  let tmpDir = getTempDir() / "nimo_gpu_layers_test"
+  removeDir(tmpDir)
+  createDir(tmpDir)
+  # fake 32-layer FP16 model header (magic ggmf, v101, vocab 65536, embed 2560)
+  var blob = newString(64 * 1024)
+  blob[0] = 'f'; blob[1] = 'm'; blob[2] = 'g'; blob[3] = 'g'
+  blob[4] = char(101)
+  blob[8] = char(0); blob[9] = char(0); blob[10] = char(1)
+  blob[12] = char(0); blob[13] = char(10)
+  blob[16] = char(32)   # n_layer = 32
+  blob[20] = char(1)    # F16
+  let fakeModel = tmpDir / "fake32.bin"
+  writeFile(fakeModel, blob)
+
+  # auto mode (-1) resolves to the model's own layer count (32)
+  run.add(Check(name: "auto gpuLayers derives from model nLayer",
+                passed: resolveGpuLayers(fakeModel, -1) == 32,
+                detail: "layers=" & $resolveGpuLayers(fakeModel, -1)))
+  # explicit cap higher than model -> clamped to model
+  run.add(Check(name: "gpuLayers cap is clamped to model layers",
+                passed: resolveGpuLayers(fakeModel, 99) == 32,
+                detail: "layers=" & $resolveGpuLayers(fakeModel, 99)))
+  # explicit 0 -> CPU only
+  run.add(Check(name: "gpuLayers 0 means CPU",
+                passed: resolveGpuLayers(fakeModel, 0) == 0))
+  # unreadable model -> -1 (caller treats as failure)
+  run.add(Check(name: "unreadable model header -> -1",
+                passed: resolveGpuLayers(tmpDir / "nope.bin", -1) == -1))
+
 # ----------------------------------------------------------------------
 # Eval 5: raw -> quantize -> cache (model_cache)
 # ----------------------------------------------------------------------
