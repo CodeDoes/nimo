@@ -518,8 +518,20 @@ proc cmdSupervise(req: RequestFn, pollSec: int, autoApprove: bool, once: bool) =
     quit(0)
 
   echo "supervising " & $jobs.len & " job(s)  (Ctrl-C to stop; agents keep going)"
-  # mutable copy we persist on each pass so restarts resume cleanly
+  # mutable copy we persist on each pass so restarts resume cleanly.
   var track = jobs
+
+  # merge helper: on each save, keep any jobs freshly spawned since we loaded
+  # (supervise must not clobber new `spawn` entries with its own snapshot).
+  proc mergeQueue() =
+    var live = loadQueue()
+    # keep jobs already present in `track`; append any newcomer ids
+    var trackIds: seq[string]
+    for t in track: trackIds.add(t.id)
+    for j in live:
+      if j.id notin trackIds:
+        track.add(j)
+    saveQueue(track)
   while true:
     for idx in 0 ..< track.len:
       let id = track[idx].id
@@ -587,7 +599,7 @@ proc cmdSupervise(req: RequestFn, pollSec: int, autoApprove: bool, once: bool) =
         echo "▶  " & id & " " & shorten(track[idx].prompt, 40) &
              "  (" & (if st.len > 0: st else: "running") & ")"
 
-    saveQueue(track)
+    mergeQueue()
     if once: break
 
     # stop when no job is still active (scheduled/queued/running/in_progress)

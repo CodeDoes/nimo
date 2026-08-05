@@ -24,9 +24,9 @@
     "repo": "CodeDoes/nimo",
     "prompt": "Update rfc/0000-index.md: it should cross-link all RFCs in rfc/ with one line each (number, title, one-sentence summary). Read every rfc/*.md file, verify the index matches the actual files present, add any missing entries, and fix stale summaries. Docs-only change, no code. Open a PR.",
     "createdAt": "2026-08-05T18:05:16Z",
-    "state": "IN_PROGRESS",
+    "state": "COMPLETED",
     "lastSeen": "2026-08-05T18:15:35.461637Z",
-    "pr": "",
+    "pr": "https://github.com/CodeDoes/nimo/pull/6",
     "blocked": false
   },
   {
@@ -46,6 +46,46 @@
     "createdAt": "2026-08-05T18:05:32Z",
     "state": "IN_PROGRESS",
     "lastSeen": "2026-08-05T18:17:26.554982Z",
+    "pr": "",
+    "blocked": false
+  },
+  {
+    "id": "5612734091602008194",
+    "repo": "CodeDoes/nimo",
+    "prompt": "Add a  command to src/nimo.nim that prints an environment health report: checks for models dir, librwkv.so on loader path, GPU probe result (via src/gpu.nim), and unit suite status. Wire it into the CLI help. It must compile with -d:harnessOffline. Keep it small. Open a PR.",
+    "createdAt": "2026-08-05T18:36:12Z",
+    "state": "COMPLETED",
+    "lastSeen": "2026-08-05T18:44:51.922535Z",
+    "pr": "https://github.com/CodeDoes/nimo/pull/7",
+    "blocked": false
+  },
+  {
+    "id": "15582105157800550813",
+    "repo": "CodeDoes/nimo",
+    "prompt": "Add offline unit tests for src/engine.nim (engine.run with scripted generator, maxSteps guard, lastOutput chaining)",
+    "createdAt": "2026-08-05T18:50:40Z",
+    "state": "IN_PROGRESS",
+    "lastSeen": "2026-08-05T18:51:17.432259Z",
+    "pr": "",
+    "blocked": false
+  },
+  {
+    "id": "8745220886822091896",
+    "repo": "CodeDoes/nimo",
+    "prompt": "Standardize error reporting: fix compiler warnings in src/ (program.nim line 93 defaults, unused hints); do NOT touch deprecated sha1 warnings; verify unit passes offline",
+    "createdAt": "2026-08-05T18:50:40Z",
+    "state": "IN_PROGRESS",
+    "lastSeen": "2026-08-05T18:51:24.435738Z",
+    "pr": "",
+    "blocked": false
+  },
+  {
+    "id": "13976359573761058975",
+    "repo": "CodeDoes/nimo",
+    "prompt": "Write docs/how-it-works.md additions: document harness tool-call parsing (3 forms) and session JSONL message-tree format. Docs only.",
+    "createdAt": "2026-08-05T18:50:40Z",
+    "state": "IN_PROGRESS",
+    "lastSeen": "2026-08-05T18:46:05.800818Z",
     "pr": "",
     "blocked": false
   }
