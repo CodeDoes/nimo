@@ -18,7 +18,7 @@ nimo generate --backend cuda --model model-q4k.bin --prompt "Hello" --max-length
 nimo chat --backend cuda model-q4k.bin
 
 # Run evals
-nimo eval
+nimo unit
 
 # Workspace
 nimo workspace create myproject
@@ -31,7 +31,7 @@ nimo workspace use myproject
 |---------|--------|---------|
 | Quantize | ✓ | `nimo quantize` |
 | Generate (CUDA/CPU/Vulkan) | ✓ | `nimo generate --backend cuda` |
-| Evals | ✓ (34/34) | `nimo eval` |
+| Evals | ✓ (34/34) | `nimo unit` |
 | Workspace | ✓ | `nimo workspace create/use/list` |
 | Sessions | ✓ | Built into harness |
 | Session Branching | ✓ | `session_branch.*` |
@@ -94,7 +94,7 @@ Model (RWKV-7)
 nimo generate --backend cuda --model <path> --prompt "text"
 nimo chat --backend cuda <model>
 nimo quantize <input> <format> <output>
-nimo eval
+nimo unit
 
 # Workspace
 nimo workspace create <name>
@@ -118,7 +118,7 @@ nimo harness
 ./scripts/e2e_demo.sh
 
 # Run evals
-nimo eval  # 34/34 passed
+nimo unit  # 34/34 passed
 
 # Test CUDA
 nimo generate --backend cuda --model models/*.q4k.bin --prompt "Test" --max-length 10
