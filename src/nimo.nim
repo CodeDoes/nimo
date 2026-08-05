@@ -295,7 +295,7 @@ Commands:
   story        Story pipeline
   unit         Run the unit test suite
   eval         (alias) Run the unit test suite
-  model-eval   Run model behavior evals (planned)
+  model-eval   Run model behavior evals
 
 Usage:
   nimo generate --backend cuda --model <path> --prompt "Hello"
