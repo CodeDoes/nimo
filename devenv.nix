@@ -31,11 +31,10 @@
 
   languages.nim.enable = true;
 
-  # LD_LIBRARY_PATH includes host GPU driver paths before stub libraries.
-  # NOTE: the nix pcre2 lib dir MUST come before /usr/lib/x86_64-linux-gnu so
-  # nix-built grep finds pcre2-10.47 (system libpcre2 is 10.46 and lacks
-  # .gnu.version_d, producing 'no version information available' warnings).
-  env.LD_LIBRARY_PATH = "${pkgs.pcre2}/lib:/usr/lib/x86_64-linux-gnu:/run/opengl-driver/lib:${pkgs.lib.makeLibraryPath [
+  # LD_LIBRARY_PATH: nix pkgs only — system /usr/lib has pcre2-10.46 without
+  # .gnu.version_d, causing noisy warnings from nix-built grep (needs 10.47).
+  env.LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath [
+    pkgs.pcre2
     pkgs.stdenv.cc.cc.lib
     pkgs.gcc.cc.lib
     pkgs.vulkan-loader
