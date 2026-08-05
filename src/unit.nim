@@ -8,6 +8,7 @@
 import std/[strutils, os, json]
 import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header
 import ./program, ./engine, ./validate, ./config, ./model_evals, ./jules
+import ./memory, ./fiaas
 
 type
   Check* = object
@@ -602,6 +603,52 @@ proc evalJules*(run: var seq[Check]) =
                         lastAgentMessage(agentQ) == "please pick a target",
                 detail: "needsApproval=" & $planNeedsApproval(planAct) &
                          " plan=" & planText(planAct).replace("\n", "/")))
+
+# ----------------------------------------------------------------------
+# Eval 19: memory.nim (FIAAS + lookupMemory)
+# ----------------------------------------------------------------------
+proc evalMemory*(run: var seq[Check]) =
+  let tmp = getTempDir() / "nimo_memory_test"
+  removeDir(tmp); createDir(tmp)
+  let memFile = tmp / ".nimo" / "memory" / "memories.json"
+
+  var store = newMemoryStore()
+  let id1 = store.addMemory("Roses are red.", category="poem")
+  let id2 = store.addMemory("Violets are blue.", category="poem")
+  let id3 = store.addMemory("Apples are tasty.", category="food")
+
+  run.add(Check(name: "memory addEntry assigns unique ids",
+                passed: id1 != id2 and id1.len > 0, detail: id1))
+
+  let searchRes = store.searchMemory("Roses")
+  run.add(Check(name: "memory search retrieves closest match",
+                passed: searchRes.len > 0 and "Roses" in searchRes[0],
+                detail: "found " & $searchRes.len))
+
+  store.saveMemory(memFile)
+  run.add(Check(name: "memory saveToFile writes to correct path",
+                passed: fileExists(memFile), detail: memFile))
+
+  var store2 = newMemoryStore()
+  let loaded = store2.loadMemory(memFile)
+  run.add(Check(name: "memory loadFromFile loads entries",
+                passed: loaded and store2.fiaas.count() == 3))
+
+  let found = store2.searchMemory("Violets")
+  run.add(Check(name: "loaded memory works with search",
+                passed: found.len > 0 and ("Violets" in found[0] or "Roses" in found[0]),
+                detail: (if found.len > 0: found[0] else: "")))
+
+  # lookupMemory with different filters
+  let ws = tmp
+  run.add(Check(name: "lookupMemory returns empty for empty filter",
+                passed: lookupMemory("", ws) == ""))
+  run.add(Check(name: "lookupMemory returns empty for no match",
+                passed: lookupMemory("nonexistent", ws) == ""))
+  run.add(Check(name: "lookupMemory returns relevant context",
+                passed: lookupMemory("Apples", ws).contains("Apples are tasty.")))
+
+  removeDir(tmp)
 
 # ----------------------------------------------------------------------
 # Runner
