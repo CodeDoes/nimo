@@ -50,6 +50,36 @@ status of the whole project is tracked in [analysis/status.md](../analysis/statu
 | 9300 | [eval.md](9300-eval.md) | ✅ implemented | `src/unit.nim` — 61 offline checks |
 | 9400 | [test.md](9400-test.md) | ✅ implemented | Unit tests for tokenizer/model |
 
+## Wild research RFCs (9500 series)
+
+These are intentionally ambitious, **speculative** proposals. They are not a
+shipping roadmap or implementation claim; each begins with offline fixtures,
+behavioral tests, and an explicit implementation plan before it may affect a
+workspace.
+
+| # | RFC | Theme |
+|---|-----|-------|
+| 9500 | [living-worlds.md](9500-living-worlds.md) | append-only world facts and continuity pulse |
+| 9510 | [time-travel-debugging.md](9510-time-travel-debugging.md) | replay and causal plan forks |
+| 9520 | [dream-compiler.md](9520-dream-compiler.md) | competing plans before expensive work |
+| 9530 | [agent-biomes.md](9530-agent-biomes.md) | bounded specialist ecosystems |
+| 9540 | [narrative-physics.md](9540-narrative-physics.md) | simulated story constraints |
+| 9550 | [memory-ecology.md](9550-memory-ecology.md) | memory lineage, decay, and review |
+| 9560 | [ontological-git.md](9560-ontological-git.md) | semantic claim diffs |
+| 9570 | [blackboard-cities.md](9570-blackboard-cities.md) | typed public coordination notices |
+| 9580 | [counterfactual-labs.md](9580-counterfactual-labs.md) | isolated what-if branches |
+| 9590 | [adversarial-muse.md](9590-adversarial-muse.md) | bounded creative opposition |
+| 9600 | [midnight-shift.md](9600-midnight-shift.md) | read-only overnight maintenance |
+| 9610 | [simulation-forges.md](9610-simulation-forges.md) | sandboxed plan scenarios |
+| 9620 | [skill-genomes.md](9620-skill-genomes.md) | provenance-rich baked skills |
+| 9630 | [plurality-court.md](9630-plurality-court.md) | cited deliberation for high-impact work |
+| 9640 | [attention-weather.md](9640-attention-weather.md) | visible focused-context diagnostics |
+| 9650 | [artifact-economy.md](9650-artifact-economy.md) | explicit local execution budgets |
+| 9660 | [ritual-interfaces.md](9660-ritual-interfaces.md) | human-gated workflow templates |
+| 9670 | [embodied-workspaces.md](9670-embodied-workspaces.md) | one event stream, many accessible views |
+| 9680 | [mythic-observability.md](9680-mythic-observability.md) | poetic but exact run traces |
+| 9690 | [consentful-autonomy.md](9690-consentful-autonomy.md) | revocable capability grants |
+
 ## Cross-References
 
 ```
