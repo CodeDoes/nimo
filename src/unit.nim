@@ -424,8 +424,19 @@ proc evalValidate*(run: var seq[Check]) =
   run.add(Check(name: "countWords counts words",
                 passed: validate.countWords("one two three") == 3 and
                         validate.countWords("") == 0))
+  run.add(Check(name: "countWords handles unicode/emoji",
+                passed: validate.countWords("This is a 🤖 test.") == 4 and
+                        validate.countWords("你好 🚀 world") == 1))
   run.add(Check(name: "countLines counts non-empty lines",
                 passed: validate.countLines("a\n\nb\nc") == 3))
+  run.add(Check(name: "countLines handles trailing newlines",
+                passed: validate.countLines("a\n\n\n\n\n\n\n") == 1))
+  run.add(Check(name: "empty string edge cases",
+                passed: validate.countWords("") == 0 and
+                        validate.countLines("") == 0 and
+                        validateText("").wordCount == 0 and
+                        validateText("").paragraphCount == 0 and
+                        validateText("").repeatingSegments == 0))
   let short = validateText("too short")
   run.add(Check(name: "validateText fails short text",
                 passed: not short.passed and short.wordCount == 2 and
@@ -441,7 +452,10 @@ proc evalValidate*(run: var seq[Check]) =
                 passed: ok.passed))
   let repeats = validateText("a b c a b c a b c")
   run.add(Check(name: "validateText catches repeating segments",
-                passed: repeats.repeatingSegments > 0))
+                passed: repeats.repeatingSegments == 1))
+  let norepeats = validateText("a b c d e f")
+  run.add(Check(name: "validateText handles non-repeating segments",
+                passed: norepeats.repeatingSegments == 0))
 
 # ----------------------------------------------------------------------
 # Eval 10: streaming boundary (RFC 3600)
@@ -592,6 +606,7 @@ proc evalJules*(run: var seq[Check]) =
 # ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
+proc evalModelEvals*(run: var seq[Check]) # forward decl needed since called before defined
 proc runAllEvals*(): int =
   var run: seq[Check]
   evalToolCalling(run)
