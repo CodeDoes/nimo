@@ -31,7 +31,7 @@ below exists and runs today.
 | `state_cache.nim` | Baked state cache | Keyed by (model signature, vocab hash, context hash). On first use it "bakes" the context into a state file; later runs load the state directly and skip the prompt evaluation. |
 | `context_state_cache.nim` | Combined cache | Wraps the state cache and model cache together and tracks hit/miss stats so you can see how often the caches actually save work. |
 | `nimo_folder.nim` | `.nimo/` folder | Creates the standard app folder with `state/`, `cache/`, `logs/`, `sessions/`, `pipelines/` and a `config.json`. Provides path helpers for each sub-folder. |
-| `evals.nim` | Test suite | 34 offline checks (no model needed): tool-call parsing, loop termination, JSONL session shape, cache logic, chapter validation, memory search, and more. Run with `nimo eval`. |
+| `unit.nim` | Test suite | 61 offline checks (no model needed): tool-call parsing, loop termination, JSONL session shape, cache logic, chapter validation, memory search, and more. Run with `nimo unit`. |
 
 ## How the pieces flow
 

@@ -128,18 +128,23 @@ proc compileEmission*(emission: string, goal: string): Plan =
       # bare JSON object line
       try:
         let j = parseJson(t)
-        if "step" in j: name = j["step"].getStr("")
-        elif "name" in j: name = j["name"].getStr("")
-        argsJson = $(if "arguments" in j: j["arguments"] else: j)
-      except JsonParsingError:
+        if j.kind == JObject:
+          if "step" in j: name = j["step"].getStr("")
+          elif "name" in j: name = j["name"].getStr("")
+          argsJson = $(if "arguments" in j: j["arguments"] else: j)
+      except CatchableError:
         continue
     else:
       continue  # prose / non-emission line -> drop (plan must be structure)
     if name.len == 0: continue
     var j = newJObject()
     if argsJson.len > 0:
-      try: j = parseJson(argsJson)
-      except JsonParsingError: discard
+      try:
+        let parsed = parseJson(argsJson)
+        if parsed.kind == JObject:
+          j = parsed
+      except CatchableError:
+        discard
     result.addStep(stepFromName(name, j))
 # ---------------------------------------------------------------------------
 # Memory template (extended)

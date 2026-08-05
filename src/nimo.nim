@@ -1,5 +1,5 @@
-import std/[os, strutils, osproc, times, strformat, sequtils]
-import ./config, ./workspace, ./story, ./bootstrap, ./orchestrator, ./program, ./engine, ./harness
+import std/[os, strutils, osproc, times]
+import ./config, ./workspace, ./story, ./bootstrap, ./orchestrator, ./program, ./engine
 
 
 # ---------------------------------------------------------------------------
@@ -362,11 +362,5 @@ Usage:
     echo "Run 'nimo' without arguments for help."
     quit(1)
 
-when isMainModule:
-  main()
-
-# ---------------------------------------------------------------------------
-# Session commands (nimo new, nimo run)
-# ---------------------------------------------------------------------------
 when isMainModule:
   main()

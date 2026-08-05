@@ -1,7 +1,7 @@
 ## Workspace Management for NIMO
 ## Implements RFC 5000/3300: workspace creation, listing, switching.
 
-import std/[os, strutils, times, json, parsejson]
+import std/[os, strutils, times, json]
 import ./config
 
 const

@@ -47,7 +47,7 @@ status of the whole project is tracked in [analysis/status.md](../analysis/statu
 | 8150 | [quantization.md](8150-quantization.md) | ✅ implemented | `src/model_cache.nim` — raw→quantize→cache policy |
 | 9100 | [logging.md](9100-logging.md) | ✅ implemented | JSONL session files (`src/session_manager.nim`) |
 | 9200 | [trace.md](9200-trace.md) | Partial | CLI progress: token streaming (generate) + target ▶/✔ steps |
-| 9300 | [eval.md](9300-eval.md) | ✅ implemented | `src/evals.nim` — 34 offline checks |
+| 9300 | [eval.md](9300-eval.md) | ✅ implemented | `src/unit.nim` — 61 offline checks |
 | 9400 | [test.md](9400-test.md) | ✅ implemented | Unit tests for tokenizer/model |
 
 ## Cross-References
@@ -61,11 +61,11 @@ status of the whole project is tracked in [analysis/status.md](../analysis/statu
 3200-story.md ──▶ 3300-workspace.md (chapters/wikis live in a workspace)
 8000-state-bake.md ──▶ 8150-quantization.md (model cache + state cache both live in .nimo/)
 7500-gpu.md ──▶ 4000-config.md (backend / gpuLayers config keys)
-9300-eval.md ──▶ 9400-test.md (evals build on the same offline harness)
+9300-eval.md ──▶ 9400-test.md (unit tests build on the same offline harness)
 ```
 
 ## Implementation Status
 
 All RFCs marked ✅ are implemented in `src/` and covered by the offline test
-suite (`nimo eval`, 34 checks). See [analysis/status.md](../analysis/status.md)
+suite (`nimo unit`, 61 checks). See [analysis/status.md](../analysis/status.md)
 for the module-by-module map and known gaps.

@@ -10,7 +10,7 @@
 ## Streaming: every `sink` call is a chunk of produced text. Phase 1 turns that
 ## into per-token streaming by wiring the sink through generateTurnStream.
 
-import std/[os, strutils]
+import std/[os]
 import ./config, ./program, ./validate, ./memory
 
 type

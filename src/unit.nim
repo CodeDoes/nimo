@@ -5,7 +5,7 @@
 ##   2. Loop termination - does it stop on a final text answer / hit max-iteration guard?
 ##   3. Session logging - is the JSONL message tree (user -> tool_call -> tool_result -> text) well-formed?
 
-import std/[strutils, os, times, json]
+import std/[strutils, os, json]
 import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header
 import ./program, ./engine, ./validate, ./config, ./model_evals
 
@@ -447,6 +447,17 @@ proc evalTurnPrimitives*(run: var seq[Check]) =
                 detail: ctx))
 
 # ----------------------------------------------------------------------
+# Eval 17: model evals
+# ----------------------------------------------------------------------
+proc evalModelEvals*(run: var seq[Check]) =
+  # Test that model evals compile and run without crashing
+  # (Real model probes require GPU - this tests the deterministic planner part)
+  let result = runPlannerEval(5)
+  run.add(Check(name: "model evals: planner compilation works",
+                passed: result.trials > 0 and result.rate >= 0.0,
+                detail: "rate=" & $result.rate & " trials=" & $result.trials))
+
+# ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
 proc runAllEvals*(): int =
@@ -475,17 +486,6 @@ proc runAllEvals*(): int =
   echo "  " & $passCount & "/" & $run.len & " passed"
   echo "  exit=" & $(if passCount == run.len: 0 else: 1)
   return if passCount == run.len: 0 else: 1
-
-# ----------------------------------------------------------------------
-# Eval 17: model evals
-# ----------------------------------------------------------------------
-proc evalModelEvals*(run: var seq[Check]) =
-  # Test that model evals compile and run without crashing
-  # (Real model probes require GPU - this tests the deterministic planner part)
-  let result = runPlannerEval(5)
-  run.add(Check(name: "model evals: planner compilation works",
-                passed: result.trials > 0 and result.rate >= 0.0,
-                detail: "rate=" & $result.rate & " trials=" & $result.trials))
 
 when isMainModule:
   quit(runAllEvals())

@@ -2,8 +2,8 @@
 ## user -> generate -> tool_call -> execute -> tool_result -> generate -> ... -> final text
 ## Emulates the pi agent loop: think -> text/tool_call, dispatch, feed result back.
 
-import std/[strutils, os, osproc, strformat, times, json, terminal]
-import ./session_manager, ./pipeline, ./config, ./cli, ./gpu, ./bootstrap, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv, ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend, ./rwkv/backend/vulkan/vulkan_backend, ./orchestrator, ./program, ./engine
+import std/[strutils, os, times, json, terminal]
+import ./session_manager, ./pipeline, ./config, ./bootstrap, ./orchestrator, ./program, ./engine
 
 const
   MaxToolIterations* = 8
@@ -59,13 +59,13 @@ proc parseToolCalls*(text: string): seq[ToolCall] =
     let inner = text[start + "<tool_call>".len ..< endPos].strip()
     try:
       let j = parseJson(inner)
-      if "name" in j and "arguments" in j:
+      if j.kind == JObject and "name" in j and "arguments" in j:
         result.add(ToolCall(
           name: j["name"].str,
           args: $(j["arguments"]),
           raw: text[start .. endPos + "</tool_call>".len - 1]
         ))
-    except JsonParsingError:
+    except CatchableError:
       discard
     pos = endPos + "</tool_call>".len
 
@@ -84,16 +84,17 @@ proc parseToolCalls*(text: string): seq[ToolCall] =
     if already: continue
     try:
       let j = parseJson(trimmed)
-      var name = ""
-      if "name" in j and j["name"].kind == JString:
-        name = j["name"].str
-      elif "tool" in j and j["tool"].kind == JString:
-        name = j["tool"].str
-      elif "arguments" in j and ("prompt" in j["arguments"] or "intent" in j["arguments"]):
-        name = "run_pipeline"
-      if name.len > 0 and "arguments" in j:
-        result.add(ToolCall(name: name, args: $(j["arguments"]), raw: trimmed))
-    except JsonParsingError:
+      if j.kind == JObject:
+        var name = ""
+        if "name" in j and j["name"].kind == JString:
+          name = j["name"].str
+        elif "tool" in j and j["tool"].kind == JString:
+          name = j["tool"].str
+        elif "arguments" in j and ("prompt" in j["arguments"] or "intent" in j["arguments"]):
+          name = "run_pipeline"
+        if name.len > 0 and "arguments" in j:
+          result.add(ToolCall(name: name, args: $(j["arguments"]), raw: trimmed))
+    except CatchableError:
       discard
 
 proc stripToolCallText*(text: string): string =
@@ -119,11 +120,12 @@ proc stripToolCallText*(text: string): string =
     if t.startsWith("{") and t.endsWith("}"):
       try:
         let j = parseJson(t)
-        if ("name" in j and "arguments" in j) or
-           ("tool" in j and "arguments" in j) or
-           ("arguments" in j and ("prompt" in j["arguments"] or "intent" in j["arguments"])):
-          continue
-      except JsonParsingError:
+        if j.kind == JObject:
+          if ("name" in j and "arguments" in j) or
+             ("tool" in j and "arguments" in j) or
+             ("arguments" in j and ("prompt" in j["arguments"] or "intent" in j["arguments"])):
+            continue
+      except CatchableError:
         discard
     keptLines.add(line)
   result = keptLines.join("\n").strip()

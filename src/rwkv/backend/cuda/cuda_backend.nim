@@ -3,7 +3,7 @@
 ## Validates CUDA availability, VRAM, and quant compatibility.
 ## Errors explicitly if the desired load strategy cannot work.
 
-import std/[os, strutils, strformat, dynlib]
+import std/[os, strformat]
 import config, rwkv/model/header, gpu, rwkv/backend/types
 
 const

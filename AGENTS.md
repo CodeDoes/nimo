@@ -21,7 +21,7 @@ Sessions follow the pi-agent JSONL message-tree format (parentId chains).
 devenv shell                 # enter dev env (nim, cmake, CUDA toolkit, python+torch)
 devenv shell build-cuda      # rebuild rwkv.cpp with CUDA (MULTI-ARCH: 86;80;75;89 — slow!)
 devenv shell build-vulkan    # rebuild rwkv.cpp with Vulkan/CLBlast (needs AMD OpenCL/CVu runtime)
-devenv shell eval            # nimble task / run ./build/evals (offline, no model needed)
+devenv shell unit            # nimble task / run ./build/unit (offline, no model needed)
 devenv shell build-all       # nimble build
 ```
 
@@ -31,7 +31,7 @@ Builds go to `build/`. Example commands in `src/` are compiled with:
 # online (real model):
 nim c --path:src -o:build/harness src/harness_main.nim
 # offline (stub generator, no rwkv.cpp):
-nim c --path:src -d:harnessOffline -o:build/evals src/evals.nim
+nim c --path:src -d:harnessOffline -o:build/unit src/unit.nim
 ```
 
 ## Smoke test (CPU / NVIDIA / AMD)
@@ -56,7 +56,7 @@ mode also benchmarks a backend directly (an explicit flag, not env vars).
 # online (real model):
 nim c --path:src -o:build/harness src/harness_main.nim
 # offline (stub generator, no rwkv.cpp):
-nim c --path:src -d:harnessOffline -o:build/evals src/evals.nim
+nim c --path:src -d:harnessOffline -o:build/unit src/unit.nim
 ```
 
 Run the harness with the rwkv libs on the loader path:
@@ -177,9 +177,9 @@ make -j$(nproc)
   magic `ggmf`, `n_layer` at offset 16) — rwkv.cpp SIGSEGVs on overcommit, so
   don't bypass the clamp.
 
-## Evals
+## Unit Tests
 
-`src/evals.nim` — 16 checks, offline (scripted `genStub`, no model):
+`src/unit.nim` — 61 checks, offline (scripted `genStub`, no model):
 
 1. **Tool calling** — detect `[tool] run_pipeline {...}`, dispatch, feed result back, final answer.
 2. **Loop termination** — max-iteration guard (8); a script that never stops calling
@@ -203,7 +203,7 @@ Small RWKV models frequently emit bare JSON instead of `[tool]` — the fallback
 ## Architecture
 
 - `src/session_manager.nim` — messages, tool registry, JSONL save, `genStub`.
-  `-d:harnessOffline` strips the RWKV backend (evals run without rwkv.cpp).
+  `-d:harnessOffline` strips the RWKV backend (unit tests run without rwkv.cpp).
 - `src/gpu.nim` — CUDA Driver API probe (`gpuProbe`) + fallback policy (`decideGpu`).
 - `src/model_cache.nim` — raw -> quantize -> cache: content-addressed quantized
   model cache (sha1 of size/mtime/head), auto-quantize via `quant` config.
@@ -224,4 +224,4 @@ Small RWKV models frequently emit bare JSON instead of `[tool]` — the fallback
 - Session JSONL must stay **one JSON object per line** (compact `$j`, not `pretty`).
 - Don't break `-d:harnessOffline` builds — the eval suite depends on it.
 - Keep tool handlers deterministic; model output is the only non-determinism.
-- Agent work should leave evals green: `devenv shell eval`.
+- Agent work should leave the unit test suite green: `devenv shell unit`.

@@ -5,7 +5,7 @@
 ## with "no CUDA-capable device is detected" (e.g. driver reports the GPU needs
 ## a reset), and we want a clean, actionable message instead of a crash.
 
-import std/[dynlib, os]
+import std/[dynlib]
 
 type
   GpuStatus* = enum

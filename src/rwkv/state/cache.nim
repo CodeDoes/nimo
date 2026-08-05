@@ -8,7 +8,7 @@
 ## Cache math (keys, paths, save/load) is offline-safe; only the actual bake
 ## (tokenize + eval) needs the real model backend.
 
-import std/[os, strutils, sha1]
+import std/[os, sha1]
 import ../../config, ../../model_cache
 when not defined(harnessOffline):
   import ../../rwkv, ../../tokenizer, ../../macros
@@ -36,28 +36,38 @@ proc statePath*(c: StateCache, key: string): string =
 
 proc saveStateToFile*(state: openArray[float32], path: string) =
   ## Writes a float32 state vector to disk (little-endian, raw).
-  let dir = parentDir(path)
-  if dir.len > 0 and dir != ".":
-    createDir(dir)
-  let f = open(path, fmWrite)
-  defer: f.close()
-  if state.len > 0:
-    if f.writeBuffer(unsafeAddr state[0], state.len * sizeof(float32)) !=
-       state.len * sizeof(float32):
-      raise newException(IOError, "Failed to write state file: " & path)
+  try:
+    let dir = parentDir(path)
+    if dir.len > 0 and dir != ".":
+      createDir(dir)
+    var f: File
+    if not f.open(path, fmWrite):
+      raise newException(IOError, "Failed to open state file for writing: " & path)
+    defer: f.close()
+    if state.len > 0:
+      if f.writeBuffer(unsafeAddr state[0], state.len * sizeof(float32)) !=
+         state.len * sizeof(float32):
+        raise newException(IOError, "Failed to write state file buffer: " & path)
+  except CatchableError as e:
+    raise newException(IOError, "saveStateToFile failed for path " & path & ": " & e.msg)
 
 proc loadStateFromFile*(state: var openArray[float32], path: string): bool =
   ## Loads a state vector; returns false on size mismatch / IO error.
   if not fileExists(path):
     return false
-  if getFileSize(path) != state.len * sizeof(float32):
+  try:
+    if getFileSize(path) != state.len * sizeof(float32):
+      return false
+    var f: File
+    if not f.open(path, fmRead):
+      return false
+    defer: f.close()
+    if f.readBuffer(addr state[0], state.len * sizeof(float32)) !=
+       state.len * sizeof(float32):
+      return false
+    return true
+  except CatchableError:
     return false
-  let f = open(path, fmRead)
-  defer: f.close()
-  if f.readBuffer(addr state[0], state.len * sizeof(float32)) !=
-     state.len * sizeof(float32):
-    return false
-  return true
 
 proc loadCachedState*(c: StateCache, modelPath, vocabPath, context: string,
                       stateLen: int): seq[float32] =

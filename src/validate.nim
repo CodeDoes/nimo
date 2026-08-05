@@ -52,8 +52,9 @@ proc validateText*(content: string,
     let seqStr = words[i ..< i + 3].join(" ")
     var occurrences = 1
     for j in i + 3 ..< words.len - 2:
-      if words[j ..< j + 3].join(" ") == seqStr:
-        inc occurrences
+      if j + 3 <= words.len:
+        if words[j ..< j + 3].join(" ") == seqStr:
+          inc occurrences
     if occurrences >= maxRepeats:
       inc result.repeatingSegments
       i += 3   # skip past the detected repeat so the same window isn't re-counted
