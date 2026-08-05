@@ -25,8 +25,12 @@ NIMO can explore a different division of labor enabled by a state-space model:
 
 The key claim is deliberately modest: instead of continuously fine-tuning
 weights, NIMO can continually improve its *library of baked contexts* and the
-policy that selects them. A bake is accepted only when held-out, reproducible
-checks show a benefit and regression guards are satisfied.
+policy that selects them. In particular, it can learn a narrow planning habit:
+when a recognizable goal pattern needs existing facts, emit a pointed
+`Extract(source="memory", ...)` / **recall** step before generating; when recall
+would add noise or duplicate work, omit it. A bake is accepted only when
+held-out, reproducible checks show a benefit and regression guards are
+satisfied.
 
 ## Research context
 
@@ -106,6 +110,54 @@ user -> Plan -> Engine -> steps/tools -> artifacts + validation + outcome
                   versioned skill registry -> explicit runtime routing only
 ```
 
+### Recall is a planner behavior, not a magical memory side effect
+
+The desired learned behavior is **not** “put more memory into every prompt.” It
+is a small, observable routing decision in the plan:
+
+```text
+Goal: "Continue Kael's chapter without contradicting his injury."
+  -> [step] extract {"source":"memory", "filter":"Kael injury and latest chapter"}
+  -> [step] generate {"skill":"output:chapter", "context":"…focused recall…"}
+
+Goal: "Write a haiku about rain."
+  -> [step] generate {"skill":"output:poem", "context":"…"}
+```
+
+The planner bake should learn to emit this structure **only** for patterns
+where a focused recall has evidence of improving the outcome: continuity
+requests, references to a known entity, revisions of an existing artifact,
+questions about prior decisions, or a tool task requiring workspace facts.
+The engine, not the model, performs recall; a missing, forbidden, or oversized
+recall result is handled deterministically.
+
+This gives the dream cycle two equally valuable outcomes:
+
+1. **Add a recall route** when a missing focused fact caused a measurable
+   failure; or
+2. **remove/avoid a recall route** when it was redundant, irrelevant, costly,
+   or made the generated result worse.
+
+### Inefficiency taxonomy
+
+Every candidate should name one concrete inefficiency rather than claiming
+vague “smarter memory”:
+
+| Code | Observed pattern | Candidate repair |
+|------|------------------|------------------|
+| `missingRecall` | continuity/fact validator fails; a relevant source existed but was not read | planner examples that emit a focused recall before generation |
+| `broadRecall` | large recalled context is mostly unused or causes drift | examples with narrower source/filter fields |
+| `duplicateRecall` | equivalent recall repeats within a plan or session | deterministic handle reuse; examples that omit the second call |
+| `lateRecall` | generation/revision happened before necessary facts were fetched | examples that place Extract before Generate |
+| `wrongRecall` | recalled facts are irrelevant to the goal | counterexamples that choose no recall or a different filter |
+| `prematureGenerate` | model drafts before extracting an available deterministic answer | extract/validate/write template rather than prose generation |
+| `toolThrash` | repeated calls produce the same error or no new information | bounded retry policy and an explicit report/stop step |
+
+The taxonomy is an annotation on evidence, not a label a model may invent and
+promote by itself. Where possible it comes from deterministic traces: plan
+order, artifact hashes, recall result size, validator outcome, duplicate
+queries, and tool error codes.
+
 ### 1. Wake trace capture
 
 Every executed plan should eventually emit a compact `DreamTrace` in the
@@ -149,7 +201,14 @@ The curator performs a budgeted, per-workspace sweep. It should prefer:
   failed, especially when a validator explains the difference;
 - repeated user corrections that point to the same missing constraint;
 - high-cost failures, where a small state improvement could save many tokens;
+- examples of **correct omission**—successful runs that deliberately did *not*
+  recall, because the goal was self-contained or recall would have been noise;
 - diverse examples that cover different inputs without mixing output kinds.
+
+For recall routing, the curator should build matched sets where possible:
+`goal pattern + focused recall + pass`, `similar goal + no recall + fail`, and
+also `self-contained goal + no recall + pass`. This prevents a planner bake
+from turning “recall” into a reflex rather than a conditional tool call.
 
 It should reject or quarantine traces with absent outcomes, policy violations,
 unresolved conflicts, secret-tainted sources, or synthetic-on-synthetic
@@ -169,6 +228,7 @@ A candidate is a small, self-describing bundle—not an opaque `.state.bin`:
   "id": "planner.story.v3",
   "parent": "planner.story.v2",
   "kind": "planner",
+  "targetBehavior": "conditional focused recall before generation",
   "modelSignature": "sha1:…",
   "template": "Goal: {{goal}}\nEmit [step] lines only:\n",
   "examples": [
@@ -193,6 +253,17 @@ separate format, separate evaluator, and an explicit opt-in. A state obtained
 from a demonstration is reproducible and easy to roll back; silently optimized
 state is not an acceptable starting point for continual improvement.
 
+For a recall-routing bundle, examples must be deliberately varied:
+
+- entity-continuity tasks with the **correct focused recall**;
+- similar-looking but self-contained tasks with the **correct omission**;
+- broad-recall failures paired with a narrower filter; and
+- no-recall failures paired with the smallest sufficient filter.
+
+The template must ask for pure `[step]` structure, never prose rationales. That
+keeps the learned behavior parser-checkable: either it calls the pointed recall
+step with valid arguments or it does not.
+
 ### 4. Evaluation before promotion
 
 Candidates compete against their parent or an unbaked baseline on three fixed
@@ -206,7 +277,10 @@ sets:
 
 Metrics are typed by skill:
 
-- planner: parse rate, allowed-step rate, plan validator pass rate;
+- planner: parse rate, allowed-step rate, plan validator pass rate, **recall
+  precision** (recall only when its evidence is relevant), **recall recall**
+  (necessary recalls emitted), duplicate-recall rate, and tokens per successful
+  plan;
 - extractor: citation/source-span precision and deterministic schema pass rate;
 - chapter output: deterministic quality gates, repetition rate, explicit human
   acceptance when available;
@@ -350,10 +424,12 @@ simple demonstration baking; complexity is not evidence of value.
 
 ## Falsifiable hypotheses
 
-1. For narrow planner tasks, curated demonstration bakes improve held-out plan
-   parse rate versus an unbaked prompt without increasing sentinel failures.
-2. Selecting diverse, outcome-labelled examples outperforms selecting the most
-   recent or most frequently recalled examples.
+1. For narrow planner tasks, a recall-routing bake improves held-out necessary
+   recall rate *and* reduces unnecessary/duplicate recalls versus an unbaked
+   prompt, without increasing sentinel failures.
+2. Selecting diverse, outcome-labelled examples—including correct recall
+   omissions—outperforms selecting the most recent or most frequently recalled
+   examples.
 3. Pairing successes with validator-explained failures reduces repeated failure
    modes more than positive-only curation.
 4. A per-workspace, budgeted curator produces useful candidates without
