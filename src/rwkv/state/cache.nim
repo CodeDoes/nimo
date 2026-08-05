@@ -8,7 +8,7 @@
 ## Cache math (keys, paths, save/load) is offline-safe; only the actual bake
 ## (tokenize + eval) needs the real model backend.
 
-import std/[os, strutils, sha1]
+import std/[os, sha1]
 import ../../config, ../../model_cache
 when not defined(harnessOffline):
   import ../../rwkv, ../../tokenizer, ../../macros

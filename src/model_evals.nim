@@ -4,8 +4,8 @@
 ## Unlike unit tests (deterministic, offline), model evals are probabilistic
 ## and require the real model + backend.
 
-import std/[os, strutils, times, json]
-import ./config, ./bootstrap, ./session_manager, ./orchestrator
+import std/[os, strutils]
+import ./orchestrator
 
 type
   EvalResult* = object

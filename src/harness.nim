@@ -2,8 +2,8 @@
 ## user -> generate -> tool_call -> execute -> tool_result -> generate -> ... -> final text
 ## Emulates the pi agent loop: think -> text/tool_call, dispatch, feed result back.
 
-import std/[strutils, os, osproc, strformat, times, json, terminal]
-import ./session_manager, ./pipeline, ./config, ./cli, ./gpu, ./bootstrap, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv, ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend, ./rwkv/backend/vulkan/vulkan_backend, ./orchestrator, ./program, ./engine
+import std/[strutils, os, times, json, terminal]
+import ./session_manager, ./pipeline, ./config, ./bootstrap, ./orchestrator, ./program, ./engine
 
 const
   MaxToolIterations* = 8

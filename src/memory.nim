@@ -1,8 +1,8 @@
 ## Memory System for NIMO
 ## Integrates FIAAS with session management for persistent context.
 
-import std/[json, strutils, os, times, tables, strformat]
-import ./fiaas, ./session_manager, ./workspace, ./config
+import std/[json, strutils, os, tables]
+import ./fiaas
 
 type
   MemoryStore* = ref object

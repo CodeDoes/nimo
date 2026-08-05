@@ -3,7 +3,7 @@
 ## Validates Vulkan availability and memory.
 ## Errors explicitly if the desired load strategy cannot work.
 
-import std/[os, strutils, strformat]
+import std/[os, strformat]
 import config, rwkv/model/header, rwkv/backend/types
 
 proc vulkanBackend*(): RwkvBackend =

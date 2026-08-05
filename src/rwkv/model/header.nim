@@ -3,8 +3,6 @@
 ## Reads the 24-byte rwkv.cpp file header straight off disk (no library load).
 ## This module has NO dependency on rwkv.nim to avoid circular imports.
 
-import std/[os, strutils]
-
 type
   ModelHeader* = object
     magic*: uint32

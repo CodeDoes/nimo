@@ -6,9 +6,10 @@
 ## injected as a parameter (`generate: GenerateFn`); pass `nil` to use the real
 ## model on this session (offline builds always get the placeholder).
 
-import std/[json, times, strutils, os, random, tables]
+import std/[json, times, os, tables]
 import ./config
 when not defined(harnessOffline):
+  import std/[strutils, random]
   import ./rwkv, ./tokenizer, ./sampling, ./macros, ./rwkv/state/cache
 
 type

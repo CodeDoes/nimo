@@ -7,10 +7,11 @@
 ## Offline-safe (with `-d:harnessOffline` it returns the stub-generator session
 ## and never touches the model/GPU).
 
-import std/[os, strutils]
+import std/[os]
 import ./config, ./session_manager
 
 when not defined(harnessOffline):
+  import std/[strutils]
   import ./rwkv, ./gpu, ./rwkv/quant/cache,
          ./rwkv/backend/cpu/cpu_backend,
          ./rwkv/backend/cuda/cuda_backend,
