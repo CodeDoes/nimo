@@ -135,7 +135,7 @@ proc pipelineTool*(session: var session_manager.Session, arguments: string, gene
   pipeline.finishPipeline()
   
   # Save pipeline state
-  let pipelineFile = session.cwd & "/.nimo/" & pipeline.id & ".json"
+  let pipelineFile = session.cwd / ".nimo" / (pipeline.id & ".json")
   createDir(parentDir(pipelineFile))
   var j = newJObject()
   j["id"] = %pipeline.id

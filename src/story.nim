@@ -74,7 +74,7 @@ proc validateChapter*(content: string, minWords: int = DefaultMinChapterWords,
   for i in 0 ..< max(words.len - maxRepeats * 3, 0):
     var repeatCount = 0
     for j in 1 ..< maxRepeats:
-      if i + j * 3 < words.len:
+      if i + 3 <= words.len and i + j * 3 + 3 <= words.len:
         let seq1 = words[i ..< i + 3].join(" ")
         let seq2 = words[i + j * 3 ..< i + j * 3 + 3].join(" ")
         if seq1 == seq2:
