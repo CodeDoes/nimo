@@ -182,7 +182,8 @@ proc buildNextContext*(reply: string, feedBack: string): string =
 proc runHarnessTurn*(s: var Session, userMsg: string,
                      generate: GenerateFn = nil,
                      maxIterations: int = MaxToolIterations,
-                     maxTokens: int = 200): HarnessTurn =
+                     maxTokens: int = 200,
+                     sink: TokenSink = nil): HarnessTurn =
   ## Runs one full user turn through the orchestrator + engine:
   ## recordTurnStart -> interpret -> addPlan -> engine.run -> addReport.
   ## `generate` is the model-generation seam (injected, not stored on the
@@ -193,27 +194,37 @@ proc runHarnessTurn*(s: var Session, userMsg: string,
 
   # Compile the goal into a plan (orchestrator seam).
   var plan = interpret(userMsg)
-  discard s.addPlan(planToJson(plan), rootId)
+  let planId = s.addPlan(planToJson(plan), rootId)
 
   # Run the plan through the engine; collect emitted text.
   var sinkText = ""
-  let r = plan.run(generate, sink = proc(t: string) = sinkText.add(t),
-                   interrupt = nil, maxSteps = maxIterations)
+  let collector: TokenSink = proc(t: string) =
+    sinkText.add(t)
+    if sink != nil:
+      sink(t)
+  var stream: GenerateStreamFn = nil
+  if generate == nil:
+    stream = proc(prompt: string, tokenSink: TokenSink): string =
+      s.generateTurnStream(prompt, tokenSink, nil, DefaultTemp, DefaultTopP, maxTokens)
+  let r = plan.run(generate, sink = collector, interrupt = nil,
+                   maxSteps = maxIterations, generateStream = stream)
   result.iterations = r.stepsRun
   result.aborted = r.aborted
   result.generated = sinkText
 
-  # Capture the final text: prefer the Report step's title, otherwise sink.
-  var lastReport = ""
-  for i in countdown(s.messages.len - 1, 0):
-    let m = s.messages[i]
-    for p in m.content:
-      if p.kind == ckReport and p.reportKind == "finished":
-        lastReport = p.text
-  if lastReport.len > 0:
-    result.finalText = lastReport
-  else:
+  # Persist generated content and a finished report in the message tree. The
+  # plan node remains the parent so a saved session is user -> plan -> output
+  # -> report, rather than a transient terminal-only trace.
+  var generatedParts: seq[string]
+  for step in plan.steps:
+    if step.kind == skGenerate and step.output.len > 0:
+      generatedParts.add(step.output)
+  result.finalText = generatedParts.join("\n\n").strip()
+  if result.finalText.len == 0:
     result.finalText = sinkText.strip()
+  if result.finalText.len > 0:
+    let outputId = s.addText(result.finalText, planId)
+    discard s.addReport("finished", "Completed: " & plan.goal, outputId)
 
 ## ---- CLI entry ----
 type
@@ -271,13 +282,14 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".",
       continue
 
     let t0 = cpuTime()
-    let turn = runHarnessTurn(s, line, maxTokens = cfg.maxTokens)
+    let turn = runHarnessTurn(s, line, maxTokens = cfg.maxTokens,
+      sink = proc(t: string) =
+        stdout.write(t)
+        stdout.flushFile())
     let elapsed = cpuTime() - t0
 
     echo ""
-    if turn.finalText.len > 0:
-      echo turn.finalText
-    else:
+    if turn.finalText.len == 0:
       echo "[nimo] No final answer produced."
 
     var stats = "  (" & $turn.iterations & " steps"

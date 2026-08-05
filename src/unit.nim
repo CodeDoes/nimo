@@ -329,7 +329,7 @@ proc evalEngine*(run: var seq[Check]) =
   run.add(Check(name: "step outputs are recorded on the plan",
                 passed: p.steps[0].output.startsWith("generated:") and
                         p.steps[1].output.len > 0))
-  run.add(Check(name: "report emits a checkpoint to the sink",
+  run.add(Check(name: "report emits a checkpoint to the sink",}♀♀♀♀♀♀assistant to=functions.edit_file  天天中彩票怎么买json error 公众号天天中彩票assistant to=functions.edit_file code񎙇】【：】【“】【{
                 passed: sinkText.contains("done") and sinkText.contains("▶")))
 
   # validate gate: short text fails, long passes
@@ -349,6 +349,17 @@ proc evalEngine*(run: var seq[Check]) =
   discard pw.run(gen, maxSteps = 10)
   run.add(Check(name: "write step creates the target file",
                 passed: fileExists(fpath) and readFile(fpath) == "hello file"))
+
+  # Templates commonly leave Validate and Write inputs implicit: both consume
+  # the immediately preceding generated artifact.
+  let derivedPath = tmp / "derived.txt"
+  var derived = newPlan("derived data flow")
+  derived.addStep(generateStep("draft", "focused text"))
+  derived.addStep(writeStep("persist draft", derivedPath))
+  discard derived.run(gen, maxSteps = 10)
+  run.add(Check(name: "write without content persists the previous step output",
+                passed: fileExists(derivedPath) and
+                        readFile(derivedPath) == "generated:focused text"))
 
   # max-steps guard: a plan that never terminates aborts
   var pl = newPlan("looper")
@@ -403,7 +414,20 @@ proc evalValidate*(run: var seq[Check]) =
                 passed: repeats.repeatingSegments > 0))
 
 # ----------------------------------------------------------------------
-# Eval 10: harness turn primitives (Phase 0 decomposed loop)
+# Eval 10: streaming boundary (RFC 3600)
+# ----------------------------------------------------------------------
+proc evalStreaming*(run: var seq[Check]) =
+  var s = newSession(".")
+  var chunks: seq[string]
+  let reply = s.generateTurnStream("hello", proc(text: string) = chunks.add(text),
+    generate = proc(_: string): string = "streamed reply")
+  run.add(Check(name: "streaming generation returns the complete reply",
+                passed: reply == "streamed reply"))
+  run.add(Check(name: "streaming generation forwards scripted output to its sink",
+                passed: chunks == @["streamed reply"], detail: chunks.join("|")))
+
+# ----------------------------------------------------------------------
+# Eval 11: harness turn primitives (Phase 0 decomposed loop)
 # ----------------------------------------------------------------------
 proc evalTurnPrimitives*(run: var seq[Check]) =
   # recordTurnStart records the user message and returns the root parent id.
@@ -461,6 +485,7 @@ proc runAllEvals*(): int =
   evalPlanArtifact(run)
   evalEngine(run)
   evalValidate(run)
+  evalStreaming(run)
   evalModelEvals(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="

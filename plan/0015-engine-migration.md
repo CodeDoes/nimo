@@ -6,6 +6,10 @@ Done:
 - [x] Phase 0 step 1: rename evals -> unit (a409844)
 - [x] Phase 2: program.nim + engine.nim + validate.nim runtime, unit suite
   34 -> 58 checks (1005670); unit tests caught 2 real latent bugs
+- [x] Phase 1 foundation: shared `TokenSink` / `generateTurnStream`; real RWKV
+  calls emit decoded tokens immediately, while chat and the harness forward
+  that sink to stdout with a flush. Scripted offline generators remain one
+  deterministic chunk.
   (validate.countWords never assigned its result -> always 0;
   repeating-segment check never fired)
   CORRECTION: the earlier claim that story.nim's countWords had the same bug

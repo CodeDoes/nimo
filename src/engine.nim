@@ -14,9 +14,9 @@ import std/[os, strutils]
 import ./config, ./program, ./validate, ./memory
 
 type
-  TokenSink* = proc(text: string)                 # emit produced text, immediately
   InterruptCheck* = proc (): bool                 # nil = never interrupt
-  # GenerateFn (the model-generation seam) is defined in ./config
+  # TokenSink / generation seams are defined in ./config so sessions and the
+  # engine share one streaming contract without an import cycle.
 
   RunResult* = object
     stepsRun*: int
@@ -29,12 +29,19 @@ proc emit(sink: TokenSink, text: string) =
   if sink != nil and text.len > 0:
     sink(text)
 
-proc run*(p: var Plan, generate: GenerateFn,
+proc run*(p: var Plan, generate: GenerateFn = nil,
           sink: TokenSink = nil,
           interrupt: InterruptCheck = nil,
-          maxSteps: int = 256): RunResult =
+          maxSteps: int = 256,
+          generateStream: GenerateStreamFn = nil): RunResult =
   ## Executes the plan from its cursor until the end, an abort, or an interrupt.
   var stepsRun = 0
+  # Steps exchange text through a focused implicit handle. On resume, recover
+  # it from the most recent completed step so Validate/Write remain useful.
+  var lastOutput = ""
+  for i in 0 ..< min(p.cursor, p.steps.len):
+    if p.steps[i].output.len > 0:
+      lastOutput = p.steps[i].output
 
   while not p.isDone:
     # interrupt check between steps
@@ -59,11 +66,20 @@ proc run*(p: var Plan, generate: GenerateFn,
     if sink != nil:
       sink("\n▶ " & (if s.name.len > 0: s.name else: $s.kind) & "\n")
 
+    proc produce(prompt: string): string =
+      if generateStream != nil:
+        return generateStream(prompt, sink)
+      if generate != nil:
+        result = generate(prompt)
+        emit(sink, result)
+      else:
+        result = "[nimo] no generator configured"
+        emit(sink, result)
+
     case s.kind
     of skGenerate:
-      s.output = generate(s.context)
+      s.output = produce(s.context)
       s.status = ssCompleted
-      emit(sink, s.output)
     of skExtract:
       # If source is "memory", use lookupMemory instead of generate
       if s.source == "memory":
@@ -75,23 +91,27 @@ proc run*(p: var Plan, generate: GenerateFn,
         if s.filter.len > 0: prompt.add(" " & s.filter)
         if s.source.len > 0: prompt.add(" from " & s.source)
         if s.forWhom.len > 0: prompt.add(" for " & s.forWhom)
-        s.output = generate(prompt)
+        s.output = produce(prompt)
         s.status = ssCompleted
-        emit(sink, s.output)
     of skSummarize:
       let prompt = "Summarize (" & s.length & "): " & s.input
-      s.output = generate(prompt)
+      s.output = produce(prompt)
       s.status = ssCompleted
-      emit(sink, s.output)
     of skValidate:
-      let v = validateText(s.input)
+      # An empty input means "gate the previous pointed step", the normal
+      # template shape: Generate -> Validate -> Write.
+      let textToValidate = if s.input.len > 0: s.input else: lastOutput
+      let v = validateText(textToValidate)
       s.output = "words=" & $v.wordCount & " paras=" & $v.paragraphCount &
                  " repeats=" & $v.repeatingSegments & " passed=" & $v.passed
       if v.passed: s.status = ssCompleted
       else: s.status = ssFailed
       emit(sink, s.output & "\n")
     of skWrite:
-      let content = if s.content.len > 0: s.content else: s.output
+      # A write without explicit content persists the preceding step's output.
+      let content = if s.content.len > 0: s.content
+                    elif s.output.len > 0: s.output
+                    else: lastOutput
       try:
         if s.path.len > 0:
           let dir = parentDir(s.path)
@@ -117,6 +137,8 @@ proc run*(p: var Plan, generate: GenerateFn,
       s.status = ssCompleted
       emit(sink, (if s.title.len > 0: s.title else: "done") & "\n")
 
+    if s.kind in {skGenerate, skExtract, skSummarize} and s.output.len > 0:
+      lastOutput = s.output
     p.advance()
     inc stepsRun
 

@@ -20,7 +20,7 @@ Plan for what to do on this codebase in the future.
 | [0012-final-verification.md](0012-final-verification.md) | **COMPLETE** ✓ | Final backend verification |
 | [0013-docs-alignment.md](0013-docs-alignment.md) | **COMPLETE** ✓ | Docs aligned to code |
 | [0014-engine-design.md](0014-engine-design.md) | **COMPLETE** ✓ | Engine design formalized (program/engine RFCs) |
-| [0015-engine-migration.md](0015-engine-migration.md) | **IN PROGRESS** | Phase 0 (Session unif) + Phase 2 done; Phases 1,3-7 pending |
+| [0015-engine-migration.md](0015-engine-migration.md) | **IN PROGRESS** | Phases 0-2 done; Phases 3-7 pending |
 
 ## Implementation Summary
 
