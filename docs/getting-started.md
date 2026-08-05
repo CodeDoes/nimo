@@ -52,7 +52,7 @@ quantized), runs the quantizer, and reports the new size.
 **The harness (tool calling):**
 
 ```bash
-./build/nimo harness --backend cuda models/model-q4k.bin
+./build/nimo harness --backend cuda --model models/model-q4k.bin
 ```
 
 The harness gives the model access to a `run_pipeline` tool. Ask it to "write a

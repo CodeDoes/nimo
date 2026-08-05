@@ -15,7 +15,11 @@ notes, and reports — all stored in neat project folders called *workspaces*.
 | Pre-compute a model state for fast start | `nimo bake` |
 | Keep separate projects (story worlds) | `nimo workspace` |
 | Write and check chapters of a story | `nimo story` |
+| Show the plan for a goal | `nimo planner` |
+| Create a session from a goal | `nimo new` |
+| Execute a plan artifact | `nimo run` |
 | Run the self-test suite | `nimo unit` |
+| Run model behavior evals | `nimo model-eval` |
 
 ## The big picture (how a request flows)
 
