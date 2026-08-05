@@ -31,10 +31,9 @@
 
   languages.nim.enable = true;
 
-  # LD_LIBRARY_PATH: nix pkgs only — system /usr/lib has pcre2-10.46 without
-  # .gnu.version_d, causing noisy warnings from nix-built grep (needs 10.47).
-  env.LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath [
-    pkgs.pcre2
+  # LD_LIBRARY_PATH: nix pcre2 FIRST (grep needs 10.47 with version symbols),
+  # then system libs (CUDA driver needs /usr/lib/x86_64-linux-gnu), then rwkv.cpp.
+  env.LD_LIBRARY_PATH = "${pkgs.pcre2}/lib:/usr/lib/x86_64-linux-gnu:/run/opengl-driver/lib:${pkgs.lib.makeLibraryPath [
     pkgs.stdenv.cc.cc.lib
     pkgs.gcc.cc.lib
     pkgs.vulkan-loader
