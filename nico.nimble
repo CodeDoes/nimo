@@ -45,6 +45,14 @@ task unit, "Run the unit test suite (offline, no model needed)":
   exec "nim c -d:harnessOffline -o:build/unit src/unit.nim"
   exec "build/unit"
 
+task jules, "Build the Jules CLI (needs SSL + system openssl)":
+  mkdir "build"
+  exec "nim c -d:ssl --passL:\"-L/usr/lib/x86_64-linux-gnu\" -o:build/jules src/jules.nim"
+
+task jules_check, "Validate the configured Jules API key (offline+build)":
+  exec "nimble jules"
+  exec "build/jules check"
+
 task eval, "Alias for the unit test suite (legacy name)":
   unitTask()
 

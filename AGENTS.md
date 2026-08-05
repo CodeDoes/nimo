@@ -32,7 +32,12 @@ Builds go to `build/`. Example commands in `src/` are compiled with:
 nim c --path:src -o:build/harness src/harness_main.nim
 # offline (stub generator, no rwkv.cpp):
 nim c --path:src -d:harnessOffline -o:build/unit src/unit.nim
+# jules CLI (needs SSL + system openssl on the linker path):
+nim c --path:src -d:ssl --passL:"-L/usr/lib/x86_64-linux-gnu" -o:build/jules src/jules.nim
 ```
+
+Tool binaries in `src/` are standalone; each `when isMainModule` is its own CLI
+(`build/harness`, `build/unit`, `build/jules`, ...).
 
 ## Smoke test (CPU / NVIDIA / AMD)
 

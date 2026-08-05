@@ -81,6 +81,29 @@ This runs the offline self-test suite (34 checks) — no model needed. It tests
 tool-call parsing, session saving, cache logic, chapter validation, memory
 search, and more. Everything should report PASS.
 
+## 6. Spawn a Jules coding agent
+
+`build/jules` is a thin CLI for the [Jules](https://jules.google.com) codeling
+agent API — spawn a session on a GitHub repo and watch it work:
+
+```bash
+# validate the API key (masked; resolved from $JULES_API_KEY or .env)
+./build/jules check
+
+# create a session that auto-opens a PR, and queue it locally
+./build/jules spawn "CodeDoes/nimo" "improve the unit suite" --pr
+
+# see queued jobs (icon + id + PR when ready)
+./build/jules queue
+
+# poll the most recent queued session until it finishes, streaming activity
+./build/jules watch
+```
+
+Other commands: `status <id>`, `activities <id>`, `prs`, `sessions`,
+`send <id> "<msg>"`, `approve <id>`, `archive-all`. The API key is never
+printed; spawned jobs are recorded in `./.jules.json`.
+
 ## Backend tips
 
 - `--backend cuda` needs a working NVIDIA GPU. If it fails, the GPU probe

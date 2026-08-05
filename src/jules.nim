@@ -27,7 +27,7 @@
 ##     {id, repo, prompt, createdAt}.
 ##   * Output is plain text + emoji; no manual, natural-language first.
 
-import std/[os, strutils, json, times, httpclient, uri, base64, tables]
+import std/[os, strutils, json, times, httpclient, tables]
 
 const
   BaseUrl* = "https://jules.googleapis.com/v1alpha"
@@ -40,22 +40,46 @@ proc envFile*(): string =
   ## `.env` next to cwd (the jules.sh convention: repo-root .env).
   getCurrentDir() / ".env"
 
+proc siblingEnvFile*(): string =
+  ## The roco_ai checkout that keeps the Jules key (fallback so the CLI works
+  ## from any directory). Returns "" if the file is not present.
+  let home = getHomeDir()
+  let candidates = @[
+    home / "Documents/dev/roco_ai/.env",
+    home / "dev/roco_ai/.env",
+    home / "Documents/dev/roco_ai/jules/.env"
+  ]
+  for c in candidates:
+    if fileExists(c): return c
+  ""
+
+proc parseEnvKey(file: string): string =
+  ## Reads JULES_API_KEY=... from an env file; strips quotes. "" if absent.
+  if file.len == 0 or not fileExists(file): return ""
+  for line in file.readFile().splitLines():
+    if line.startsWith("JULES_API_KEY="):
+      var key = line["JULES_API_KEY=".len .. ^1]
+      # strip surrounding quotes just like jules.sh does (dotenv keeps them)
+      key = key.strip(chars = {' ', '\t', '\r', '\n'})
+      if key.len >= 2 and key[0] in {'\'', '"'} and key[^1] == key[0]:
+        key = key[1 .. ^2]
+      return key
+  ""
+
 proc resolveKey*(inline: string = ""): string =
   ## Returns the API key or "" (never prints it). Priority:
-  ##   inline > $JULES_API_KEY > .env JULES_API_KEY=...   (quotes stripped)
-  var key = inline
-  if key.len == 0:
-    key = getEnv("JULES_API_KEY")
-  if key.len == 0 and fileExists(envFile()):
-    for line in envFile().readFile().splitLines():
-      if line.startsWith("JULES_API_KEY="):
-        key = line["JULES_API_KEY=".len .. ^1]
-        break
-  # strip surrounding quotes just like jules.sh does (dotenv keeps them)
-  key = key.strip(chars = {' ', '\t', '\r', '\n'})
-  if key.len >= 2 and key[0] in {'\'', '"'} and key[^1] == key[0]:
-    key = key[1 .. ^2]
-  key
+  ##   inline > $JULES_API_KEY > cwd/.env > sibling roco_ai .env
+  let sources = @[inline, getEnv("JULES_API_KEY"),
+                  parseEnvKey(envFile()), parseEnvKey(siblingEnvFile())]
+  for s in sources:
+    if s.len > 0:
+      var key = s
+      # strip surrounding quotes just like jules.sh does (dotenv keeps them)
+      key = key.strip(chars = {' ', '\t', '\r', '\n'})
+      if key.len >= 2 and key[0] in {'\'', '"'} and key[^1] == key[0]:
+        key = key[1 .. ^2]
+      return key
+  ""
 
 # ---------------------------------------------------------------------------
 # Pure helpers (offline-testable)
