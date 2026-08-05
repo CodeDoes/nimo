@@ -7,7 +7,7 @@
 
 import std/[strutils, os, json]
 import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header
-import ./program, ./engine, ./validate, ./config, ./model_evals
+import ./program, ./engine, ./validate, ./config, ./model_evals, ./jules
 
 type
   Check* = object
@@ -481,6 +481,50 @@ proc evalModelEvals*(run: var seq[Check]) =
                 passed: result.trials > 0 and result.rate >= 0.0,
                 detail: "rate=" & $result.rate & " trials=" & $result.trials))
 
+proc evalJules*(run: var seq[Check]) =
+  # Pure helpers for the jules CLI, offline (no network).
+  # stateIcon maps known states to empjiji; unknown stays neutral.
+  run.add(Check(name: "jules: state icons",
+                passed: stateIcon("COMPLETED") == "✅" and
+                        stateIcon("RUNNING") == "▶" and
+                        stateIcon("archived") == "🗄️" and
+                        stateIcon("weird") == "○",
+                detail: "icons=" & stateIcon("COMPLETED") & "/" & stateIcon("RUNNING") & "/" & stateIcon("weird")))
+
+  # shorten collapses newlines and truncates with ellipsis.
+  run.add(Check(name: "jules: shorten collapses + truncates",
+                passed: shorten("a\nb\nc") == "a b c" and
+                        shorten("0123456789", 4) == "0123…" and
+                        shorten("short") == "short",
+                detail: "got='" & shorten("a\nb\nc") & "'"))
+
+  # extractPrs pulls pullRequest urls out of session outputs.
+  let sess = parseJson("""{"id":"x","outputs":[
+    {"pullRequest":{"url":"https://github.com/CodeDoes/nimo/pull/1"}},
+    {"something":true},
+    {"pullRequest":{"url":"https://github.com/CodeDoes/roco_ai/pull/28"}}
+  ]}""")
+  let prs = extractPrs(sess)
+  run.add(Check(name: "jules: extractPrs picks urls",
+                passed: prs == @["https://github.com/CodeDoes/nimo/pull/1",
+                                 "https://github.com/CodeDoes/roco_ai/pull/28"],
+                detail: "got=" & $prs))
+
+  # activityLine reads agentMessaged text (the key shape used by the CLI).
+  let act = parseJson("""{"createTime":"2026-08-05T06:29:52Z","originator":"agent",
+    "agentMessaged":{"agentMessage":"let us look at the plan"}}""")
+  let line = activityLine(act)
+  run.add(Check(name: "jules: activityLine shows agent message",
+                passed: "💬" in line and "let us look" in line and "[agent]" in line,
+                detail: "line='" & line & "'"))
+
+  # resolveKey strips quotes from an inline/dotenv value (never the raw secret).
+  run.add(Check(name: "jules: resolveKey strips quotes",
+                passed: resolveKey(inline = "\"AQabc…\"") == "AQabc…" and
+                        resolveKey(inline = "'k3'") == "k3" and
+                        resolveKey(inline = "k4") == "k4",
+                detail: "stripped=" & resolveKey(inline = "\"AQabc…\"")))
+
 # ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
@@ -498,6 +542,7 @@ proc runAllEvals*(): int =
   evalValidate(run)
   evalStreaming(run)
   evalModelEvals(run)
+  evalJules(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="
   var passCount = 0
