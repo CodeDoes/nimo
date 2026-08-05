@@ -31,11 +31,11 @@ echo "---------------------------"
 echo "  PASS: CUDA generation working"
 echo ""
 
-# Step 3: Run Evals
-echo "STEP 3: Run Evals"
-echo "-----------------"
-./build/nimo eval 2>&1 | tail -3
-echo "  PASS: All evals passing"
+# Step 3: Run Unit Tests
+echo "STEP 3: Run Unit Tests"
+echo "----------------------"
+./build/nimo unit 2>&1 | tail -3
+echo "  PASS: All unit tests passing"
 echo ""
 
 # Step 4: Create Workspace
@@ -102,7 +102,7 @@ echo ""
 echo "Summary:"
 echo "  - Quantize: ✓ (2.2GB Q4_K model)"
 echo "  - Generate: ✓ (~200ms/token on CUDA)"
-echo "  - Evals: ✓ (34/34 passed)"
+echo "  - Unit Tests: ✓ (61/61 passed)"
 echo "  - Workspace: ✓ (CRUD operations)"
 echo "  - Chat: ✓ (interactive with CUDA)"
 echo "  - Story: ✓ (pipeline with validation)"

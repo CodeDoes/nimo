@@ -62,7 +62,7 @@ never bakes.
 - The harness seeds the model from a baked state when `bakeContext` is on and a
   `systemPrompt` is configured (`session_manager.initModel`).
 - `context_state_cache.nim` wraps this and the model cache together, tracking
-  hit/miss stats (`nimo eval` covers the cache logic).
+  hit/miss stats (`nimo unit` covers the cache logic).
 - The `bake` CLI writes a state file directly from a prompt.
 
 ## Example
