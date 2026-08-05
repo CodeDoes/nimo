@@ -230,3 +230,77 @@ Small RWKV models frequently emit bare JSON instead of `[tool]` — the fallback
 - Don't break `-d:harnessOffline` builds — the eval suite depends on it.
 - Keep tool handlers deterministic; model output is the only non-determinism.
 - Agent work should leave the unit test suite green: `devenv shell unit`.
+
+## Onboarding — Core Philosophy
+
+> Nimo is a deterministic program wrapping a non-deterministic model. The coherence
+> lives in the program and baked states, not in the model's attention or weights.
+> The goal is to do with a 2.9B model what 100B models do with millions in fine-tuning.
+
+### Design principles
+
+1. **Explicit over implicit.** No fallbacks unless explicitly allowed. If a backend
+   isn't available, error. If a model doesn't match `--quant`, error. One path,
+   clear failures.
+2. **Config > flags > nothing.** Single source of truth: `nimo.json`. Above it,
+   `--backend` is the one override. Env vars are intentionally absent — they add
+   hidden paths and hunting bugs.
+3. **Low cognitive load.** We aren't in the 90s. Natural language is the interface.
+   `nimo new "create a story about X"` not `nimo new story "X"`. Users should not
+   need a manual. Developers should not need to read all files to change one thing.
+4. **Tests enable fearless change.** Unit tests mock the model (precanned responses,
+   no model loaded). Evals test the model's behavior in controlled environments
+   (model is a black box). Know your confidence range and manage it.
+5. **Git commit regularly.** Small, focused commits. The test suite is the safety net.
+6. **Code should be elegant.** Nim templates and macros are tools, not curiosities.
+   If something is repeated, abstract it. If a file does too much, split it.
+
+### Architecture beliefs
+
+- **Session = history + workspace reference.** No separate `goal`. No `activePlan`
+  as a first-class concept — plan is part of the message chain.
+- **Model backend is input, token stream is output.** Functional contract:
+  `backend + workspace + context/state + prefill → token+event stream`.
+- **gpuLayers from model + GPU, not default.** No hardcoded layer counts.
+- **Pipeline steps are normal tool calls.** Injected into the session like any
+  other message. Interruptible and resumible at any point.
+- **Session history includes:** which model was used per turn, bake state per
+  message, workspace switches. Everything traceable.
+- **User sees streaming progress.** `creating plan` → plan items with checkmarks,
+  actual generation visible per step. Never wait in silence.
+
+### Where to look
+
+- **RFCs** (`rfc/`): the intent. 4-digit numbers attach meaning (thousands = category,
+  hundreds = sub-domain, tens+ones = exact aspect). Example-driven, not speculative.
+- **Git history**: the evolution. How and why things changed.
+- **Pi sessions** (`~/.pi/agent/sessions/--home-kit-dev-nimo--/`): the reasoning.
+  Ephemeral session artifacts (plan/, analysis/, critique/) live here, not in the repo.
+- **Docs** (`docs/`): end-user facing explanation.
+
+### Message format
+
+Each message in the session JSONL is one of:
+- `user` — the user's input
+- `think` — model reasoning (optional, between user and response)
+- `text` — model's text response
+- `tool_call` + `tool_result` — paired, the tool call and its output
+- `system` — immutable operational rules
+
+The flow: `user → (think) → text|tool_call → tool_result → user → ...`
+
+### The RFC numbering scheme
+
+| Thousand | Category |
+|----------|----------|
+| 0 | Meta (index, vision) |
+| 1 | Core — Session & Messages |
+| 2 | CLI — User Interface |
+| 3 | Pipeline — Execution & Tools |
+| 4 | Config — Settings |
+| 5 | Workspace — Project Isolation |
+| 6 | Architecture — Source Structure |
+| 7 | Environment — Build & Runtime |
+| 8 | Model — RWKV & Quantization |
+| 9 | Infrastructure — Logging, Eval, Test |
+| 9500+ | Speculative research (clearly marked) |
