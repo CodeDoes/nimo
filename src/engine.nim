@@ -35,6 +35,7 @@ proc run*(p: var Plan, generate: GenerateFn,
           maxSteps: int = 256): RunResult =
   ## Executes the plan from its cursor until the end, an abort, or an interrupt.
   var stepsRun = 0
+  var lastOutput = ""
 
   while not p.isDone:
     # interrupt check between steps
@@ -91,7 +92,7 @@ proc run*(p: var Plan, generate: GenerateFn,
       else: s.status = ssFailed
       emit(sink, s.output & "\n")
     of skWrite:
-      let content = if s.content.len > 0: s.content else: s.output
+      let content = if s.content.len > 0: s.content else: lastOutput
       try:
         if s.path.len > 0:
           let dir = parentDir(s.path)
@@ -116,6 +117,8 @@ proc run*(p: var Plan, generate: GenerateFn,
       s.output = s.title
       s.status = ssCompleted
       emit(sink, (if s.title.len > 0: s.title else: "done") & "\n")
+
+    lastOutput = s.output
 
     p.advance()
     inc stepsRun

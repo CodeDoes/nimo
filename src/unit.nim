@@ -350,6 +350,15 @@ proc evalEngine*(run: var seq[Check]) =
   run.add(Check(name: "write step creates the target file",
                 passed: fileExists(fpath) and readFile(fpath) == "hello file"))
 
+  # validate + write chaining test (lastOutput)
+  let cpath = tmp / "chain.txt"
+  var pc = newPlan("chain")
+  pc.addStep(validateStep("chk", "The quick brown fox jumps over the lazy dog.\nAnd another line here for length."))
+  pc.addStep(writeStep("save", cpath))
+  discard pc.run(gen, maxSteps = 10)
+  run.add(Check(name: "write step chains lastOutput when content is empty",
+                passed: fileExists(cpath) and readFile(cpath).contains("words=")))
+
   # max-steps guard: a plan that never terminates aborts
   var pl = newPlan("looper")
   for i in 0 .. 9: pl.addStep(generateStep("g" & $i, "x"))
