@@ -66,7 +66,9 @@ work. NIMO must measure its own model, tasks, and hardware.
 | **wake trace** | The auditable record of one completed or aborted plan run. |
 | **episode** | A compact, source-linked view of a wake trace suitable for offline analysis. |
 | **bake example** | A templated demonstration/context that is evaluated through RWKV to create a starting state. It is not a weight update. |
-| **skill bundle** | A versioned manifest containing a template, curated examples, bake state, compatibility data, and evaluation evidence. |
+| **recall detector bake** | A tiny planner-state whose sole output is a parseable recall decision: no recall, or one focused `Extract(memory, filter)` step. It does not write prose or retrieve content. |
+| **skill bundle** | A versioned manifest containing a template, curated examples, bake state, compatibility data, evaluation evidence, and one narrow declared behavior. |
+| **skill lattice** | A registry of small, independently evaluated bakes plus an explicit routing policy—not one ever-growing universal state. |
 | **dream** | An offline proposal to create, revise, retire, or route a skill bundle. A dream is not automatically deployed. |
 | **canary** | A held-out, fixed evaluation task used to compare a candidate bundle with its parent/baseline. |
 
@@ -137,6 +139,43 @@ This gives the dream cycle two equally valuable outcomes:
    failure; or
 2. **remove/avoid a recall route** when it was redundant, irrelevant, costly,
    or made the generated result worse.
+
+### A lattice of small state bakes, not one overloaded state
+
+A state bake should have one job. Baking every preference, recall rule, output
+voice, tool convention, and domain fact into one giant context would recreate
+the heterogeneous-context failure that NIMO is intended to avoid. Instead,
+NIMO should route between a **lattice** of narrow bundles:
+
+```text
+user goal
+  -> recall-detector bake        # only: no recall | focused recall request
+  -> deterministic recall tool   # only if requested
+  -> task router                 # deterministic goal class / explicit policy
+  -> output bake                 # only: chapter OR wiki OR critique OR answer
+  -> validator / write
+```
+
+The recall detector receives the goal and a compact workspace capability index
+(e.g. known entities and artifact categories), **not** the entire memory store.
+It emits one of two pure structures:
+
+```text
+[step] report {"title":"recall not needed"}
+[step] extract {"source":"memory", "filter":"Kael injury and latest chapter"}
+```
+
+The engine validates this structure, executes a bounded recall if present, and
+passes only the resulting focused slice to the next specialist. The chapter bake
+never needs to learn the recall decision; the recall detector never needs to
+learn chapter prose.
+
+Bakes are selected, not piled up. At each stage the runtime restores a
+compatible base/skill state for that stage, runs its narrow context, captures
+its output artifact, and deliberately starts the next stage from that next
+skill’s state. It must not concatenate arbitrary baked-state vectors or allow
+one specialist’s hidden state to bleed into another. Composition happens via
+explicit plan steps and artifacts.
 
 ### Inefficiency taxonomy
 
@@ -221,7 +260,12 @@ single accidental success.
 
 ### 3. Candidate bake construction
 
-A candidate is a small, self-describing bundle—not an opaque `.state.bin`:
+A candidate is a small, self-describing bundle—not an opaque `.state.bin`.
+The curator may propose a *new specialist* when traces reveal a stable narrow
+behavior; it must not append unrelated examples to an existing bundle merely
+because that bundle is convenient. For example, `planner.recall.entity.v1`,
+`planner.recall.revision.v1`, `output.chapter.v4`, and `output.critique.v2`
+are independently evaluated bundles with separate canaries.
 
 ```json
 {
@@ -348,8 +392,10 @@ A bake example is a training-like asset; it demands stronger provenance.
 2. An example has a declared behavior, input class, output schema, and outcome.
 3. At least one counterexample or failure boundary accompanies each positive
    pattern when such a boundary exists.
-4. A bundle contains one output kind only: planner, extractor, critique, or
-   chapter—not a mixed “be good at everything” state.
+4. A bundle contains one narrow behavior only: planner recall detection,
+   planner plan shape, extraction, critique, or chapter output—not a mixed
+   “be good at everything” state. A bundle that has accumulated unrelated
+   examples is split and re-evaluated rather than expanded further.
 5. User-authored content is excluded unless its workspace consent policy allows
    local curation; secrets and credentials are never bake material.
 6. Synthetic examples are labeled and capped; they cannot become the only
