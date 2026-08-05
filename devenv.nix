@@ -33,7 +33,7 @@
 
   # LD_LIBRARY_PATH: nix pcre2 FIRST (grep needs 10.47 with version symbols),
   # then system libs (CUDA driver needs /usr/lib/x86_64-linux-gnu), then rwkv.cpp.
-  env.LD_LIBRARY_PATH = "/nix/store/gvn2w8kxsxdjh1nsw88gp9fjyrcxwmkj-pcre2-10.47/lib:/run/opengl-driver/lib:${pkgs.lib.makeLibraryPath [
+  env.LD_LIBRARY_PATH = "/nix/store/gvn2w8kxsxdjh1nsw88gp9fjyrcxwmkj-pcre2-10.47/lib:/usr/lib/x86_64-linux-gnu:/run/opengl-driver/lib:${pkgs.lib.makeLibraryPath [
     pkgs.stdenv.cc.cc.lib
     pkgs.gcc.cc.lib
     pkgs.vulkan-loader
