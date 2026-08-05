@@ -42,7 +42,7 @@ task build_all, "Build all Nim executables into build/":
 
 task unit, "Run the unit test suite (offline, no model needed)":
   mkdir "build"
-  exec "nim c -d:harnessOffline -o:build/unit src/unit.nim"
+  exec "nim c -d:harnessOffline --path:src -o:build/unit src/unit.nim"
   exec "build/unit"
 
 task jules, "Build the Jules CLI (needs SSL + system openssl)":
