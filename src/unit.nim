@@ -6,6 +6,7 @@
 ##   3. Session logging - is the JSONL message tree (user -> tool_call -> tool_result -> text) well-formed?
 
 import std/[strutils, os, times, json]
+import ./memory, ./fiaas
 import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header
 import ./program, ./engine, ./validate, ./config, ./model_evals
 
@@ -449,6 +450,69 @@ proc evalTurnPrimitives*(run: var seq[Check]) =
 # ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# Eval 17: model evals
+# ----------------------------------------------------------------------
+proc evalModelEvals*(run: var seq[Check]) =
+  # Test that model evals compile and run without crashing
+  # (Real model probes require GPU - this tests the deterministic planner part)
+  let result = runPlannerEval(5)
+  run.add(Check(name: "model evals: planner compilation works",
+                passed: result.trials > 0 and result.rate >= 0.0,
+                detail: "rate=" & $result.rate & " trials=" & $result.trials))
+
+
+# ----------------------------------------------------------------------
+# Eval 18: memory.nim (FIAAS and lookupMemory)
+# ----------------------------------------------------------------------
+proc evalMemory*(run: var seq[Check]) =
+  let tmp = getTempDir() / "nimo_memory_test"
+  removeDir(tmp); createDir(tmp)
+  let memFile = tmp / ".nimo" / "memory" / "memories.json"
+
+  var store = newMemoryStore()
+  let id1 = store.addMemory("Roses are red.", category="poem")
+  let id2 = store.addMemory("Violets are blue.", category="poem")
+  let id3 = store.addMemory("Apples are tasty.", category="food")
+
+  run.add(Check(name: "memory addEntry assigns unique ids",
+                passed: id1 != id2 and id1.len > 0, detail: id1))
+
+  let searchRes = store.searchMemory("Roses")
+  run.add(Check(name: "memory search retrieves closest match",
+                passed: searchRes.len > 0 and "Roses" in searchRes[0],
+                detail: "found " & $searchRes.len))
+
+  store.saveMemory(memFile)
+  run.add(Check(name: "memory saveToFile writes to correct path",
+                passed: fileExists(memFile), detail: memFile))
+
+  var store2 = newMemoryStore()
+  let loaded = store2.loadMemory(memFile)
+  run.add(Check(name: "memory loadFromFile loads entries",
+                passed: loaded and store2.fiaas.count() == 3))
+
+  let found = store2.searchMemory("Violets")
+  run.add(Check(name: "loaded memory works with search",
+                passed: found.len > 0 and ("Violets" in found[0] or "Roses" in found[0]),
+                detail: (if found.len > 0: found[0] else: "")))
+
+  # test lookupMemory with different filters
+  let ws = tmp
+  let emptyStrLookup = lookupMemory("", ws)
+  run.add(Check(name: "lookupMemory returns empty for empty filter",
+                passed: emptyStrLookup == ""))
+
+  let emptyLookup = lookupMemory("nonexistent", ws)
+  run.add(Check(name: "lookupMemory returns empty for no match",
+                passed: emptyLookup == ""))
+
+  let foodLookup = lookupMemory("Apples", ws)
+  run.add(Check(name: "lookupMemory returns relevant context",
+                passed: foodLookup.contains("Apples are tasty.")))
+
+  removeDir(tmp)
+
 proc runAllEvals*(): int =
   var run: seq[Check]
   evalToolCalling(run)
@@ -462,6 +526,7 @@ proc runAllEvals*(): int =
   evalEngine(run)
   evalValidate(run)
   evalModelEvals(run)
+  evalMemory(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="
   var passCount = 0
@@ -475,17 +540,6 @@ proc runAllEvals*(): int =
   echo "  " & $passCount & "/" & $run.len & " passed"
   echo "  exit=" & $(if passCount == run.len: 0 else: 1)
   return if passCount == run.len: 0 else: 1
-
-# ----------------------------------------------------------------------
-# Eval 17: model evals
-# ----------------------------------------------------------------------
-proc evalModelEvals*(run: var seq[Check]) =
-  # Test that model evals compile and run without crashing
-  # (Real model probes require GPU - this tests the deterministic planner part)
-  let result = runPlannerEval(5)
-  run.add(Check(name: "model evals: planner compilation works",
-                passed: result.trials > 0 and result.rate >= 0.0,
-                detail: "rate=" & $result.rate & " trials=" & $result.trials))
 
 when isMainModule:
   quit(runAllEvals())

@@ -85,7 +85,7 @@ proc lookupMemory*(query: string, workspace: string = ""): string =
   try:
     let j = parseJson(readFile(memPath))
     var results: seq[string] = @[]
-    for entry in j:
+    for entry in j["entries"]:
       if entry.hasKey("text") and entry.hasKey("category"):
         results.add(entry["text"].getStr())
     

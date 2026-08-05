@@ -29,9 +29,9 @@ proc newFIAAS*(dimension: int = DefaultDimension): FIAAS =
 
 proc hashToEmbedding*(text: string, dimension: int): seq[float64] =
   result = newSeq[float64](dimension)
-  var h = 12345
+  var h: int32 = 12345
   for i in 0 ..< dimension:
-    h = h * 1103515245 + 12345
+    h = h *% 1103515245'i32 +% 12345'i32
     result[i] = float64(((h shr 16) and 0x7FFF) - 0x4000) / 16384.0
 
 proc cosineSimilarity*(a, b: seq[float64]): float64 =
