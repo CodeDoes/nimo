@@ -93,7 +93,6 @@ when the story/chat needs context:
 | Gap | Notes |
 |-----|-------|
 | Real embeddings | FIAAS uses hash-based pseudo-vectors, not a real embedding model. Good enough for the MVP, documented honestly. |
-| Story CLI wiring | `nimo story generate/validate/critique/outline` print placeholders; the real story functions live in `src/story.nim` and are exercised by evals/tests, not yet from the CLI with a live model. |
 | Branch merge | `mergeBranch` in `session_branch.nim` is a stub (returns "not yet implemented"). |
 | Branch message persistence | `saveBranch`/`loadBranch` store branch metadata (ids, parents, timestamps) but not the messages themselves. |
 | `allowCpuFallback` | Mentioned in RFCs; the harness refuses to start on an unusable GPU rather than falling back (GPU-required by default). |

@@ -3,7 +3,7 @@
 
 import std/[json, strutils, os, times, strformat]
 import ./session_manager, ./config, ./workspace
-import ./program
+import ./program, ./validate
 
 type
   StoryQuality* = enum
@@ -31,69 +31,24 @@ const
   DefaultMinParagraphs* = 5
   DefaultMaxRepeats* = 3
 
-proc countWords*(s: string): int =
-  ## Counts words in a string.
-  var count = 0
-  var inWord = false
-  for c in s:
-    if c.isAlphaNumeric() or c == '_' or c == '\'':
-      if not inWord:
-        inc count
-        inWord = true
-    else:
-      inWord = false
-  return count
-
-proc countLines*(s: string): int =
-  ## Counts non-empty lines (paragraphs).
-  var count = 0
-  for line in s.splitLines():
-    let trimmed = line.strip()
-    if trimmed.len > 0:
-      inc count
-  return count
-
 proc validateChapter*(content: string, minWords: int = DefaultMinChapterWords,
                       minParagraphs: int = DefaultMinParagraphs,
                       maxRepeats: int = DefaultMaxRepeats): ChapterValidation =
   ## Validates chapter quality against classic writing criteria.
   result.chapter = 0
   result.title = ""
-  result.wordCount = content.countWords()
-  result.paragraphCount = content.countLines()
-  result.repeatingSegments = 0
-  result.issues = @[]
   
   # Extract title from first line
   let lines = content.strip().splitLines()
   if lines.len > 0:
     result.title = lines[0].replace("#", "").strip()
-  
-  # Check for repeating segments
-  let words = content.strip().splitWhitespace()
-  for i in 0 ..< max(words.len - maxRepeats * 3, 0):
-    var repeatCount = 0
-    for j in 1 ..< maxRepeats:
-      if i + j * 3 < words.len:
-        let seq1 = words[i ..< i + 3].join(" ")
-        let seq2 = words[i + j * 3 ..< i + j * 3 + 3].join(" ")
-        if seq1 == seq2:
-          inc repeatCount
-    if repeatCount >= maxRepeats:
-      inc result.repeatingSegments
-  
-  # Determine quality
-  if result.wordCount < minWords:
-    result.issues.add("Word count too low: " & $result.wordCount & " < " & $minWords)
-  if result.paragraphCount < minParagraphs:
-    result.issues.add("Paragraph count too low: " & $result.paragraphCount & " < " & $minParagraphs)
-  if result.repeatingSegments > 0:
-    result.issues.add("Found " & $result.repeatingSegments & " repeating segments")
-  
-  if result.issues.len == 0:
-    result.quality = sqPass
-  else:
-    result.quality = sqFail
+
+  let v = validateText(content, minWords, minParagraphs, maxRepeats)
+  result.wordCount = v.wordCount
+  result.paragraphCount = v.paragraphCount
+  result.repeatingSegments = v.repeatingSegments
+  result.issues = v.issues
+  result.quality = if v.passed: sqPass else: sqFail
 
 proc critiqueChapter*(content: string, chapterNum: int): CritiqueResult =
   ## Generates critique for a chapter.
