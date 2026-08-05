@@ -544,6 +544,21 @@ proc evalJules*(run: var seq[Check]) =
                 detail: "plan=" & $feedbackHint("s1", planWait).splitLines()[0] &
                          " | answered=" & $feedbackHint("s1", answered).splitLines()[0]))
 
+  # planNeedsApproval / planText / lastAgentMessage power the supervisor.
+  let planAct = parseJson("""[{"planGenerated":{"plan":{"steps":[
+      {"title":"Make build","description":"wrap nimble commands"},
+      {"title":"Run unit","description":"nim c -d:harnessOffline"}]}}}]""")
+  let approvedAct = parseJson("""[{"planGenerated":{"plan":{}}},{"planApproved":{}}]""")
+  let agentQ = parseJson("""[{"agentMessaged":{"agentMessage":"please pick a target"}}]""")
+  run.add(Check(name: "jules: supervisor helpers (plan/approve/question)",
+                passed: planNeedsApproval(planAct) and
+                        not planNeedsApproval(approvedAct) and
+                        "Make build" in planText(planAct) and
+                        "nim c -d:harnessOffline" in planText(planAct) and
+                        lastAgentMessage(agentQ) == "please pick a target",
+                detail: "needsApproval=" & $planNeedsApproval(planAct) &
+                         " plan=" & planText(planAct).replace("\n", "/")))
+
 # ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------

@@ -5,7 +5,7 @@ description   = "Nim wrapper for rwkv.cpp (RWKV language model inference in C/C+
 license       = "MIT"
 srcDir        = "src"
 binDir        = "build"
-bin           = @["main", "generate", "chat", "test_rwkv_full", "bake_state", "nimwave_app", "harness", "quantize", "nimo"]
+bin           = @["main", "generate", "chat", "test_rwkv_full", "bake_state", "nimwave_app", "harness", "quantize", "nimo", "jules"]
 
 # Dependencies
 requires "nim >= 2.0.0"

@@ -121,6 +121,15 @@ proc niceTime*(ts: string): string =
   except:
     ts
 
+const ActiveStates* = ["scheduled", "queued", "running", "active", "in_progress", "in progress"]
+const TerminalStates* = ["completed", "done", "failed", "error", "cancelled", "archived"]
+
+proc isActiveState*(st: string): bool =
+  let s = st.toLowerAscii()
+  for a in ActiveStates:
+    if s == a: return true
+  false
+
 # ---------------------------------------------------------------------------
 # API layer (network injected so the rest is testable)
 # ---------------------------------------------------------------------------
@@ -164,6 +173,10 @@ proc parseOrErr*(body: string): JsonNode =
 type
   QueuedJob* = object
     id*, repo*, prompt*, createdAt*: string
+    state*: string          # last known API state (for supervisor)
+    lastSeen*: string       # createTime watermark of newest printed activity
+    pr*: string             # PR url once the job produced one
+    blocked*: bool          # waiting on a human (question, not a plan)
 
 proc queuePath*(): string = getCurrentDir() / QueueFile
 
@@ -176,7 +189,11 @@ proc loadQueue*(): seq[QueuedJob] =
           id: n{"id"}.getStr(""),
           repo: n{"repo"}.getStr(""),
           prompt: n{"prompt"}.getStr(""),
-          createdAt: n{"createdAt"}.getStr("")))
+          createdAt: n{"createdAt"}.getStr(""),
+          state: n{"state"}.getStr(""),
+          lastSeen: n{"lastSeen"}.getStr(""),
+          pr: n{"pr"}.getStr(""),
+          blocked: n{"blocked"}.getBool(false)))
   except:
     discard
 
@@ -184,7 +201,8 @@ proc saveQueue*(jobs: seq[QueuedJob]) =
   var arr = newJArray()
   for j in jobs:
     arr.add(%*{ "id": j.id, "repo": j.repo, "prompt": j.prompt,
-                "createdAt": j.createdAt })
+                "createdAt": j.createdAt, "state": j.state,
+                "lastSeen": j.lastSeen, "pr": j.pr, "blocked": j.blocked })
   queuePath().writeFile(arr.pretty)
 
 proc addJob*(id, repo, prompt: string) =
@@ -294,6 +312,59 @@ proc feedbackHint*(sessionId: string, acts: JsonNode): string =
   else:
     result = "💬 session " & sessionId & " is waiting for your input.\n" &
              "   respond with:       jules send " & sessionId & " \"<msg>\""
+
+proc planNeedsApproval*(acts: JsonNode): bool =
+  ## True when the newest planGenerated has no later planApproved.
+  var lastPlan = -1
+  var lastApproval = -1
+  if not acts.isNil and acts.kind == JArray:
+    for i in 0 ..< acts.len:
+      let a = acts[i]
+      if not a{"planGenerated"}.isNil: lastPlan = i
+      elif not a{"planApproved"}.isNil: lastApproval = i
+  lastPlan > lastApproval
+
+proc planText*(acts: JsonNode): string =
+  ## Render the pending plan (from planGenerated.plan.steps) as text, or "".
+  if acts.isNil or acts.kind != JArray: return ""
+  for a in acts:
+    let pg = a{"planGenerated"}
+    if pg.isNil: continue
+    let plan = pg{"plan"}
+    if plan.isNil: continue
+    let steps = plan{"steps"}
+    if steps.isNil or steps.kind != JArray: continue
+    var lines: seq[string]
+    for s in steps:
+      let title = s{"title"}.getStr("")
+      let desc = s{"description"}.getStr("")
+      if title.len > 0:
+        lines.add("  " & title)
+        if desc.len > 0:
+          lines.add("      " & shorten(desc, 110))
+    if lines.len > 0:
+      return lines.join("\n")
+  ""
+
+proc lastAgentMessage*(acts: JsonNode): string =
+  ## The newest agentMessaged text (for question-style feedback), or "".
+  if acts.isNil or acts.kind != JArray: return ""
+  var best = ""
+  for a in acts:
+    let am = a{"agentMessaged"}
+    if am.isNil: continue
+    let txt = am{"agentMessage"}.getStr("")
+    if txt.len > 0: best = txt
+  best
+
+proc lastActivityTime*(acts: JsonNode): string =
+  ## createTime of the newest activity in the array (for the dedupe watermark).
+  if acts.isNil or acts.kind != JArray or acts.len == 0: return ""
+  var best = ""
+  for a in acts:
+    let t = a{"createTime"}.getStr("")
+    if t > best: best = t
+  best
 
 # ---------------------------------------------------------------------------
 # Command implementations
@@ -435,6 +506,109 @@ proc cmdPrs(req: RequestFn, apiSessions: JsonNode) =
         seen[pr] = true
         echo "  " & stateIcon(s{"state"}.getStr("")) & "  " & pr
 
+proc cmdSupervise(req: RequestFn, pollSec: int, autoApprove: bool, once: bool) =
+  ## Poll EVERY queued job, dedupe activity per job (watermark), and act:
+  ##   - plan pending + autoApprove -> approve it (so the agent isn't stalled)
+  ##   - plan pending + not          -> print the plan for a human to review
+  ##   - awaiting a question         -> print the agent's question
+  ## Terminates when every job is done or blocked on a human, or on `once`.
+  let jobs = loadQueue()
+  if jobs.len == 0:
+    echo "  queue is empty. spawn jobs first:  jules spawn <repo> \"<prompt>\" [--pr]"
+    quit(0)
+
+  echo "supervising " & $jobs.len & " job(s)  (Ctrl-C to stop; agents keep going)"
+  # mutable copy we persist on each pass so restarts resume cleanly
+  var track = jobs
+  var poll = 0
+  while true:
+    for idx in 0 ..< track.len:
+      let id = track[idx].id
+      var sess: JsonNode
+      try:
+        sess = parseOrErr(req("GET", "/sessions/" & id, nil))
+      except CatchableError as e:
+        echo "  ! " & id & " fetch error: " & e.msg
+        continue
+      let st = sess{"state"}.getStr("")
+      let s = st.toLowerAscii()
+      track[idx].state = st
+
+      # completed -> note the PR, emit once
+      if s in ["completed", "done"]:
+        if track[idx].pr.len == 0:
+          let prs = extractPrs(sess)
+          if prs.len > 0:
+            track[idx].pr = prs[0]
+            echo "✅ " & id & " COMPLETED  →  " & prs[0]
+          else:
+            echo "✅  " & id & " COMPLETED (no PR)"
+        continue
+      if s in ["failed", "error"]:
+        if track[idx].pr.len == 0:   # guard against repeat print
+          echo "❌  " & id & " FAILED"
+          track[idx].pr = "FAILED"  # mark as reported
+        continue
+      if s in ["cancelled", "archived"]:
+        continue
+
+      # fetch activities once (state differs per branch)
+      let acts = parseOrErr(req("GET", "/sessions/" & id & "/activities?pageSize=40", nil)){"activities"}
+      let latest = lastActivityTime(acts)
+      track[idx].lastSeen = latest
+
+      # blocked on a human?
+      if s in ["awaiting_user_feedback", "awaiting user feedback"]:
+        if planNeedsApproval(acts):
+          if autoApprove:
+            discard parseOrErr(req("POST", "/sessions/" & id & ":approvePlan", nil))
+            echo "👍  " & id & " approved plan (auto)"
+          elif not track[idx].blocked:
+            echo "📋  " & id & " needs approval. Plan:"
+            echo planText(acts)
+            echo "      jules approve " & id
+            track[idx].blocked = true
+        else:
+          if not track[idx].blocked:
+            let q = lastAgentMessage(acts)
+            if q.len == 0:
+              echo "💬  " & id & " needs your input somewhere."
+            else:
+              echo "💬  " & id & " asks:"
+              echo "      " & shorten(q, 140)
+            echo "      jules send " & id & " \"<answer>\""
+            track[idx].blocked = true
+        continue
+
+      # still active -> rearm blocked flag (it resumed) and touch watermark
+      track[idx].blocked = false
+      # echo a dot so the user can see it's being polled
+      if not once or poll == 1:
+        echo "▶  " & id & " " & shorten(track[idx].prompt, 40) & " ..."
+
+    saveQueue(track)
+    if once: break
+
+    # stop when no job is still active (scheduled/queued/running/in_progress)
+    var anyActive = false
+    for jj in track:
+      if isActiveState(jj.state): anyActive = true
+    if not anyActive: break
+    poll.inc
+    sleep(pollSec * 1000)
+
+  echo ""
+  echo "done."
+  # summary of blocked jobs needing a human
+  var blocked: seq[QueuedJob]
+  for jj in track:
+    if jj.blocked: blocked.add(jj)
+  if blocked.len > 0:
+    echo "still needs a human:"
+    for b in blocked:
+      echo "  💬 " & b.id & "  " & shorten(b.prompt, 50)
+
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
@@ -446,7 +620,10 @@ Usage:
   jules spawn <repo> "<prompt>" [--pr] create a session + queue it
   jules queue                          list queued jobs (icon + id + PR)
   jules status <id>                    one session: state, PR, recent activity
-  jules watch [id]                     poll until done, streaming activity
+  jules watch [id]                     poll ONE session until done, streaming
+  jules supervise [--approve]
+                                       poll ALL queued jobs; print plans/
+                                       questions, auto-approve with --approve
   jules activities <id> [--limit N]    printable activity stream
   jules prs                            pull requests across queued/completed jobs
   jules sessions                       recent API sessions
@@ -509,6 +686,18 @@ proc main() =
         id = paramStr(i)
       inc i
     cmdWatch(req, id, pollSec)
+  of "supervise":
+    var pollSec = 30
+    var approve = false
+    var once = false
+    var i = 2
+    while i <= paramCount():
+      if paramStr(i) == "--interval" and i < paramCount():
+        pollSec = parseInt(paramStr(i+1)); inc i
+      elif paramStr(i) == "--approve": approve = true
+      elif paramStr(i) == "--once": once = true
+      inc i
+    cmdSupervise(req, pollSec, approve, once)
   of "activities":
     var id = ""
     var limit = 30
