@@ -1,5 +1,7 @@
-import std/[os, strutils, osproc, times]
-import ./config, ./workspace, ./story, ./bootstrap, ./orchestrator, ./program, ./engine
+import std/[os, strutils, osproc, times, strformat, sequtils]
+import ./config, ./workspace, ./story, ./bootstrap, ./orchestrator, ./program, ./engine, ./harness
+import std/[dynlib]
+import ./gpu
 
 
 # ---------------------------------------------------------------------------
@@ -36,6 +38,29 @@ Example:
 proc cmdPlan(rest: seq[string]): int =
   ## `nimo plan <goal>` — alias for planner (goal-first CLI)
   return cmdPlanner(rest)
+
+proc cmdDoctor(rest: seq[string]): int =
+  ## "nimo doctor" — check environment health
+  echo "[doctor] NIMO Environment Health Report"
+  echo "====================================="
+  let modelsDir = "models"
+  if dirExists(modelsDir):
+    echo "[OK] Models directory exists: " & modelsDir
+  else:
+    echo "[WARN] Models directory not found: " & modelsDir
+  let lib = loadLib("librwkv.so")
+  if lib != nil:
+    echo "[OK] librwkv.so found on loader path"
+    unloadLib(lib)
+  else:
+    echo "[WARN] librwkv.so not found on loader path"
+  let gpuRep = gpuProbe()
+  echo "[gpu] " & gpuRep.describe()
+  case gpuRep.status
+  of gpuAvailable: echo "[OK] GPU usable"
+  of gpuUnusable: echo "[WARN] GPU unusable"
+  of gpuUnknown: echo "[WARN] No CUDA driver"
+  return 0
 
 ## NIMO CLI entry point
 ## Usage: nimo <command> [args...]
@@ -294,6 +319,7 @@ Commands:
   run          Execute a plan
   story        Story pipeline
   unit         Run the unit test suite
+  doctor       Check environment health
   eval         (alias) Run the unit test suite
   model-eval   Run model behavior evals
 
@@ -350,6 +376,8 @@ Usage:
     else:
       echo "Error: unit binary not found. Run 'nimble build' first."
       quit(1)
+  of "doctor":
+    quit(cmdDoctor(rest))
   of "model-eval":
     let binary = baseDir / "model_evals"
     if fileExists(binary):
