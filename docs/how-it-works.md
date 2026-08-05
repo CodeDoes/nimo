@@ -88,17 +88,28 @@ For `generate` (and inside chat/harness) the same core loop runs:
 1. Wrap your message with a system prompt that explains the `run_pipeline` tool.
 2. Ask the model for a reply.
 3. Look at the reply for a tool call. Three formats are recognized:
-   - `[tool] run_pipeline {...}` (the primary one)
-   - `<tool_call>{...}</tool_call>`
-   - a bare JSON object line `{"name": ..., "arguments": ...}`
+   - **Bracket format** (the primary one):
+     ```
+     [tool] run_pipeline {"intent": "write a poem"}
+     ```
+   - **XML format**:
+     ```xml
+     <tool_call>{"name": "run_pipeline", "arguments": {"intent": "write a poem"}}</tool_call>
+     ```
+   - **Bare JSON format**:
+     ```json
+     {"name": "run_pipeline", "arguments": {"intent": "write a poem"}}
+     ```
 4. **No tool call** → the reply is the final answer. Done.
 5. **Tool call found** → record the call, run the tool, record the result,
    then feed the result back to the model and ask it to continue.
 6. Repeat up to 8 iterations; if the model keeps calling tools forever, the
    turn is marked aborted instead of looping endlessly.
 
+### Session JSONL message-tree format
+
 The whole conversation is saved as JSONL: one line for the session header, one
-line per message, each with an id and parent id forming a tree.
+line per message, each with an id and parent id forming a tree. This allows branching conversations. Each message links back to the previous one via a `parentId` chain. It also includes a `stopReason` indicating how the generation completed (e.g. `stop`, `length`, `tool_call`).
 
 ## The `run_pipeline` tool
 
