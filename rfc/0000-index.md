@@ -21,65 +21,34 @@ status of the whole project is tracked in [analysis/status.md](../analysis/statu
 
 ## RFCs
 
-| # | RFC | Status | What it describes (in code) |
-|---|-----|--------|------------------------------|
-| 0000 | [index.md](0000-index.md) | — | This file |
-| 0001 | [vision.md](0001-vision.md) | Guide | Product vision: harness around a model |
-| 1000 | [session.md](1000-session.md) | ⏳ re-scoped | thin session: history + refs; provenance (model/bake per message) |
-| 1100 | [message-format.md](1100-message-format.md) | ✅ implemented | `src/harness.nim` `parseToolCalls` — the 3 tool-call forms |
-| 1200 | [chat.md](1200-chat.md) | ✅ implemented | `src/chat.nim` — interactive REPL chat (streaming migration pending, RFC 3600) |
-| 1300 | [story.md](1300-story.md) | Partial | Story flow — hardcoded approx.; target is the plan-template form |
-| 2000 | [cli.md](2000-cli.md) | ⏳ re-scoped | goal-first verbs (new/open/continue/plan/run); no content-type nouns |
-| 3000 | [pipeline.md](3000-pipeline.md) | Partial | `src/pipeline.nim` — intent → plan → execute (MVP step superseded) |
-| 3100 | [chat.md](3100-chat.md) | Superseded | Target: every message compiles into a streaming engine (code in transition) |
-| 3200 | [story.md](3200-story.md) | Partial | Story plan template: outline → extract → wiki → chapters → validate |
-| 3300 | [workspace.md](3300-workspace.md) | ✅ implemented | `src/workspace.nim` — workspace creation flow |
-| 3400 | [agent.md](3400-agent.md) | Superseded | Target: planner → plan → engine (old improvisation loop being removed) |
-| 3500 | [plan-format.md](3500-plan-format.md) | Design ref | The plan artifact: step vocabulary, data-driven loops, plan-as-data |
-| 3600 | [engine.md](3600-engine.md) | Design ref | The streaming executor: sink, infinite loop, checkpoint/resume |
-| 4000 | [config.md](4000-config.md) | ✅ implemented | `src/config.nim` — `nimo.json` + `NIMO_*` env overrides |
-| 5000 | [workspace.md](5000-workspace.md) | ✅ implemented | Workspace commands in `src/nimo.nim` + `src/workspace.nim` |
-| 6000 | [src.md](6000-src.md) | ✅ implemented | Actual source layout (no more "desired" layout) |
-| 7000 | [env.md](7000-env.md) | ✅ implemented | Build/runtime requirements, backend libraries |
-| 7500 | [gpu.md](7500-gpu.md) | ✅ implemented | `src/gpu.nim` — GPU probe + backend policy |
-| 8000 | [state-bake.md](8000-state-bake.md) | Partial | `src/state_cache.nim` — context bake; skill bake (planner/output) planned |
-| 8100 | [rwkv.md](8100-rwkv.md) | ✅ implemented | RWKV model details, sampling, quant formats |
-| 8150 | [quantization.md](8150-quantization.md) | ✅ implemented | `src/model_cache.nim` — raw→quantize→cache policy |
-| 9100 | [logging.md](9100-logging.md) | ✅ implemented | JSONL session files (`src/session_manager.nim`) |
-| 9200 | [trace.md](9200-trace.md) | Partial | CLI progress: token streaming (generate) + target ▶/✔ steps |
-| 9300 | [eval.md](9300-eval.md) | ✅ implemented | `src/unit.nim` — 61 offline checks |
-| 9400 | [test.md](9400-test.md) | ✅ implemented | Unit tests for tokenizer/model |
-
-## Wild research RFCs (9500 series)
-
-These are intentionally ambitious, **speculative** proposals. They are not a
-shipping roadmap or implementation claim; each begins with offline fixtures,
-behavioral tests, and an explicit implementation plan before it may affect a
-workspace.
-
-| # | RFC | Theme |
-|---|-----|-------|
-| 9500 | [living-worlds.md](9500-living-worlds.md) | append-only world facts and continuity pulse |
-| 9510 | [time-travel-debugging.md](9510-time-travel-debugging.md) | replay and causal plan forks |
-| 9520 | [dream-compiler.md](9520-dream-compiler.md) | competing plans before expensive work |
-| 9530 | [agent-biomes.md](9530-agent-biomes.md) | bounded specialist ecosystems |
-| 9540 | [narrative-physics.md](9540-narrative-physics.md) | simulated story constraints |
-| 9550 | [memory-ecology.md](9550-memory-ecology.md) | memory lineage, decay, and review |
-| 9560 | [ontological-git.md](9560-ontological-git.md) | semantic claim diffs |
-| 9570 | [blackboard-cities.md](9570-blackboard-cities.md) | typed public coordination notices |
-| 9580 | [counterfactual-labs.md](9580-counterfactual-labs.md) | isolated what-if branches |
-| 9590 | [adversarial-muse.md](9590-adversarial-muse.md) | bounded creative opposition |
-| 9600 | [midnight-shift.md](9600-midnight-shift.md) | read-only overnight maintenance |
-| 9610 | [simulation-forges.md](9610-simulation-forges.md) | sandboxed plan scenarios |
-| 9620 | [skill-genomes.md](9620-skill-genomes.md) | provenance-rich baked skills |
-| 9630 | [plurality-court.md](9630-plurality-court.md) | cited deliberation for high-impact work |
-| 9640 | [attention-weather.md](9640-attention-weather.md) | visible focused-context diagnostics |
-| 9650 | [artifact-economy.md](9650-artifact-economy.md) | explicit local execution budgets |
-| 9660 | [ritual-interfaces.md](9660-ritual-interfaces.md) | human-gated workflow templates |
-| 9670 | [embodied-workspaces.md](9670-embodied-workspaces.md) | one event stream, many accessible views |
-| 9680 | [mythic-observability.md](9680-mythic-observability.md) | poetic but exact run traces |
-| 9690 | [consentful-autonomy.md](9690-consentful-autonomy.md) | revocable capability grants |
-| 9710 | [state-dreaming.md](9710-state-dreaming.md) | evidence-gated RWKV state-bake improvement |
+| Number | Title | Summary |
+|--------|-------|---------|
+| 0000 | [Index](0000-index.md) | Design documents for the NIMO project. |
+| 0001 | [Vision](0001-vision.md) | NIMO is an AI Harness — deterministic software wrapping non-deterministic LLM inference. |
+| 1000 | [Session](1000-session.md) | The conversation container. |
+| 1100 | [Message Format](1100-message-format.md) | Raw text format for each content type, and the **planner's emission format**. |
+| 1200 | [Chat](1200-chat.md) | The interactive chat workflow. |
+| 1300 | [Story](1300-story.md) | The creative writing workflow. |
+| 2000 | [CLI](2000-cli.md) | The command surface. |
+| 3000 | [Pipeline](3000-pipeline.md) | Intent → plan → execute. |
+| 3100 | [Chat Pipeline](3100-chat.md) | The interactive chat loop with plan compilation. |
+| 3200 | [Story Pipeline](3200-story.md) | Multi-chapter story generation with validation. |
+| 3300 | [Workspace Pipeline](3300-workspace.md) | Workspace creation and structure. |
+| 3400 | [Agent](3400-agent.md) | The orchestration loop. |
+| 3500 | [Plan Format](3500-plan-format.md) | The plan is the core artifact: it's what the planner emits and what the executor runs. |
+| 3600 | [Engine](3600-engine.md) | The engine is the executor that takes a plan and runs it — **forever if needed** — streaming every token, checkpointing for resume, and allowing interruption. |
+| 4000 | [Config](4000-config.md) | How settings are resolved. |
+| 5000 | [Workspace](5000-workspace.md) | Workspace management commands and the active-workspace pointer. |
+| 6000 | [Source Structure](6000-src.md) | The actual layout of `src/`. |
+| 7000 | [Environment](7000-env.md) | Build and runtime requirements. |
+| 7500 | [GPU Detection & Backend Policy](7500-gpu.md) | How the harness determines GPU usability and decides—before loading the model— whether to use GPU, fall back to CPU, or refuse to start. |
+| 8000 | [State Bake](8000-state-bake.md) | Bake a context into model state so later sessions resume instantly, and **bake skills** — the state-tuning mechanism. |
+| 8100 | [RWKV](8100-rwkv.md) | RWKV model details. |
+| 8150 | [Quantization](8150-quantization.md) | Model quantization policy and the model cache. |
+| 9100 | [Logging](9100-logging.md) | JSONL files. |
+| 9200 | [Trace](9200-trace.md) | What the user sees in the CLI during execution. |
+| 9300 | [Eval](9300-eval.md) | Check that the harness behaves correctly. |
+| 9400 | [Test](9400-test.md) | Test if the harness (code) is working. |
 
 ## Cross-References
 
@@ -92,11 +61,11 @@ workspace.
 3200-story.md ──▶ 3300-workspace.md (chapters/wikis live in a workspace)
 8000-state-bake.md ──▶ 8150-quantization.md (model cache + state cache both live in .nimo/)
 7500-gpu.md ──▶ 4000-config.md (backend / gpuLayers config keys)
-9300-eval.md ──▶ 9400-test.md (unit tests build on the same offline harness)
+9300-eval.md ──▶ 9400-test.md (evals build on the same offline harness)
 ```
 
 ## Implementation Status
 
 All RFCs marked ✅ are implemented in `src/` and covered by the offline test
-suite (`nimo unit`, 61 checks). See [analysis/status.md](../analysis/status.md)
+suite (`devenv shell unit`, 75 checks). See [analysis/status.md](../analysis/status.md)
 for the module-by-module map and known gaps.
