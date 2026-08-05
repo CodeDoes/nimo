@@ -270,7 +270,11 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".",
   while true:
     stdout.write("\n> ")
     stdout.flushFile()
-    let line = stdin.readLine()
+    var line = ""
+    try:
+      line = stdin.readLine()
+    except EOFError:
+      break
     if line.len == 0: continue
     if line == "/quit": break
     if line.startsWith("/save"):

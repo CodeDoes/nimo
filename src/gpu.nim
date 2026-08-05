@@ -6,6 +6,12 @@
 ## a reset), and we want a clean, actionable message instead of a crash.
 
 import std/[dynlib]
+import ./rwkv/model/header
+
+# Opaque CUDA Driver API handles (we never dereference them)
+type
+  CUdevice* = distinct int
+  CUcontext* = distinct int
 
 type
   GpuStatus* = enum
@@ -102,9 +108,62 @@ proc freeVramMiB*(): int =
   let lib = loadLib("libcuda.so.1")
   if lib == nil: return -1
   defer: unloadLib(lib)
+  type CuInit = proc(flags: cuint): cint {.cdecl.}
+  type CuDeviceGet = proc(dev: ptr CUdevice; ordinal: cint): cint {.cdecl.}
+  type CuCtxCreate = proc(ctx: ptr CUcontext; flags: cuint; dev: CUdevice): cint {.cdecl.}
   type CuMemGetInfo = proc(free, total: ptr int64): cint {.cdecl.}
+  type CuCtxDestroy = proc(ctx: CUcontext): cint {.cdecl.}
+  let cuInit = cast[CuInit](symAddr(lib, "cuInit"))
+  let cuDeviceGet = cast[CuDeviceGet](symAddr(lib, "cuDeviceGet"))
+  let cuCtxCreate = cast[CuCtxCreate](symAddr(lib, "cuCtxCreate"))
   let cuMemGetInfo = cast[CuMemGetInfo](symAddr(lib, "cuMemGetInfo"))
-  if cuMemGetInfo == nil: return -1
+  let cuCtxDestroy = cast[CuCtxDestroy](symAddr(lib, "cuCtxDestroy"))
+  if cuInit == nil or cuMemGetInfo == nil: return -1
+  # cuMemGetInfo requires an initialized CUDA context (returns
+  # CUDA_ERROR_INVALID_CONTEXT=201 otherwise) — so cuInit + cuCtxCreate
+  # must precede it. Clean up the context after.
+  if cuInit(0) != cuSuccess: return -1
+  if cuDeviceGet == nil or cuCtxCreate == nil: return -1
+  var dev: CUdevice
+  if cuDeviceGet(addr dev, 0) != cuSuccess: return -1
+  var ctx: CUcontext
+  if cuCtxCreate(addr ctx, 0, dev) != cuSuccess: return -1
   var freeMem, totalMem: int64
-  if cuMemGetInfo(addr freeMem, addr totalMem) != cuSuccess: return -1
+  let ok = cuMemGetInfo(addr freeMem, addr totalMem) == cuSuccess
+  # release the throwaway context (best-effort; ignore errors)
+  if cuCtxDestroy != nil:
+    discard cuCtxDestroy(ctx)
+  if not ok: return -1
   return int(freeMem div (1024 * 1024))
+
+proc resolveGpuLayers*(modelPath: string, requested: int = -1): int =
+  ## Derive how many transformer layers to offload to GPU VRAM.
+  ##
+  ## There is NO magic "default layer count" — offload amount is derived from
+  ## the model's own shape (header nLayer) and the GPU's free VRAM:
+  ##   - requested < 0  -> offload all model layers that fit in VRAM
+  ##   - requested == 0 -> CPU only (0 layers)
+  ##   - requested > 0  -> explicit cap, still clamped to what VRAM holds
+  ## Returns >= 0; -1 only if the model header can't be read.
+  let h = readModelHeader(modelPath)
+  if not isValidHeader(h) or h.nLayer == 0:
+    return -1
+  let modelLayers = int(h.nLayer)
+  var want = if requested < 0: modelLayers else: requested
+  if want <= 0:
+    return 0
+  if want > modelLayers:
+    want = modelLayers
+  # If we can query free VRAM and the whole model swims in it, that's enough.
+  let freeVram = freeVramMiB()
+  if freeVram <= 0:
+    return want  # can't gauge VRAM — trust model layer bound
+  let modelMiB = modelSizeMiB(h)
+  if modelMiB <= freeVram:
+    return modelLayers  # whole model fits: offload everything
+  # Not enough VRAM for all layers — proportionally drop layers so the
+  # offloaded subset approximates available memory (keep at least 1).
+  let totalMiB = modelMiB  # embed+vocab+layers; layers dominate for RWKV
+  let usableMiB = freeVram
+  let keep = max(1, int(float(modelLayers) * float(usableMiB) / float(totalMiB)))
+  result = if keep < want: keep else: want

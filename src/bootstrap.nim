@@ -88,6 +88,14 @@ when not defined(harnessOffline):
         result.lines.add "       nimo.json -> { \"backend\": \"cpu\" }"
         result.lines.add "       or       -> --backend cpu"
         return
+      # Derive offload from the model's own shape (header nLayer), clamped to
+      # free VRAM — there is no hardcoded default layer count.
+      if layers < 0:
+        layers = resolveGpuLayers(modelToLoad, -1)
+        if layers < 0:
+          result.ok = false
+          result.lines.add "Cannot determine model layer count (unreadable header): " & modelToLoad
+          return
       result.lines.add "[gpu] using " & $layers & " GPU layer(s)."
       let err = checkCudaLoad(backend, modelToLoad, "default", layers)
       if err.len > 0:

@@ -23,7 +23,7 @@ const
   DefaultTopP* = 0.7f
   DefaultChunkSize* = 16
   DefaultThreads* = 8
-  DefaultGpuLayers* = 99  # Offload all layers to GPU VRAM by default
+  DefaultGpuLayers* = -1  # -1 = derive from model shape + free VRAM (no magic number)
   DefaultConfigFile* = "nimo.json"
   DefaultMaxTokens* = 200
   DefaultQuantFormat* = ""          # "" = load model as-is; e.g. "Q4_K" -> raw->quantize->cache
@@ -52,7 +52,7 @@ type
   NimoConfig* = object
     modelPath*: string
     vocabPath*: string
-    gpuLayers*: int
+    gpuLayers*: int      # <0: auto (model nLayer clamped by free VRAM); 0: CPU; >0: explicit cap
     backend*: RwkvBackendKind      # runtime backend: cpu | cuda | vulkan
     backendSet*: bool              # true when backend came from config/env (beats rwkv default)
     libPath*: string               # explicit librwkv.so path (overrides per-backend default)

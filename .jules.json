@@ -10,66 +10,6 @@
     "blocked": false
   },
   {
-    "id": "6442194228157555935",
-    "repo": "CodeDoes/nimo",
-    "prompt": "Clean up src/story.nim: it has private duplicates of countWords and countLines that already exist in src/validate.nim (validateText). Remove the private duplicates and import from ./validate instead. Keep behavior identical (check the return values match: countWords counts whitespace-separated words, countLines counts newline-separated lines). Run 'nimble unit' offline before committing and open a PR.",
-    "createdAt": "2026-08-05T18:05:00Z",
-    "state": "COMPLETED",
-    "lastSeen": "2026-08-05T18:16:30.195Z",
-    "pr": "https://github.com/CodeDoes/nimo/pull/4",
-    "blocked": false
-  },
-  {
-    "id": "11549812003595611114",
-    "repo": "CodeDoes/nimo",
-    "prompt": "Update rfc/0000-index.md: it should cross-link all RFCs in rfc/ with one line each (number, title, one-sentence summary). Read every rfc/*.md file, verify the index matches the actual files present, add any missing entries, and fix stale summaries. Docs-only change, no code. Open a PR.",
-    "createdAt": "2026-08-05T18:05:16Z",
-    "state": "COMPLETED",
-    "lastSeen": "2026-08-05T18:15:35.461637Z",
-    "pr": "https://github.com/CodeDoes/nimo/pull/6",
-    "blocked": false
-  },
-  {
-    "id": "6732097654231818113",
-    "repo": "CodeDoes/nimo",
-    "prompt": "Check docs/ for drift from the code: grep the CLI help text in src/nimo.nim, src/generate.nim, src/harness.nim and compare with docs/getting-started.md and docs/index.md commands. Fix any doc references to commands or flags that no longer exist (e.g. renamed 'eval' -> 'unit'). Docs-only, no code changes. Open a PR.",
-    "createdAt": "2026-08-05T18:05:21Z",
-    "state": "COMPLETED",
-    "lastSeen": "2026-08-05T18:27:21.378399Z",
-    "pr": "https://github.com/CodeDoes/nimo/pull/5",
-    "blocked": false
-  },
-  {
-    "id": "3083769437961506621",
-    "repo": "CodeDoes/nimo",
-    "prompt": "Add offline unit tests for src/memory.nim: test lookupMemory with various filter strings (empty, unknown key, matching key), memory add/retrieve round-trip, and persistence of the memory store file. Follow the existing test style in src/unit.nim (Check objects + evalX procs). Run 'nimble unit' offline (must pass, no model) before committing. Open a PR.",
-    "createdAt": "2026-08-05T18:05:32Z",
-    "state": "COMPLETED",
-    "lastSeen": "2026-08-05T18:17:26.554982Z",
-    "pr": "https://github.com/CodeDoes/nimo/pull/10",
-    "blocked": false
-  },
-  {
-    "id": "5612734091602008194",
-    "repo": "CodeDoes/nimo",
-    "prompt": "Add a  command to src/nimo.nim that prints an environment health report: checks for models dir, librwkv.so on loader path, GPU probe result (via src/gpu.nim), and unit suite status. Wire it into the CLI help. It must compile with -d:harnessOffline. Keep it small. Open a PR.",
-    "createdAt": "2026-08-05T18:36:12Z",
-    "state": "COMPLETED",
-    "lastSeen": "2026-08-05T18:44:51.922535Z",
-    "pr": "https://github.com/CodeDoes/nimo/pull/7",
-    "blocked": false
-  },
-  {
-    "id": "15582105157800550813",
-    "repo": "CodeDoes/nimo",
-    "prompt": "Add offline unit tests for src/engine.nim (engine.run with scripted generator, maxSteps guard, lastOutput chaining)",
-    "createdAt": "2026-08-05T18:50:40Z",
-    "state": "COMPLETED",
-    "lastSeen": "2026-08-05T18:52:16.033226Z",
-    "pr": "https://github.com/CodeDoes/nimo/pull/9",
-    "blocked": false
-  },
-  {
     "id": "8745220886822091896",
     "repo": "CodeDoes/nimo",
     "prompt": "Standardize error reporting: fix compiler warnings in src/ (program.nim line 93 defaults, unused hints); do NOT touch deprecated sha1 warnings; verify unit passes offline",
@@ -77,16 +17,6 @@
     "state": "IN_PROGRESS",
     "lastSeen": "2026-08-05T18:53:42.497810Z",
     "pr": "",
-    "blocked": false
-  },
-  {
-    "id": "13976359573761058975",
-    "repo": "CodeDoes/nimo",
-    "prompt": "Write docs/how-it-works.md additions: document harness tool-call parsing (3 forms) and session JSONL message-tree format. Docs only.",
-    "createdAt": "2026-08-05T18:50:40Z",
-    "state": "COMPLETED",
-    "lastSeen": "2026-08-05T18:55:13.073039Z",
-    "pr": "https://github.com/CodeDoes/nimo/pull/8",
     "blocked": false
   }
 ]
