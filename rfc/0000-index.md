@@ -2,7 +2,7 @@
 
 Design documents for the NIMO project. Each RFC below has been aligned with
 the **actual code** in `src/` and includes an implementation status. The
-status of the whole project is tracked in [analysis/status.md](../analysis/status.md).
+status of the whole project is tracked in git history.
 
 ## Numbering Scheme
 
@@ -67,5 +67,5 @@ status of the whole project is tracked in [analysis/status.md](../analysis/statu
 ## Implementation Status
 
 All RFCs marked ✅ are implemented in `src/` and covered by the offline test
-suite (`devenv shell unit`, 75 checks). See [analysis/status.md](../analysis/status.md)
+suite (`devenv shell unit`, 87 checks)
 for the module-by-module map and known gaps.

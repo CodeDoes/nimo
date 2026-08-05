@@ -6,7 +6,7 @@ The orchestration loop. **Status: superseded design — the improvisation loop
 > This RFC documents the **intended** architecture. Today `src/harness.nim`
 > still contains the old loop where the model improvises `[tool]` calls inside
 > its reply; that behavior contradicts the design and is being removed. Code in
-> transition is tracked in [analysis/status.md](../analysis/status.md).
+> transition is tracked in git history.
 
 ## What it is now
 

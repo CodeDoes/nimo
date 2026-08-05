@@ -60,5 +60,5 @@ The detailed walk-through is in [how-it-works.md](how-it-works.md).
   state/  cache/  logs/  sessions/  pipelines/
 ```
 
-See [the implementation status](../analysis/status.md) for the exact list of
+See git history and RFCs for the implementation status
 code modules behind all of this.

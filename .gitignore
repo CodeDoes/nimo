@@ -21,7 +21,3 @@ nimble.paths
 nimbledeps
 
 # AI session artifacts
-baked_state.bin
-analysis/
-critique/
-plan/
