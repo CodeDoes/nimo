@@ -608,6 +608,22 @@ proc cmdSupervise(req: RequestFn, pollSec: int, autoApprove: bool, once: bool) =
     for b in blocked:
       echo "  💬 " & b.id & "  " & shorten(b.prompt, 50)
 
+proc cmdPrune(allBad: bool) =
+  ## Drop jobs from the local queue we no longer want to supervise. `--all`
+  ## clears everything; otherwise drops jobs whose last known state is
+  ## terminal (or paused/garbled). API sessions are left untouched.
+  var jobs = loadQueue()
+  var keep: seq[QueuedJob]
+  var dropped = 0
+  for j in jobs:
+    let s = j.state.toLowerAscii()
+    if allBad or (j.state.len > 0 and (s in TerminalStates or s == "paused")):
+      inc dropped
+      continue
+    keep.add(j)
+  saveQueue(keep)
+  echo "pruned " & $dropped & " job(s); " & $keep.len & " remain."
+
 
 # ---------------------------------------------------------------------------
 # CLI
@@ -629,6 +645,7 @@ Usage:
   jules sessions                       recent API sessions
   jules send <id> "<msg>"              message the agent
   jules approve <id>                   approve a pending plan
+  jules prune [--all]                  drop done/terminal jobs from the queue
   jules archive-all [--limit N]        archive every non-archived session
   jules help                           this help
 
@@ -732,6 +749,11 @@ proc main() =
       echo "usage: jules approve <id>"; quit(1)
     discard parseOrErr(req("POST", "/sessions/" & paramStr(2) & ":approvePlan", nil))
     echo "plan approved for " & paramStr(2)
+  of "prune":
+    var allBad = false
+    for i in 2 .. paramCount():
+      if paramStr(i) == "--all": allBad = true
+    cmdPrune(allBad)
   of "archive-all":
     var limit = 100
     var i = 2
