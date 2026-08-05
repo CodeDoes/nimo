@@ -339,7 +339,7 @@ Usage:
   let baseDir = getCurrentDir() / "build"
 
   # Handle help before dispatching to commands
-  if cmd in @["--help", "-h", "help"]:
+  if cmd in @["--help", "-h", "help", "h"]:
     echo """
 nimo -- RWKV inference CLI
 
