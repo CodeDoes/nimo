@@ -461,7 +461,9 @@ proc runAllEvals*(): int =
   evalPlanArtifact(run)
   evalEngine(run)
   evalValidate(run)
-  evalModelEvals(run)
+
+  when not defined(harnessOffline):
+    evalModelEvals(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="
   var passCount = 0
