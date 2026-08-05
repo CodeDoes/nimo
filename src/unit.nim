@@ -606,7 +606,6 @@ proc evalJules*(run: var seq[Check]) =
 # ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
-proc evalModelEvals*(run: var seq[Check]) # forward decl needed since called before defined
 proc runAllEvals*(): int =
   var run: seq[Check]
   evalToolCalling(run)
