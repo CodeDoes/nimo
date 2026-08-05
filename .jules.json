@@ -44,9 +44,9 @@
     "repo": "CodeDoes/nimo",
     "prompt": "Add offline unit tests for src/memory.nim: test lookupMemory with various filter strings (empty, unknown key, matching key), memory add/retrieve round-trip, and persistence of the memory store file. Follow the existing test style in src/unit.nim (Check objects + evalX procs). Run 'nimble unit' offline (must pass, no model) before committing. Open a PR.",
     "createdAt": "2026-08-05T18:05:32Z",
-    "state": "IN_PROGRESS",
+    "state": "COMPLETED",
     "lastSeen": "2026-08-05T18:17:26.554982Z",
-    "pr": "",
+    "pr": "https://github.com/CodeDoes/nimo/pull/10",
     "blocked": false
   },
   {
@@ -64,9 +64,9 @@
     "repo": "CodeDoes/nimo",
     "prompt": "Add offline unit tests for src/engine.nim (engine.run with scripted generator, maxSteps guard, lastOutput chaining)",
     "createdAt": "2026-08-05T18:50:40Z",
-    "state": "IN_PROGRESS",
-    "lastSeen": "2026-08-05T18:51:17.432259Z",
-    "pr": "",
+    "state": "COMPLETED",
+    "lastSeen": "2026-08-05T18:52:16.033226Z",
+    "pr": "https://github.com/CodeDoes/nimo/pull/9",
     "blocked": false
   },
   {
@@ -75,7 +75,7 @@
     "prompt": "Standardize error reporting: fix compiler warnings in src/ (program.nim line 93 defaults, unused hints); do NOT touch deprecated sha1 warnings; verify unit passes offline",
     "createdAt": "2026-08-05T18:50:40Z",
     "state": "IN_PROGRESS",
-    "lastSeen": "2026-08-05T18:51:24.435738Z",
+    "lastSeen": "2026-08-05T18:53:42.497810Z",
     "pr": "",
     "blocked": false
   },
@@ -84,9 +84,9 @@
     "repo": "CodeDoes/nimo",
     "prompt": "Write docs/how-it-works.md additions: document harness tool-call parsing (3 forms) and session JSONL message-tree format. Docs only.",
     "createdAt": "2026-08-05T18:50:40Z",
-    "state": "IN_PROGRESS",
-    "lastSeen": "2026-08-05T18:46:05.800818Z",
-    "pr": "",
+    "state": "COMPLETED",
+    "lastSeen": "2026-08-05T18:55:13.073039Z",
+    "pr": "https://github.com/CodeDoes/nimo/pull/8",
     "blocked": false
   }
 ]
