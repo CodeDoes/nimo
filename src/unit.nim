@@ -476,13 +476,13 @@ proc runAllEvals*(): int =
   echo "  exit=" & $(if passCount == run.len: 0 else: 1)
   return if passCount == run.len: 0 else: 1
 
-when isMainModule:
-  quit(runAllEvals())
-
 # ----------------------------------------------------------------------
 # Eval 17: model evals
 # ----------------------------------------------------------------------
 proc evalModelEvals*(run: var seq[Check]) =
+
+when isMainModule:
+  quit(runAllEvals())
   # Test that model evals compile and run without crashing
   # (Real model probes require GPU - this tests the deterministic planner part)
   let result = runPlannerEval(5)
