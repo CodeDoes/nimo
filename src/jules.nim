@@ -520,7 +520,6 @@ proc cmdSupervise(req: RequestFn, pollSec: int, autoApprove: bool, once: bool) =
   echo "supervising " & $jobs.len & " job(s)  (Ctrl-C to stop; agents keep going)"
   # mutable copy we persist on each pass so restarts resume cleanly
   var track = jobs
-  var poll = 0
   while true:
     for idx in 0 ..< track.len:
       let id = track[idx].id
@@ -532,6 +531,7 @@ proc cmdSupervise(req: RequestFn, pollSec: int, autoApprove: bool, once: bool) =
         continue
       let st = sess{"state"}.getStr("")
       let s = st.toLowerAscii()
+      let prevState = track[idx].state
       track[idx].state = st
 
       # completed -> note the PR, emit once
@@ -540,14 +540,15 @@ proc cmdSupervise(req: RequestFn, pollSec: int, autoApprove: bool, once: bool) =
           let prs = extractPrs(sess)
           if prs.len > 0:
             track[idx].pr = prs[0]
-            echo "✅ " & id & " COMPLETED  →  " & prs[0]
+            echo "✅  " & id & " COMPLETED  →  " & prs[0]
           else:
             echo "✅  " & id & " COMPLETED (no PR)"
+            track[idx].pr = "-"
         continue
       if s in ["failed", "error"]:
         if track[idx].pr.len == 0:   # guard against repeat print
           echo "❌  " & id & " FAILED"
-          track[idx].pr = "FAILED"  # mark as reported
+          track[idx].pr = "-"  # mark as reported
         continue
       if s in ["cancelled", "archived"]:
         continue
@@ -580,11 +581,11 @@ proc cmdSupervise(req: RequestFn, pollSec: int, autoApprove: bool, once: bool) =
             track[idx].blocked = true
         continue
 
-      # still active -> rearm blocked flag (it resumed) and touch watermark
+      # still active -> rearm blocked flag (it resumed); report state changes
       track[idx].blocked = false
-      # echo a dot so the user can see it's being polled
-      if not once or poll == 1:
-        echo "▶  " & id & " " & shorten(track[idx].prompt, 40) & " ..."
+      if prevState != st:
+        echo "▶  " & id & " " & shorten(track[idx].prompt, 40) &
+             "  (" & (if st.len > 0: st else: "running") & ")"
 
     saveQueue(track)
     if once: break
@@ -594,7 +595,6 @@ proc cmdSupervise(req: RequestFn, pollSec: int, autoApprove: bool, once: bool) =
     for jj in track:
       if isActiveState(jj.state): anyActive = true
     if not anyActive: break
-    poll.inc
     sleep(pollSec * 1000)
 
   echo ""
