@@ -447,6 +447,17 @@ proc evalTurnPrimitives*(run: var seq[Check]) =
                 detail: ctx))
 
 # ----------------------------------------------------------------------
+# Eval 17: model evals
+# ----------------------------------------------------------------------
+proc evalModelEvals*(run: var seq[Check]) =
+  # Test that model evals compile and run without crashing
+  # (Real model probes require GPU - this tests the deterministic planner part)
+  let result = runPlannerEval(5)
+  run.add(Check(name: "model evals: planner compilation works",
+                passed: result.trials > 0 and result.rate >= 0.0,
+                detail: "rate=" & $result.rate & " trials=" & $result.trials))
+
+# ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
 proc runAllEvals*(): int =
@@ -475,17 +486,6 @@ proc runAllEvals*(): int =
   echo "  " & $passCount & "/" & $run.len & " passed"
   echo "  exit=" & $(if passCount == run.len: 0 else: 1)
   return if passCount == run.len: 0 else: 1
-
-# ----------------------------------------------------------------------
-# Eval 17: model evals
-# ----------------------------------------------------------------------
-proc evalModelEvals*(run: var seq[Check]) =
-  # Test that model evals compile and run without crashing
-  # (Real model probes require GPU - this tests the deterministic planner part)
-  let result = runPlannerEval(5)
-  run.add(Check(name: "model evals: planner compilation works",
-                passed: result.trials > 0 and result.rate >= 0.0,
-                detail: "rate=" & $result.rate & " trials=" & $result.trials))
 
 when isMainModule:
   quit(runAllEvals())

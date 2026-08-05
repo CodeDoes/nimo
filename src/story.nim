@@ -3,7 +3,7 @@
 
 import std/[json, strutils, os, times, strformat]
 import ./session_manager, ./config, ./workspace
-import ./program
+import ./program, ./validate
 
 type
   StoryQuality* = enum
@@ -30,28 +30,6 @@ const
   DefaultMinChapterWords* = 500
   DefaultMinParagraphs* = 5
   DefaultMaxRepeats* = 3
-
-proc countWords*(s: string): int =
-  ## Counts words in a string.
-  var count = 0
-  var inWord = false
-  for c in s:
-    if c.isAlphaNumeric() or c == '_' or c == '\'':
-      if not inWord:
-        inc count
-        inWord = true
-    else:
-      inWord = false
-  return count
-
-proc countLines*(s: string): int =
-  ## Counts non-empty lines (paragraphs).
-  var count = 0
-  for line in s.splitLines():
-    let trimmed = line.strip()
-    if trimmed.len > 0:
-      inc count
-  return count
 
 proc validateChapter*(content: string, minWords: int = DefaultMinChapterWords,
                       minParagraphs: int = DefaultMinParagraphs,
