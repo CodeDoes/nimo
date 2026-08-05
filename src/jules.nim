@@ -88,7 +88,7 @@ proc stateIcon*(state: string): string =
   ## A tiny visual for a session state.
   case state.toLowerAscii()
   of "scheduled", "queued": "🕐"
-  of "running", "active":   "▶"
+  of "running", "active", "in_progress", "in progress": "▶"
   of "completed", "done":   "✅"
   of "failed", "error":     "❌"
   of "archived":            "🗄️"
