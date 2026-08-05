@@ -16,7 +16,6 @@
     # GPU Driver & Toolkit Dependencies
     vulkan-loader
     vulkan-headers
-    vulkan-tools
     shaderc        # provides glslc (ggml-vulkan shader compile)
     glslang        # glslangValidator as fallback
     clblast
@@ -26,22 +25,27 @@
     cudaPackages.cuda_nvcc
     cudaPackages.cuda_cudart
     cudaPackages.libcublas
-    cudaPackages.cuda_cupti
   ];
 
   languages.nim.enable = true;
 
-  # LD_LIBRARY_PATH: nix pcre2 FIRST (grep needs 10.47 with version symbols),
-  # then system libs (CUDA driver needs /usr/lib/x86_64-linux-gnu), then rwkv.cpp.
-  env.LD_LIBRARY_PATH = "/nix/store/gvn2w8kxsxdjh1nsw88gp9fjyrcxwmkj-pcre2-10.47/lib:/usr/lib/x86_64-linux-gnu:/run/opengl-driver/lib:${pkgs.lib.makeLibraryPath [
-    pkgs.stdenv.cc.cc.lib
-    pkgs.gcc.cc.lib
+  # LD_LIBRARY_PATH: system libs first (CUDA driver needs /usr/lib/x86_64-linux-gnu), then rwkv.cpp.
+  env.LD_LIBRARY_PATH = "/usr/lib/x86_64-linux-gnu:/run/opengl-driver/lib:${pkgs.lib.makeLibraryPath [
     pkgs.vulkan-loader
     pkgs.clblast
     pkgs.ocl-icd
   ]}:$DEVENV_ROOT/rwkv.cpp:$DEVENV_ROOT/rwkv.cpp/ggml/src:.";
 
   # GPU-enabled build scripts
+  scripts.build-cpu.exec = ''
+    echo "Building rwkv.cpp with CPU backend..."
+    cd $DEVENV_ROOT/rwkv.cpp
+    rm -rf CMakeCache.txt CMakeFiles
+    cmake . -DCMAKE_BUILD_TYPE=Release
+    make -j$(nproc)
+    echo "rwkv.cpp (CPU) built successfully!"
+  '';
+
   scripts.build-cuda.exec = ''
     echo "Building rwkv.cpp with NVIDIA CUDA GPU acceleration..."
     cd $DEVENV_ROOT/rwkv.cpp

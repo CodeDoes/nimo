@@ -20,3 +20,12 @@ output.txt
 nimble.develop
 nimble.paths
 nimbledeps
+
+# AI session artifacts
+baked_state.bin
+output.txt
+poem.md
+story.md
+analysis/
+critique/
+plan/

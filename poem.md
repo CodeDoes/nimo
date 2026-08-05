@@ -1,1 +1,0 @@
-Once upon a time, roses were red.

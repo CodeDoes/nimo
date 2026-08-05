@@ -219,7 +219,7 @@ Small RWKV models frequently emit bare JSON instead of `[tool]` — the fallback
 - `src/session.nim` — low-level RWKV session (real generation).
 - `src/config.nim` — `NimoConfig` (model/vocab/layers/allowCpuFallback/quant/caches
   + env overrides).
-- `devenv.nix` / `devenv.yaml` / `flake.nix` — dev env (allowUnfree is set in
+- `devenv.nix` / `devenv.yaml` — dev env (allowUnfree is set in
   `devenv.yaml`; CUDA toolkit via `cudaPackages`).
 
 ## Conventions
