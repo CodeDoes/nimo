@@ -15,7 +15,6 @@ src/test_rwkv_full
 
 # runtime harness artifacts
 .nimo/
-output.txt
 *.jsonl
 nimble.develop
 nimble.paths
@@ -23,9 +22,6 @@ nimbledeps
 
 # AI session artifacts
 baked_state.bin
-output.txt
-poem.md
-story.md
 analysis/
 critique/
 plan/
