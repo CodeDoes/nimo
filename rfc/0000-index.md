@@ -79,6 +79,7 @@ workspace.
 | 9670 | [embodied-workspaces.md](9670-embodied-workspaces.md) | one event stream, many accessible views |
 | 9680 | [mythic-observability.md](9680-mythic-observability.md) | poetic but exact run traces |
 | 9690 | [consentful-autonomy.md](9690-consentful-autonomy.md) | revocable capability grants |
+| 9710 | [state-dreaming.md](9710-state-dreaming.md) | evidence-gated RWKV state-bake improvement |
 
 ## Cross-References
 
