@@ -11,7 +11,7 @@ const
 
 proc cudaBackend*(): RwkvBackend =
   RwkvBackend(kind: bkCuda, name: "cuda",
-              libPath: "rwkv.cpp/librwkv.so",
+              libPath: "rwkv.cpp/librwkv_cuda.so",
               defaultGpuLayers: 99)
 
 proc checkCudaLoad*(backend: RwkvBackend, modelPath: string,

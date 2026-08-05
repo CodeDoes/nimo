@@ -12,46 +12,40 @@ Sessions follow the pi-agent JSONL message-tree format (parentId chains).
   ~2.2 GB — fits the 4 GB RTX 2050). FP16 variant (`-f16.bin`, 5.9 GB) is too
   big for full-GPU offload; the harness clamps `gpuLayers` to fit.
   Vocab: `rwkv.cpp/python/rwkv_cpp/rwkv_vocab_v20230424.txt`.
-- GPU: NVIDIA GeForce RTX 2050 (Ampere, sm_86, 4 GB) on a hybrid-graphics laptop
-  (AMD Vega is boot VGA).
+- GPU: NVIDIA GeForce RTX 2050 (Ampere, sm_86, 4 GB).
 
 ## Commands (run inside `devenv shell`)
 
 ```bash
 devenv shell                 # enter dev env (nim, cmake, CUDA toolkit, python+torch)
-devenv shell build-cuda      # rebuild rwkv.cpp with CUDA (MULTI-ARCH: 86;80;75;89 — slow!)
-devenv shell build-vulkan    # rebuild rwkv.cpp with Vulkan/CLBlast (needs AMD OpenCL/CVu runtime)
+devenv shell build_libs      # build CUDA and CPU backend libraries
 devenv shell unit            # nimble task / run ./build/unit (offline, no model needed)
-devenv shell build-all       # nimble build
+devenv shell build_all       # nimble build all binaries
 ```
 
 Builds go to `build/`. Example commands in `src/` are compiled with:
 
 ```bash
 # online (real model):
-nim c --path:src -o:build/harness src/harness_main.nim
+nim c --path:src -o:build/harness src/harness.nim
 # offline (stub generator, no rwkv.cpp):
 nim c --path:src -d:harnessOffline -o:build/unit src/unit.nim
-# jules CLI (needs SSL + system openssl on the linker path):
-nim c --path:src -d:ssl --passL:"-L/usr/lib/x86_64-linux-gnu" -o:build/jules src/jules.nim
 ```
 
 Tool binaries in `src/` are standalone; each `when isMainModule` is its own CLI
-(`build/harness`, `build/unit`, `build/jules`, ...).
+(`build/harness`, `build/unit`, ...).
 
-## Smoke test (CPU / NVIDIA / AMD)
+## Smoke test (CUDA preferred, CPU fallback)
 
 Fast single-shot backend check (no agent loop): loads the model, generates a
 short reply, reports PASS/FAIL + wall time.
 
 ```bash
 devenv shell scripts/smoke_test.sh
-# cpu     -> --backend cpu (PASS, ~7s)
-# nvidia  -> --backend cuda (PASS, ~4s)
-# amd     -> --backend vulkan (PASS, ~6s)
+# cuda  -> --backend cuda (PASS, ~4s) if NVIDIA GPU available
+# cpu   -> --backend cpu (PASS, ~7s) as fallback
 #
-# All three run through the single controlled path:
-#   nimo.json config > explicit --backend flag > rwkv default > backend modules
+# Priority: CUDA if nvidia-smi detects GPU, otherwise CPU.
 ```
 
 The harness's `--smoke --backend <kind> --prompt "..." --max-tokens n` single-shot
@@ -59,7 +53,7 @@ mode also benchmarks a backend directly (an explicit flag, not env vars).
 
 ```bash
 # online (real model):
-nim c --path:src -o:build/harness src/harness_main.nim
+nim c --path:src -o:build/harness src/harness.nim
 # offline (stub generator, no rwkv.cpp):
 nim c --path:src -d:harnessOffline -o:build/unit src/unit.nim
 ```
@@ -67,7 +61,7 @@ nim c --path:src -d:harnessOffline -o:build/unit src/unit.nim
 Run the harness with the rwkv libs on the loader path:
 
 ```bash
-LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:rwkv.cpp/ggml/src/ggml-cuda:$LD_LIBRARY_PATH" ./build/harness
+LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:$LD_LIBRARY_PATH" ./build/harness
 ```
 
 ## Backend Selection (RFC 7500)
@@ -77,7 +71,7 @@ most-specific first:
 1. Explicit `--backend` flag (CLI arg, same convention as `generate.nim`)
 2. Config file: `nimo.json` → `"backend"` / `"lib"`
 3. Compile-time default: `-d:rwkvDefaultBackend=cuda`
-4. Backend modules (`src/rwkv_cpu/cuda/vulkan.nim`) — lowest authority
+4. Backend modules (`src/rwkv/backend/cpu.nim`, `src/rwkv/backend/cuda.nim`) — lowest authority
 
 That's the whole precedence — no more layers above it. (Env vars are fine when
 they earn their place; they are simply not needed here, so the core path stays
@@ -90,16 +84,16 @@ Per-backend GPU policy:
 |---------|-----------|----------|
 | `cpu`   | skip      | 0        |
 | `cuda`  | required  | clamped  |
-| `vulkan`| skip      | cfg.gpuLayers |
 
 ### CLI generate command
 
 ```bash
-# Direct binary
-./build/generate --backend cpu|cuda|vulkan --max-length 20 "prompt"
+# Direct binary (CUDA if available, CPU fallback)
+./build/generate --backend cuda --max-length 20 "prompt"
+./build/generate --backend cpu --max-length 20 "prompt"
 
 # Via harness dispatcher
-./build/harness generate --backend vulkan --max-length 20 "prompt"
+./build/harness generate --backend cuda --max-length 20 "prompt"
 ```
 
 ### Measured performance (8 tokens, this machine)
@@ -108,11 +102,10 @@ Per-backend GPU policy:
 |---------|-----------|-------|
 | CPU     | ~15s      | OpenMP, no GPU |
 | CUDA    | ~1s       | RTX 2050 (may fail if GPU state is bad) |
-| Vulkan  | ~0.9s     | AMD Radeon Graphics (RADV) |
 
 Note: CUDA may fail with `CUDA driver is a stub library` on this hybrid-
-graphics laptop when the NVIDIA GPU is in a suspended state. Use `vulkan`
-or `cpu` as fallback. See `src/gpu.nim` for the probe logic.
+graphics laptop when the NVIDIA GPU is in a suspended state. Use `cpu`
+as fallback. See `src/gpu.nim` for the probe logic.
 
 The harness detects the GPU state on startup via the CUDA Driver API
 (`src/gpu.nim`, `gpuProbe`), *before* loading the model — so a broken GPU gives a
@@ -143,7 +136,7 @@ The harness only runs on CPU when explicitly allowed. Default is GPU-required.
 ```jsonc
 // nimo.json (repo root; see src/config.nim for all keys)
 {
-  "model": "models/rwkv7-g1i-2.9b-20260729-ctx16384-f16.bin",
+  "model": "models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin",
   "allowCpuFallback": true,     // opt-in: run on CPU if the GPU is unusable
   "quant": "Q4_K",              // raw -> quantize -> cache (src/model_cache.nim)
   "modelCacheDir": ".nimo/model-cache",

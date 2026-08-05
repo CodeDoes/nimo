@@ -11,7 +11,7 @@ const
 
 proc cpuBackend*(): RwkvBackend =
   RwkvBackend(kind: bkCpu, name: "cpu",
-              libPath: "rwkv.cpp/librwkv.so",
+              libPath: "rwkv.cpp/librwkv_cpu.so",
               defaultGpuLayers: 0)
 
 proc checkCpuLoad*(backend: RwkvBackend, modelPath: string,

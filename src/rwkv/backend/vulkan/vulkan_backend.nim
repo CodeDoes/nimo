@@ -8,7 +8,7 @@ import config, rwkv/model/header, rwkv/backend/types
 
 proc vulkanBackend*(): RwkvBackend =
   RwkvBackend(kind: bkVulkan, name: "vulkan",
-              libPath: "rwkv.cpp/build-amd/librwkv.so",
+              libPath: "rwkv.cpp/librwkv_vulkan.so",
               defaultGpuLayers: 99)
 
 proc checkVulkanLoad*(backend: RwkvBackend, modelPath: string,
