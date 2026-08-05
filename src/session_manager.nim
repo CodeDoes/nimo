@@ -84,13 +84,17 @@ when not defined(harnessOffline):
       let cache = initStateCache(stateCacheDir)
       s.state = cache.bakeContext(s.model, s.tok, modelPath, vocabPath, systemPrompt)
 
-proc generateTurn*(s: var Session, userMsg: string, generate: GenerateFn = nil,
-                   temp: float32 = DefaultTemp, topP: float32 = DefaultTopP,
-                   maxTokens: int = 200): string =
-  ## Generates a reply. If a `generate` fn is supplied (test mock, offline
-  ## stub), call it; otherwise run the real RWKV model attached to this session.
+proc generateTurnStream*(s: var Session, userMsg: string, sink: TokenSink = nil,
+                         generate: GenerateFn = nil,
+                         temp: float32 = DefaultTemp, topP: float32 = DefaultTopP,
+                         maxTokens: int = 200): string =
+  ## Generates a reply and immediately forwards each decoded token to `sink`.
+  ## The returned text keeps buffered callers and offline tests compatible.
   if generate != nil:
-    return generate(userMsg)
+    result = generate(userMsg)
+    if sink != nil and result.len > 0:
+      sink(result) # scripted generators have no token boundary to expose
+    return
   when not defined(harnessOffline):
     if s.model == nil:
       return "[nimo] Model not loaded"
@@ -108,6 +112,8 @@ proc generateTurn*(s: var Session, userMsg: string, generate: GenerateFn = nil,
         break
       let tokenStr = s.tok.decodeToken(token.uint32)
       reply.add(tokenStr)
+      if sink != nil:
+        sink(tokenStr)
       if endsWithStopSequence(reply):
         s.state = validState
         break
@@ -122,7 +128,15 @@ proc generateTurn*(s: var Session, userMsg: string, generate: GenerateFn = nil,
 
     return reply.strip()
   else:
-    return "[nimo] No model available (offline)"
+    result = "[nimo] No model available (offline)"
+    if sink != nil:
+      sink(result)
+
+proc generateTurn*(s: var Session, userMsg: string, generate: GenerateFn = nil,
+                   temp: float32 = DefaultTemp, topP: float32 = DefaultTopP,
+                   maxTokens: int = 200): string =
+  ## Compatibility wrapper for callers that need a complete reply.
+  s.generateTurnStream(userMsg, nil, generate, temp, topP, maxTokens)
 
 proc addMessage*(s: var Session, role: MessageRole, content: seq[ContentPart], parentId: string = ""): string =
   let msgId = "msg_" & $s.messages.len

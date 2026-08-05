@@ -14,7 +14,7 @@ below exists and runs today.
 | `gpu.nim` | GPU health probe | Before loading the model, it calls into the NVIDIA driver (`libcuda.so.1`) directly: `cuInit` + `cuDeviceGetCount`. Reports OK / unusable / unknown so a broken GPU gives a clear message instead of a crash. |
 | `generate.nim` | One-shot text generation | Parse args → pick backend → bind library → load model → encode the prompt → run it through the model in chunks → sample one token at a time until the stop token or max length → print speed (ms/token). |
 | `quantize.nim` | Model quantization | Read the 24-byte GGML header, make sure the input is raw FP16/FP32, load the backend, call the quantizer, report the size reduction. |
-| `chat.nim` | Interactive chat | Load model, seed a greeting, then loop: read a line from the user → generate a reply → print it. Supports `/reset` and `/quit`. |
+| `chat.nim` | Interactive chat | Load model, seed a greeting, then loop: read a line from the user → stream each generated token directly to stdout. Supports `/reset` and `/quit`. |
 | `session.nim` | Low-level inference session | Wraps the loaded model, tokenizer, state vector, logits and RNG. `generateTurn` is the core: encode the message, evaluate the prompt, sample tokens, stop cleanly. |
 | `bake_state.nim` | State baking | Takes a prompt (or file), encodes it, runs it through the model once, and writes the resulting model state to a binary file. |
 | `harness.nim` | Agent loop | The brain. Builds a system prompt + user message, calls the model, looks for tool calls, executes them, feeds results back, repeats (max 8 iterations), then gives the final answer. |

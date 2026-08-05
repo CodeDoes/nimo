@@ -7,7 +7,12 @@ import std/[os, strutils, json]
 # responses); everything else — session bookkeeping, plan execution, tool
 # dispatch — runs for real against this seam.
 type
+  ## A streaming sink is called as soon as generated text is available. Real
+  ## RWKV generation calls it once per decoded token; deterministic/offline
+  ## generators may provide a single chunk.
+  TokenSink* = proc(text: string)
   GenerateFn* = proc(prompt: string): string
+  GenerateStreamFn* = proc(prompt: string, sink: TokenSink): string
 
 const
   DefaultModelPath* = "models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin"

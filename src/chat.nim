@@ -181,8 +181,12 @@ proc main() =
       styledEcho(styleBright, fgGreen, "Bot:  Hello! How can I help you today?")
       continue
 
-    let reply = s.generateTurn(inputLine)
-    echo "Bot:  ", reply
+    stdout.write("Bot:  ")
+    stdout.flushFile()
+    let reply = s.generateTurnStream(inputLine, proc(token: string) =
+      stdout.write(token)
+      stdout.flushFile())
+    echo ""
     logChatInteraction(inputLine, reply)
 
 when isMainModule:
