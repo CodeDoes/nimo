@@ -329,7 +329,7 @@ proc evalEngine*(run: var seq[Check]) =
   run.add(Check(name: "step outputs are recorded on the plan",
                 passed: p.steps[0].output.startsWith("generated:") and
                         p.steps[1].output.len > 0))
-  run.add(Check(name: "report emits a checkpoint to the sink",}♀♀♀♀♀♀assistant to=functions.edit_file  天天中彩票怎么买json error 公众号天天中彩票assistant to=functions.edit_file code񎙇】【：】【“】【{
+  run.add(Check(name: "report emits a checkpoint to the sink",
                 passed: sinkText.contains("done") and sinkText.contains("▶")))
 
   # validate gate: short text fails, long passes

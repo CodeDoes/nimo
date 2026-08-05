@@ -185,11 +185,14 @@ proc runHarnessTurn*(s: var Session, userMsg: string,
                      generate: GenerateFn = nil,
                      maxIterations: int = MaxToolIterations,
                      maxTokens: int = 200,
-                     sink: TokenSink = nil): HarnessTurn =
+                     sink: TokenSink = nil,
+                     generateStream: GenerateStreamFn = nil): HarnessTurn =
   ## Runs one full user turn through the orchestrator + engine:
   ## recordTurnStart -> interpret -> addPlan -> engine.run -> addReport.
   ## `generate` is the model-generation seam (injected, not stored on the
-  ## session): nil = use the session's real model; a fn = mock.
+  ## session): nil = use the session's real model; a fn = mock. `generateStream`
+  ## streams tokens live (real-model path); build it at the call site where the
+  ## session is a local var (a closure cannot capture a `var Session` param).
   result.userInput = userMsg
 
   let rootId = recordTurnStart(s, userMsg)
@@ -204,12 +207,8 @@ proc runHarnessTurn*(s: var Session, userMsg: string,
     sinkText.add(t)
     if sink != nil:
       sink(t)
-  var stream: GenerateStreamFn = nil
-  if generate == nil:
-    stream = proc(prompt: string, tokenSink: TokenSink): string =
-      s.generateTurnStream(prompt, tokenSink, nil, DefaultTemp, DefaultTopP, maxTokens)
   let r = plan.run(generate, sink = collector, interrupt = nil,
-                   maxSteps = maxIterations, generateStream = stream)
+                   maxSteps = maxIterations, generateStream = generateStream)
   result.iterations = r.stepsRun
   result.aborted = r.aborted
   result.generated = sinkText
@@ -284,10 +283,18 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".",
       continue
 
     let t0 = cpuTime()
+    # Real-model path: stream decoded tokens straight to the terminal. The
+    # closure captures the local `s` (safe) — it cannot capture the var param
+    # inside runHarnessTurn, so we build it here and pass it down.
+    var stream: GenerateStreamFn = nil
+    if bs.generate == nil:
+      stream = proc(prompt: string, tokenSink: TokenSink): string =
+        s.generateTurnStream(prompt, tokenSink, nil, DefaultTemp, DefaultTopP, cfg.maxTokens)
     let turn = runHarnessTurn(s, line, maxTokens = cfg.maxTokens,
       sink = proc(t: string) =
         stdout.write(t)
-        stdout.flushFile())
+        stdout.flushFile(),
+      generateStream = stream)
     let elapsed = cpuTime() - t0
 
     echo ""
