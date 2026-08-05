@@ -74,7 +74,7 @@ plus a `config.toml` and `outline.md` you can edit.
 ## 5. Verify everything works
 
 ```bash
-./build/nimo eval
+./build/nimo unit
 ```
 
 This runs the offline self-test suite (34 checks) — no model needed. It tests

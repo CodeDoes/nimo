@@ -15,7 +15,7 @@ off to the right piece:
 5. `nimo bake ...` → runs the state baker
 6. `nimo workspace ...` → handled directly (create/list/use/status/remove)
 7. `nimo story ...` → handled directly (generate/validate/critique/outline)
-8. `nimo eval` → runs the offline test suite
+8. `nimo unit` → runs the offline test suite
 
 ## Settings: defaults → file → environment
 
