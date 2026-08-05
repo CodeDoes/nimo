@@ -338,6 +338,38 @@ Usage:
   let rest = if args.len > 1: args[1 ..< args.len] else: @[]
   let baseDir = getCurrentDir() / "build"
 
+  # Handle help before dispatching to commands
+  if cmd in @["--help", "-h", "help"]:
+    echo """
+nimo -- RWKV inference CLI
+
+Commands:
+  generate     Generate text from a prompt
+  quantize     Convert model quantization
+  harness      Interactive chat harness
+  chat         Simple chat
+  bake         Bake model state
+  workspace    Workspace management
+  planner      Show plan for a goal
+  new          Create session from goal
+  run          Execute a plan
+  story        Story pipeline
+  unit         Run the unit test suite
+  doctor       Check environment health
+  eval         (alias) Run the unit test suite
+  model-eval   Run model behavior evals
+
+Usage:
+  nimo generate --backend cuda --model <path> --prompt \"Hello\"
+  nimo quantize <input> <format> <output>
+  nimo harness
+  nimo chat --backend cuda <model>
+  nimo workspace create <name>
+  nimo story generate <premise> --workspace <name>
+  nimo unit
+"""
+    quit(0)
+
   case cmd
   of "generate":
     let binary = baseDir / "generate"
