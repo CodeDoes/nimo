@@ -99,9 +99,9 @@ The pieces already present, and what changes:
 
 | Existing code | Today | Becomes |
 |---------------|-------|---------|
-| `session_manager.generateTurnStream` | decodes a reply and calls `TokenSink` once per token | shared streaming model boundary |
+| `session.generateTurn` | collects a full reply, returns it | gains a `TokenSink` param (or a streaming variant) |
 | `generate.nim` | already streams per token (`stdout.write` + `flushFile`) | the canonical streaming example |
-| `chat.nim` / `harness.nim` | forward the shared sink to stdout and flush | streams while each reply/step is generated |
+| `chat.nim` / `harness.nim` | buffer through `generateTurn`, then print | stream through a sink |
 | `pipeline.nim` / `story.nim` | fixed/hardcoded step flows | driven by a plan (`Step` vocabulary) |
 | `session_manager.nim` | message tree | also records the running plan + checkpoints |
 | `memory.nim` / `fiaas.nim` | exist, not wired | the `Extract`/`lookupMemory` tools |
