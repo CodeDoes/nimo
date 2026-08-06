@@ -257,11 +257,10 @@ Example:
   echo "[run] Goal: " & plan.goal
   echo "[run] Steps: " & $plan.steps.len
   
-  # Execute through engine with a placeholder generator
-  # (Full model integration: bootstrap session, wire generateTurn)
+  # Execute plan with real model
   var sinkText = ""
   let gen: GenerateFn = proc(prompt: string): string =
-    "[stub] " & prompt
+    s.generateTurn(prompt, bs.generate)
   let result = plan.run(gen, sink = proc(t: string) = sinkText.add(t), maxSteps = 256)
   
   echo "[run] Completed: " & $result.completed
