@@ -257,6 +257,7 @@ Now answer with exactly one integer between 0 and 10 and nothing else."""
     focus*: string            # what trait the scenario probes (self-doc)
     metrics*: seq[ScoreMetric]
     trials*: int              # sample generations (1 keeps judge-repeat focus)
+    preamble*: string         # optional chat-format turns establishing context
 
   const JudgeScenarios* = @[
     JudgeScenario(
@@ -299,6 +300,19 @@ Now answer with exactly one integer between 0 and 10 and nothing else."""
         ScoreMetric(name: "imagery",
                     ask: "evocative, memorable language"),
       ]),
+    # Cross-turn coherence: state_bake's real point. Bakes an establishing context
+    # (preamble turns) then asks the model to answer a question that depends on
+    # facts established in those earlier turns. The judge scores whether the
+    # reply is consistent with the prior conversation.
+    JudgeScenario(
+      name: "cross-turn coherence (named context)",
+      preamble: "\x00User: My name is Priya and I love astronomy.\n\nBot: Nice to meet you, Priya! Astronomy is a fascinating subject.\n\nUser: It's the stars and planets that interest me most.\n\nBot: The cosmos is amazing — you're in good company with your curiosity!",
+      generatePrompt: "What is my name and what do I love?",
+      focus: "context recall across turns (the point of state_bake)",
+      metrics: @[ScoreMetric(
+        name: "consistency",
+        ask: "the reply honors the earlier conversation — the user's name is Priya and they love astronomy; the answer should reflect that, not ignore or contradict it"
+      )]),
   ]
 
   type MetricScore* = object
@@ -409,6 +423,12 @@ Now answer with exactly one integer between 0 and 10 and nothing else."""
     result = c.bakeContext(s.model, s.tok, cfg.modelPath, cfg.vocabPath,
                            JudgeSystemPrompt)
 
+  proc bakeChatState(c: StateCache, s: Session, cfg: NimoConfig,
+                     context: string): seq[float32] =
+    ## Bake an arbitrary chat-format context (a cross-turn preamble) into a
+    ## state on the SAME loaded model, independent of the global chat bake.
+    result = c.bakeContext(s.model, s.tok, cfg.modelPath, cfg.vocabPath, context)
+
   proc askJudge(s: var Session, judge: seq[float32], generatePrompt: string,
                 reply: string, metric: ScoreMetric): float =
     ## Present the sample to the judge, ask for a 0..10 score. The judge is
@@ -445,7 +465,8 @@ Now answer with exactly one integer between 0 and 10 and nothing else."""
       return result
     var s = bs.session
     let chat = deepCopyState(s.state)            # pristine chat bake
-    let judge = bakeJudgeState(initStateCache(cfg.stateCacheDir), s, cfg)
+    let cache = initStateCache(cfg.stateCacheDir)
+    let judge = bakeJudgeState(cache, s, cfg)
     var allMetrics: seq[float]
     let nSamples = max(1, trials)
     for sc in JudgeScenarios:
@@ -454,8 +475,13 @@ Now answer with exactly one integer between 0 and 10 and nothing else."""
       var mSlots: seq[MetricScore]
       for m in sc.metrics:
         mSlots.add(MetricScore(name: m.name))
+      # cross-turn scenarios bake their own establishing context; otherwise use
+      # the pristine chat bake so every scenario starts from the same baseline.
+      let base = if sc.preamble.len > 0:
+                   bakeChatState(cache, s, cfg, sc.preamble) else:
+                   chat
       for rep in 0 ..< nSamples:
-        s.state = deepCopyState(chat)
+        s.state = deepCopyState(base)
         let sample = s.generateTurn(sc.generatePrompt, nil, DefaultTemp,
                                     DefaultTopP, cfg.maxTokens)
         for mi, m in sc.metrics:
