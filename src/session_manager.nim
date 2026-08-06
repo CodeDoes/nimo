@@ -114,7 +114,7 @@ proc generateTurnStream*(s: var Session, userMsg: string, sink: TokenSink = nil,
       reply.add(tokenStr)
       if sink != nil:
         sink(tokenStr)
-      if endsWithStopSequence(reply):
+      if tokenStr == "\x00" or endsWithStopSequence(reply):
         s.state = validState
         break
       if not s.model.eval(token.uint32, s.state, s.logits):
