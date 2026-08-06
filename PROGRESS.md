@@ -1,46 +1,47 @@
 # PROGRESS.md
 
 ## Current State
-- **Baseline: `v0.1.0`** — solid working state
-- **Multi-turn**: 6 turns verified (Alice remembered, math correct, haiku generated)
+- **Baseline: `v0.2.0`** — solid working app
+- **Multi-turn**: 6 turns verified (Alice, math, haiku)
 - **Tests**: 87/87 pass
 - **Backend**: CUDA on RTX 2050
 
 ## Working
-- [x] `./build/harness` — interactive agent (6+ turns)
-- [x] `./build/generate` — single-shot text generation
-- [x] `./build/nimo doctor` — health check
-- [x] `./build/unit` — 87/87 tests
-- [x] State baking with examples in nimo.json
+- [x] `./bin/nimo harness` — interactive agent (6+ turns, no loops)
+- [x] `./bin/nimo generate` — single-shot text generation
+- [x] `./bin/nimo doctor` — health check
+- [x] `./bin/nimo unit` — 87/87 tests
+- [x] `./bin/nimo` PATH shim — works from repo root
+- [x] State baking with conversation examples
 - [x] Token-0 stop sequence prevents loops
 
 ## Known Issues
-- [ ] `chat` command has output formatting bugs (shows "User: Bot:" prefix)
-- [ ] `generate` is slow (~800ms/token) — may need GPU optimization
-- [ ] `nimo` not in PATH — users must run `./build/nimo` or `nimble run nimo`
+- [ ] `chat` command has display bugs (shows "User: Bot:" prefix)
+- [ ] `generate` slow (~800ms/token after warmup)
 - [ ] CLI `--` separator broken in `nimble run`
+- [ ] GPU OOM if multiple processes load model simultaneously
 
-## Next Priorities
+## Next Improvements
 1. Fix chat command output formatting
-2. Add `bin/nimo` PATH shim
-3. Fix CLI `--` separator
-4. Optimize generate speed
-5. Add README quick start with working examples
+2. Add CUDA context cleanup between processes
+3. Improve generate speed (warmup optimization)
+4. Add `nimo new "goal"` one-liner for quick tasks
+5. Add streaming progress indicator during generation
 
 ## Commands
 ```bash
-# Harness (agent loop)
-./build/harness
+# Interactive agent
+./bin/nimo harness
 
-# Generate
-./build/generate --backend cuda --prompt "Hello" --max-length 10
+# Single-shot generation
+./bin/nimo generate --prompt "Hello"
 
-# Chat
-./build/chat --backend cuda models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin
+# Health check
+./bin/nimo doctor
 
 # Tests
-./build/unit
-
-# Health
-./build/nimo doctor
+./bin/nimo unit
 ```
+
+## Git Tags
+- `v0.2.0` — solid baseline (revert with `git checkout v0.2.0`)
