@@ -36,13 +36,17 @@ devenv shell nimo-new "write a poem about roses"
 
 ### Chat (simple)
 ```bash
-devenv shell nimo-chat -- --backend cuda models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin
+devenv shell nimo-chat --backend cuda models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin
 ```
 
 ## Example Session
 
 ```bash
 $ devenv shell nimo-harness
+
+nimo harness — user -> pipeline -> tool call -> answer
+Config file: nimo.json
+Type /quit to exit, /save <file> to save session.
 
 > hello
 Hello! How can I help you?
