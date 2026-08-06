@@ -185,6 +185,5 @@ proc pipelineTool*(session: var session_manager.Session, arguments: string, gene
       wroteTarget = true
       target = absTarget
 
-  let written = if wroteTarget: " -> " & target else: ""
   return "[nimo] Pipeline " & pipeline.id & " completed with " & $pipeline.steps.len &
          " steps; " & (if wroteTarget: "wrote target " & target else: "no target written")

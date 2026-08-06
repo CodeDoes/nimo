@@ -7,7 +7,7 @@
 ## Offline-safe (with `-d:harnessOffline` it returns the stub-generator session
 ## and never touches the model/GPU).
 
-import std/[os]
+import std/[os, json]
 import ./config, ./session_manager
 import ./lock
 
@@ -37,8 +37,30 @@ proc bootstrapSession*(cfg: NimoConfig, cwd: string = getCurrentDir()): Bootstra
   when defined(harnessOffline):
     result.ok = true
     result.session = newSession(cwd)
-    result.generate = proc(userMsg: string): string = "[nimo offline] no model"
-    result.lines.add "[nimo] offline mode: no model loaded; generation returns placeholder text"
+    if cfg.scriptReplies.len > 0 and fileExists(cfg.scriptReplies):
+      # L1 test seam: drive the CLI with a scripted model so the whole
+      # user -> tool-call -> dispatch -> file-write -> answer path is testable
+      # deterministically at the binary level (no rwkv.cpp, no GPU).
+      var idx = 0
+      var replies: seq[string]
+      try:
+        let j = parseJson(readFile(cfg.scriptReplies))
+        if j.kind == JArray:
+          for n in j:
+            if n.kind == JString:
+              replies.add(n.str)
+      except CatchableError:
+        discard
+      result.generate = proc(userMsg: string): string =
+        if idx < replies.len:
+          result = replies[idx]
+          inc idx
+        else:
+          result = "[nimo offline] no more scripted replies"
+      result.lines.add "[offline] scripted model: " & $replies.len & " replies from " & cfg.scriptReplies
+    else:
+      result.generate = proc(userMsg: string): string = "[nimo offline] no model"
+      result.lines.add "[nimo] offline mode: no model loaded; generation returns placeholder text"
     return
   else:
     result = bootstrapOnline(cfg, cwd)

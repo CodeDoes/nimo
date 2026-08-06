@@ -354,7 +354,8 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".",
     if bs.generate == nil:
       stream = proc(prompt: string, tokenSink: TokenSink): string =
         s.generateTurnStream(prompt, tokenSink, nil, DefaultTemp, DefaultTopP, cfg.maxTokens)
-    let turn = runHarnessTurn(s, opts.prompt, maxTokens = cfg.maxTokens,
+    let turn = runHarnessTurn(s, opts.prompt, generate = bs.generate,
+      maxTokens = cfg.maxTokens,
       sink = proc(t: string) =
         stdout.write(t)
         stdout.flushFile(),
@@ -419,7 +420,8 @@ proc runHarnessCli*(cfg: NimoConfig, cwd: string = ".",
     if bs.generate == nil:
       stream = proc(prompt: string, tokenSink: TokenSink): string =
         s.generateTurnStream(prompt, tokenSink, nil, DefaultTemp, DefaultTopP, cfg.maxTokens)
-    let turn = runHarnessTurn(s, line, maxTokens = cfg.maxTokens,
+    let turn = runHarnessTurn(s, line, generate = bs.generate,
+      maxTokens = cfg.maxTokens,
       sink = proc(t: string) =
         stdout.write(t)
         stdout.flushFile(),
@@ -473,12 +475,17 @@ proc main() =
       inc i; opts.workspace = paramStr(i)
     elif a == "--prompt" and i < paramCount():
       inc i; opts.prompt = paramStr(i); opts.oneShot = true
+    elif a == "--script-replies" and i < paramCount():
+      inc i; cfg.scriptReplies = paramStr(i)
     elif a == "--max-tokens" and i < paramCount():
       inc i
       try: opts.maxTokens = parseInt(paramStr(i))
       except ValueError:
         echo "Error: invalid --max-tokens value"
         quit(1)
+    elif a.startsWith("--"):
+      echo "Error: unknown option '" & a & "'"
+      quit(1)
     else:
       positional.add(a)
     inc i

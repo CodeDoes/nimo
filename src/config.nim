@@ -65,6 +65,8 @@ type
     stateCacheDir*: string
     systemPrompt*: string    # fixed context baked into the state cache (RFC 8000)
     bakeContext*: bool       # resume baked state; bake on miss when true
+    scriptReplies*: string   # L1 test seam: path to JSON array of scripted model
+                             # replies (offline builds only) — deterministic CLI tests
 
 proc defaultConfig*(): NimoConfig =
   NimoConfig(
@@ -83,6 +85,7 @@ proc defaultConfig*(): NimoConfig =
     stateCacheDir: DefaultStateCacheDir,
     systemPrompt: "",
     bakeContext: DefaultBakeContext,
+    scriptReplies: "",
   )
 
 proc loadConfig*(path: string = DefaultConfigFile): NimoConfig =
