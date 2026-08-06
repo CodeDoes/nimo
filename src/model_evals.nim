@@ -263,7 +263,6 @@ when not defined(harnessOffline):
     gLog.writeLine($o)
 
   const JudgeSystemPrompt* = "You are a judge. Output only a number 0-10.\n\n" &
-    "You are a judge. Output only a number 0-10.\n\n" &
     "Criteria: friendliness \xe2\x80\x94 the sample should be warm and kind\n" &
     "Sample: \"I don\'t care.\"\n" &
     "Score: 1\n" &
