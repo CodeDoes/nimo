@@ -2,12 +2,12 @@
 
 ## Current State
 - **Baseline: `v0.5.0`** — solid working app
-- **Multi-turn**: 5 turns verified (Alice remembered, math correct)
+- **Multi-turn**: 4 turns verified (Alice remembered, math correct)
 - **Tests**: 87/87 pass
 - **Backend**: CUDA on RTX 2050
 
 ## Working
-- [x] `./bin/nimo harness` — interactive agent (5+ turns)
+- [x] `./bin/nimo harness` — interactive agent (4+ turns)
 - [x] `./bin/nimo generate` — single-shot generation
 - [x] `./bin/nimo doctor` — health check
 - [x] `./bin/nimo unit` — 87/87 tests
@@ -16,14 +16,14 @@
 - [x] State baking with examples
 
 ## Known Issues
-- [ ] `chat` command hangs on turn 3+ (uses different state path)
+- [ ] `chat` command hangs on turn 3+
 - [ ] `nimo run` uses stub generator
 - [ ] State cache can corrupt across runs (clear with `rm -rf .nimo/state-cache`)
 - [ ] CLI `--` separator broken in `nimble run`
 
 ## Commands
 ```bash
-./bin/nimo harness      # interactive agent (primary interface)
+./bin/nimo harness      # interactive agent
 ./bin/nimo generate --prompt "Hello"
 ./bin/nimo doctor
 ./bin/nimo unit
