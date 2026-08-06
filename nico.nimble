@@ -133,7 +133,7 @@ task run, "Compile and run a source file (auto-builds if needed)":
   
   # Run with args
   if paramCount() > 1:
-    let args = joinArgs(paramStrings(2))
+    let args = paramStrings(2).join(" ")
     let runCmd = outPath & " " & args
     exec(runCmd)
   else:
