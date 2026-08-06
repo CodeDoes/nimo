@@ -573,6 +573,32 @@ proc evalModelEvals*(run: var seq[Check]) =
                 passed: (not sdBad.diagnostics[0].passed) and
                         sdBad.diagnostics[0].why.contains("NOT found"),
                 detail: sdBad.diagnostics[0].why))
+  # qualitative rubric primitives (anyOf markers, sentence pacing)
+  let qGood = scoreDetailed("I am sorry to hear that. I hope tomorrow is better.",
+                            Rubric(name: "q", anyOf: @["sorry", "glad", "hope"],
+                                   minSentences: 2, maxSentences: 3))
+  run.add(Check(name: "scoreDetailed: anyOf passes when ONE marker present",
+                passed: qGood.diagnostics[0].passed and
+                        qGood.diagnostics[0].why.contains("sorry"),
+                detail: qGood.diagnostics[0].why))
+  run.add(Check(name: "scoreDetailed: sentence pacing beats counted",
+                passed: abs(qGood.overall - 1.0) < 0.001 and
+                        qGood.diagnostics.len == 3,
+                detail: "overall=" & $qGood.overall))
+  let qCurt = scoreDetailed("no",
+                            Rubric(name: "q", anyOf: @["sorry", "hope"],
+                                   minSentences: 2))
+  run.add(Check(name: "scoreDetailed: curt reply fails pacing (why explains)",
+                passed: (not qCurt.diagnostics[0].passed) and
+                        (not qCurt.diagnostics[1].passed) and
+                        qCurt.diagnostics[1].why.contains("curt"),
+                detail: qCurt.diagnostics[1].why))
+  let qRambling = scoreDetailed("A. B. C. D. E. F. G. H.",
+                                Rubric(name: "q", maxSentences: 3))
+  run.add(Check(name: "scoreDetailed: rambling fails maxSentences (why explains)",
+                passed: (not qRambling.diagnostics[0].passed) and
+                        qRambling.diagnostics[0].why.contains("rambled"),
+                detail: qRambling.diagnostics[0].why))
 
 proc evalJules*(run: var seq[Check]) =
   # Pure helpers for the jules CLI, offline (no network).

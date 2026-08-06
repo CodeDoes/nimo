@@ -23,8 +23,13 @@ type
     name*: string
     required*: seq[string]   # substrings the reply MUST contain
     forbidden*: seq[string]  # substrings that must NOT appear
+    anyOf*: seq[string]      # at least ONE of these must appear (qualitative
+                             # proxies: wander a warm-tone marker, a vivid
+                             # word, etc.)
     minLen*: int             # minimum reply length (0 = no constraint)
     maxLen*: int             # maximum reply length (0 = no constraint)
+    minSentences*: int       # min sentence-pacing beats (0 = no constraint)
+    maxSentences*: int       # max sentence-pacing beats (0 = no constraint)
     expectToolCall*: bool    # reply must contain a [tool] call
 
   ConstraintDiagnostic* = object
@@ -45,6 +50,13 @@ proc trimReply*(r: string, n: int = 90): string =
   ## without dumping whole responses into the log).
   let s = r.replace("\n", " ")
   result = if s.len > n: s[0 ..< n] & "…" else: s
+
+proc countSentences*(s: string): int =
+  ## Rough sentence-count proxy. A 2.9B model won't reliably format, so we use
+  ## sentence-terminating punctuation (not newlines) as pacing beats — used to
+  ## spot curt/monotone vs rambling replies.
+  for ch in s:
+    if ch in {'.', '!', '?'}: inc result
 
 proc buildDiagnostics*(reply: string, r: Rubric): seq[ConstraintDiagnostic] =
   ## Turn a rubric into concrete per-part checks with explanations. The label
@@ -81,6 +93,36 @@ proc buildDiagnostics*(reply: string, r: Rubric): seq[ConstraintDiagnostic] =
       label: "reply length <= " & $r.maxLen,
       passed: ok,
       why: "len=" & $reply.len & (if ok: " so <= " & $r.maxLen else: " — overlong, may be looping"),
+      weight: 1.0))
+  if r.anyOf.len > 0:
+    # Qualitative proxy: at least ONE of a family of markers suffices, so we
+    # don't over-fit to any single word. E.g. "friendly" = any warm marker.
+    var hits: seq[string]
+    for m in r.anyOf:
+      if reply.contains(m): hits.add(m)
+    let ok = hits.len > 0
+    result.add(ConstraintDiagnostic(
+      label: "at least one of {" & r.anyOf.join(", ") & "}",
+      passed: ok,
+      why: if ok: "found " & hits.join(", ")
+           else: "none present — reply: \"" & t & "\"",
+      weight: 1.0))
+  let sentences = countSentences(reply)
+  if r.minSentences > 0:
+    let ok = sentences >= r.minSentences
+    result.add(ConstraintDiagnostic(
+      label: "pacing: >= " & $r.minSentences & " sentence(s)",
+      passed: ok,
+      why: "went " & $sentences & " pacing beat(s)" &
+           (if ok: " so >= " & $r.minSentences else: " — curt, no substance"),
+      weight: 1.0))
+  if r.maxSentences > 0:
+    let ok = sentences <= r.maxSentences
+    result.add(ConstraintDiagnostic(
+      label: "concision: <= " & $r.maxSentences & " sentence(s)",
+      passed: ok,
+      why: "came in " & $sentences & " sentence(s)" &
+           (if ok: " so <= " & $r.maxSentences else: " — rambled past the limit"),
       weight: 1.0))
   if r.expectToolCall:
     let n = parseToolCalls(reply).len
@@ -183,24 +225,45 @@ when not defined(harnessOffline):
 
   const ScoredScenarios* = @[
     ScoredScenario(
-      name: "tool-call on write request",
-      userMsg: "write a poem about roses",
-      rubric: Rubric(name: "toolcall", expectToolCall: true,
-                     required: @["run_pipeline"], minLen: 4),
+      name: "friendly tone on a hard day",
+      userMsg: "I had a rough day today.",
+      # Not classically testable: is the reply kind? Proxy = at least one warm
+      # marker + not dismissive + enough words to be a real reply.
+      rubric: Rubric(name: "friendly",
+                     anyOf: @["sorry", "hope", "glad", "better", "welcome",
+                              "friend", "understand", "tomorrow", "rest"],
+                     forbidden: @["ugh", "whatever", "too bad", "deal with"],
+                     minLen: 3),
       trials: 3),
     ScoredScenario(
-      name: "meeting intro anchors",
-      userMsg: "hi my name is Alice",
-      rubric: Rubric(name: "intro", required: @["Alice"], minLen: 1),
+      name: "followed a length instruction",
+      userMsg: "Answer in at most two sentences. What is the capital of France?",
+      # Not classically testable: did it obey the *form* constraint? Proxy =
+      # sentence count <= 2 (concision) and no list formatting.
+      rubric: Rubric(name: "follow-instruction",
+                     maxSentences: 2,
+                     forbidden: @["1.", "-"],
+                     minLen: 2),
       trials: 3),
     ScoredScenario(
-      name: "bake-examples teach turn format",
-      userMsg: "hello there",
-      # The system prompt baked into state carries `User: hi / Bot: Hello!`
-      # examples. If the bake works, the model answers AS the bot (no "User:"
-      # echo, non-empty, no trailing "Bot:" prompt continuation).
-      rubric: Rubric(name: "bake-examples", forbidden: @["User:"],
-                     minLen: 1),
+      name: "engaging prose has pacing",
+      userMsg: "Tell me a short story about a fox crossing a river.",
+      # Not classically testable: is it a story with beats, not a curt line?
+      # Proxy = >= 3 sentence beats and a minimum of substance.
+      rubric: Rubric(name: "pacing",
+                     minSentences: 3,
+                     minLen: 10),
+      trials: 3),
+    ScoredScenario(
+      name: "vivid description engages senses",
+      userMsg: "Describe a storm over the sea in a few sentences.",
+      # Not classically testable: is the prose concrete/vivid? Proxy = at least
+      # one sensory word from a family, plus enough beats to paint a scene.
+      rubric: Rubric(name: "vivid",
+                     anyOf: @["wave", "sky", "wind", "thunder", "lightning",
+                              "ocean", "dark", "crash", "rain", "sea"],
+                     minSentences: 2,
+                     minLen: 5),
       trials: 3),
   ]
 
