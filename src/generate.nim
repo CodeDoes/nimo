@@ -4,7 +4,7 @@
 import std/[os, strutils, strformat, times, options]
 import cli, ./session_manager, ./config, ./tokenizer, ./rwkv, ./sampling, ./logger, ./macros,
        ./rwkv/model/header, ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend,
-       ./rwkv/backend/vulkan/vulkan_backend
+       ./rwkv/backend/vulkan/vulkan_backend, ./lock
 
 type
   GenOpts = object
@@ -211,13 +211,19 @@ proc generateCmd(args: seq[string]) =
     echo "  --lib <path to librwkv.so>"
     quit(1)
 
-  # Load model
+  # Load model (with lock to prevent OOM)
   var s = newSession(".")
+  if not acquireModelLock():
+    printError "[gpu] ERROR: Another process is loading the model. Waiting..."
+    printError "Try again in a moment, or run: pkill -f 'nimo|build/harness'"
+    quit(1)
   try:
     s.initModel(modelPath, cfg.vocabPath, backend.defaultGpuLayers)
   except Exception as e:
+    releaseModelLock()
     printError &"Failed to load model: {e.msg}"
     quit(1)
+  defer: releaseModelLock()
 
   var promptTokens = s.tok.encode(opts.prompt)
   if promptTokens.len == 0:
