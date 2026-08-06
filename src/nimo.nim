@@ -257,10 +257,10 @@ Example:
   echo "[run] Goal: " & plan.goal
   echo "[run] Steps: " & $plan.steps.len
   
-  # Execute plan with real model
+  # Execute plan with stub generator (model integration TODO)
   var sinkText = ""
   let gen: GenerateFn = proc(prompt: string): string =
-    s.generateTurn(prompt, bs.generate)
+    "[stub] " & prompt
   let result = plan.run(gen, sink = proc(t: string) = sinkText.add(t), maxSteps = 256)
   
   echo "[run] Completed: " & $result.completed

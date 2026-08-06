@@ -3,10 +3,11 @@
 ## Follow-ups for Kit
 
 ### Immediate
-1. **Token-0 tuning** — The `\x00` fix works for turns 1-2 but causes repetition on turn 3+. Need to investigate:
-   - Is token-0 too aggressive?
-   - Should we use a softer reset (e.g., just `\n\n`)?
-   - Is there a context length issue after multiple turns?
+1. **Fixed: Multi-turn conversation loop** — Root cause was two-fold:
+   - State wasn't being baked (nimo.json had no systemPrompt/bakeContext)
+   - No stop sequence for token-0 during generation
+   - **Fix**: Added conversation examples to systemPrompt in nimo.json, added `\x00` stop check in generation loop
+   - **Verified**: 5-turn conversation works, model remembers Alice, no loops
 
 2. **CLI `--` separator** — `nimble run nimo -- cmd` is broken. Options:
    - Fix the CLI parser to handle `--`
