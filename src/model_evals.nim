@@ -122,6 +122,15 @@ when not defined(harnessOffline):
       userMsg: "hi my name is Alice",
       rubric: Rubric(name: "intro", required: @["Alice"], minLen: 1),
       trials: 3),
+    ScoredScenario(
+      name: "bake-examples teach turn format",
+      userMsg: "hello there",
+      # The system prompt baked into state carries `User: hi / Bot: Hello!`
+      # examples. If the bake works, the model answers AS the bot (no "User:"
+      # echo, non-empty, no trailing "Bot:" prompt continuation).
+      rubric: Rubric(name: "bake-examples", forbidden: @["User:"],
+                     minLen: 1),
+      trials: 3),
   ]
 
   proc runScoredEval*(cfg: NimoConfig, trials: int = 3,
@@ -194,7 +203,7 @@ Usage:
       if seed >= 0: cfg.seed = seed
       let r = runScoredEval(cfg, trials)
       echo "[model-eval] scored state_bake: $1% ($2/$3)" % [
-        (r.rate * 100).formatFloat(ffDecimal, 0), $r.success, $trials]
+        (r.rate * 100).formatFloat(ffDecimal, 0), $r.success, $r.trials]
       quit(0)
 
   discard runEval(trials)

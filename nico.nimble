@@ -5,7 +5,7 @@ description   = "Nim wrapper for rwkv.cpp (RWKV language model inference in C/C+
 license       = "MIT"
 srcDir        = "src"
 binDir        = "build"
-bin           = @["main", "generate", "chat", "test_rwkv_full", "bake_state", "nimwave_app", "harness", "quantize", "nimo", "jules"]
+bin           = @["main", "generate", "chat", "test_rwkv_full", "test_state_bake", "bake_state", "nimwave_app", "harness", "quantize", "nimo", "jules"]
 
 # Dependencies
 requires "nim >= 2.0.0"
@@ -49,6 +49,11 @@ task unit, "Run the unit test suite (offline, no model needed)":
   exec "nim c -d:harnessOffline --path:src -o:build/unit src/unit.nim"
   exec "build/unit"
 
+task state_bake_test, "Deterministic state_bake equivalence (tiny model)":
+  mkdir "build"
+  exec "nim c --path:src -o:build/test_state_bake src/test_state_bake.nim"
+  exec "build/test_state_bake"
+
 task eval, "Alias for the unit test suite":
   unitTask()
 
@@ -82,7 +87,7 @@ task nimo, "Run nimo CLI":
 
 task run, "Compile and run a source file (auto-builds if needed)":
   ## Usage: nimble run <source_file> [args...]
-  ## Example: nimble run harness, nimble run nimo -- harness
+  ## Example: nimble run harness, nimble run nimo harness
   if paramCount() < 1:
     echo "Usage: nimble run <source_file> [args...]"
     echo "Example: nimble run harness, nimble run nimo -- harness"
