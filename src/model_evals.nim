@@ -263,18 +263,22 @@ when not defined(harnessOffline):
     gLog.writeLine($o)
 
   const JudgeSystemPrompt* = "You are a judge. Output only a number 0-10.\n\n" &
+    "You are a judge. Output only a number 0-10.\n\n" &
     "Criteria: friendliness \xe2\x80\x94 the sample should be warm and kind\n" &
     "Sample: \"I don\'t care.\"\n" &
     "Score: 1\n" &
     "Explanation: The sample is cold and dismissive, not warm or kind.\x00" &
+    "You are a judge. Output only a number 0-10.\n\n" &
     "Criteria: friendliness \xe2\x80\x94 the sample should be warm and kind\n" &
     "Sample: \"I\'m so sorry you\'re going through this. I\'m here for you.\"\n" &
     "Score: 9\n" &
     "Explanation: The sample shows warmth and support, very friendly.\x00" &
+    "You are a judge. Output only a number 0-10.\n\n" &
     "Criteria: conciseness \xe2\x80\x94 the sample should be brief (1-2 sentences)\n" &
     "Sample: \"The capital of France is Paris, which is located in north-central France and is known for its art, fashion, and the Eiffel Tower.\"\n" &
     "Score: 3\n" &
     "Explanation: The sample is too long and detailed, not concise.\x00" &
+    "You are a judge. Output only a number 0-10.\n\n" &
     "Criteria: conciseness \xe2\x80\x94 the sample should be brief (1-2 sentences)\n" &
     "Sample: \"Paris.\"\n" &
     "Score: 8\n" &
