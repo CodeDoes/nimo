@@ -7,42 +7,46 @@ cd ~/dev/nimo
 devenv shell
 ```
 
-## Commands
-
-### Dev Workflow (Auto-compile)
-```bash
-# Compile and run harness
-nimble run harness
-
-# Compile and run unit tests
-nimble run unit
-
-# Compile and run generate
-nimble run generate -- --prompt "Hello" --max-length 10
-```
-
-### Pre-compiled (Faster)
-```bash
-./bin/nimo harness
-./bin/nimo generate --prompt "Hello"
-./bin/nimo doctor
-./bin/nimo unit
-./bin/nimo new "write a poem"
-```
+## Commands (All via nimble run)
 
 ### Interactive Agent
 ```bash
-# Dev workflow
 nimble run harness
-
-# Or pre-compiled
-./bin/nimo harness
 ```
-Type messages, press Enter. Type `/quit` to exit.
 
-### Example Session
+### Generate Text
+```bash
+nimble run generate -- --prompt "Hello" --max-length 10
 ```
+
+### Health Check
+```bash
+nimble run nimo -- doctor
+```
+
+### Run Tests
+```bash
+nimble run unit
+```
+
+### Create Plan from Goal
+```bash
+nimble run nimo -- new "write a poem about roses"
+```
+
+### Chat (simple)
+```bash
+nimble run chat -- --backend cuda models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin
+```
+
+## Example Session
+
+```bash
 $ nimble run harness
+
+nimo harness — user -> pipeline -> tool call -> answer
+Config file: nimo.json
+Type /quit to exit, /save <file> to save session.
 
 > hello
 Hello! How can I help you?
@@ -61,6 +65,15 @@ Your name is Alice.
 - **Fresh cache**: If conversation gets weird, clear cache: `rm -rf .nimo/state-cache`
 - **GPU memory**: Only one process can load the model at a time
 - **Quick test**: `echo 'hi' | nimble run harness`
+
+## Dev Workflow
+
+```bash
+# Edit code, then recompile and run
+nimble run harness
+nimble run unit
+nimble run generate -- --prompt "Hello"
+```
 
 ## Git Tags
 
