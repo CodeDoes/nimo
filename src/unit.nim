@@ -6,7 +6,7 @@
 ##   3. Session logging - is the JSONL message tree (user -> tool_call -> tool_result -> text) well-formed?
 
 import std/[strutils, os, json]
-import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header
+import ./session_manager, ./pipeline, ./harness, ./gpu, ./rwkv/quant/cache, ./rwkv/state/cache, ./rwkv/model/header, ./session_branch
 import ./program, ./engine, ./validate, ./config, ./model_evals, ./jules
 import ./memory, ./fiaas
 
@@ -651,6 +651,69 @@ proc evalMemory*(run: var seq[Check]) =
   removeDir(tmp)
 
 # ----------------------------------------------------------------------
+# Eval 20: session_branch.nim (Branch message persistence and merging)
+# ----------------------------------------------------------------------
+proc evalSessionBranching*(run: var seq[Check]) =
+  let tmp = getTempDir() / "nimo_branch_test"
+  removeDir(tmp); createDir(tmp)
+  let branchFile = tmp / "branches.json"
+
+  # 1. Test creation and message preservation
+  var sb = newSessionBranch()
+  let parentId = "msg_original_parent"
+  let bId = sb.addBranch(parentId)
+
+  run.add(Check(name: "branch creation and parent retention",
+                passed: bId.len > 0 and sb.getBranch(0).parentId == parentId,
+                detail: "branchId=" & bId))
+
+  var msg1: Message
+  msg1.id = "msg_branch_1"
+  msg1.parentId = parentId
+  msg1.timestamp = "2026-08-06T12:00:00"
+  msg1.role = mrUser
+  msg1.content = @[ContentPart(kind: ckText, text: "hello branch")]
+
+  sb.addMessageToBranch(msg1)
+  run.add(Check(name: "message added to branch",
+                passed: sb.getBranch(0).messages.len == 1 and
+                        sb.getBranch(0).messages[0].id == "msg_branch_1"))
+
+  # 2. Test save/load of branch data (message persistence)
+  sb.saveBranch(branchFile)
+  run.add(Check(name: "branch file saved",
+                passed: fileExists(branchFile)))
+
+  var sb2 = newSessionBranch()
+  let loaded = sb2.loadBranch(branchFile)
+  run.add(Check(name: "branch file loaded successfully",
+                passed: loaded))
+  run.add(Check(name: "branch messages restored completely",
+                passed: sb2.branches.len == 1 and
+                        sb2.branches[0].messages.len == 1 and
+                        sb2.branches[0].messages[0].id == "msg_branch_1" and
+                        sb2.branches[0].messages[0].content[0].text == "hello branch"))
+
+  # 3. Test merging a branch into main session (with ID clash resolution/mapping)
+  var mainSess = newSession(".")
+  discard mainSess.addText("root user msg", "", isThinking = false) # msg_0
+
+  let mergeResult = mainSess.mergeBranch(sb2, bId)
+  run.add(Check(name: "merge branch success message",
+                passed: mergeResult.contains("Successfully merged 1 messages")))
+
+  run.add(Check(name: "merged message is in main session messages",
+                passed: mainSess.messages.len == 2 and
+                        mainSess.messages[1].role == mrUser and
+                        mainSess.messages[1].content[0].text == "hello branch"))
+
+  run.add(Check(name: "merged message has parent correctly resolved",
+                passed: mainSess.messages[1].parentId == parentId,
+                detail: "parentId=" & mainSess.messages[1].parentId))
+
+  removeDir(tmp)
+
+# ----------------------------------------------------------------------
 # Runner
 # ----------------------------------------------------------------------
 proc runAllEvals*(): int =
@@ -669,6 +732,7 @@ proc runAllEvals*(): int =
   evalModelEvals(run)
   evalJules(run)
   evalMemory(run)
+  evalSessionBranching(run)
 
   echo "\n=== nimo unit tests (stub, no model) ==="
   var passCount = 0

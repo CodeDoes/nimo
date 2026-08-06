@@ -6,10 +6,10 @@
 ## injected as a parameter (`generate: GenerateFn`); pass `nil` to use the real
 ## model on this session (offline builds always get the placeholder).
 
-import std/[json, times, os, tables]
+import std/[json, times, os, tables, strutils]
 import ./config
 when not defined(harnessOffline):
-  import std/[strutils, random]
+  import std/[random]
   import ./rwkv, ./tokenizer, ./sampling, ./macros, ./rwkv/state/cache
 
 type
@@ -233,6 +233,76 @@ proc kindToStr*(k: ContentKind): string =
   of ckPlan: "plan"
   of ckReport: "report"
 
+proc messageToJson*(msg: Message): JsonNode =
+  ## Serializes a Message to a JsonNode.
+  result = newJObject()
+  result["type"] = % "message"
+  result["id"] = %msg.id
+  if msg.parentId.len > 0:
+    result["parentId"] = %msg.parentId
+  result["timestamp"] = %msg.timestamp
+  result["role"] = %roleToStr(msg.role)
+
+  var content = newJArray()
+  for part in msg.content:
+    var p = newJObject()
+    p["type"] = %kindToStr(part.kind)
+    if part.text.len > 0:
+      p["text"] = %part.text
+    if part.toolCallId.len > 0:
+      p["toolCallId"] = %part.toolCallId
+    if part.toolName.len > 0:
+      p["toolName"] = %part.toolName
+    if part.arguments.len > 0:
+      p["arguments"] = %part.arguments
+    if part.reportKind.len > 0:
+      p["reportKind"] = %part.reportKind
+    content.add(p)
+  result["content"] = content
+
+  if msg.stopReason.len > 0:
+    result["stopReason"] = %msg.stopReason
+
+proc parseRole*(s: string): MessageRole =
+  case s.toLowerAscii()
+  of "user": mrUser
+  of "assistant": mrAssistant
+  of "toolresult", "tool_result": mrToolResult
+  else: mrUser
+
+proc parseKind*(s: string): ContentKind =
+  case s.toLowerAscii()
+  of "text": ckText
+  of "thinking": ckThinking
+  of "toolcall", "tool_call": ckToolCall
+  of "toolresult", "tool_result": ckToolResult
+  of "plan": ckPlan
+  of "report": ckReport
+  else: ckText
+
+proc messageFromJson*(j: JsonNode): Message =
+  ## Deserializes a Message from a JsonNode.
+  result.id = j["id"].getStr("")
+  if "parentId" in j:
+    result.parentId = j["parentId"].getStr("")
+  result.timestamp = j["timestamp"].getStr("")
+  result.role = parseRole(j["role"].getStr("user"))
+
+  result.content = @[]
+  if "content" in j and j["content"].kind == JArray:
+    for pj in j["content"]:
+      var part: ContentPart
+      part.kind = parseKind(pj["type"].getStr("text"))
+      if "text" in pj: part.text = pj["text"].getStr("")
+      if "toolCallId" in pj: part.toolCallId = pj["toolCallId"].getStr("")
+      if "toolName" in pj: part.toolName = pj["toolName"].getStr("")
+      if "arguments" in pj: part.arguments = pj["arguments"].getStr("")
+      if "reportKind" in pj: part.reportKind = pj["reportKind"].getStr("")
+      result.content.add(part)
+
+  if "stopReason" in j:
+    result.stopReason = j["stopReason"].getStr("")
+
 proc saveSession*(s: Session, path: string) =
   let dir = parentDir(path)
   if dir.len > 0 and dir != ".":
@@ -249,32 +319,34 @@ proc saveSession*(s: Session, path: string) =
   f.writeLine($header)
 
   for msg in s.messages:
-    var j = newJObject()
-    j["type"] = % "message"
-    j["id"] = %msg.id
-    if msg.parentId.len > 0:
-      j["parentId"] = %msg.parentId
-    j["timestamp"] = %msg.timestamp
-    j["role"] = %roleToStr(msg.role)
+    f.writeLine($(messageToJson(msg)))
 
-    var content = newJArray()
-    for part in msg.content:
-      var p = newJObject()
-      p["type"] = %kindToStr(part.kind)
-      if part.text.len > 0:
-        p["text"] = %part.text
-      if part.toolCallId.len > 0:
-        p["toolCallId"] = %part.toolCallId
-      if part.toolName.len > 0:
-        p["toolName"] = %part.toolName
-      if part.arguments.len > 0:
-        p["arguments"] = %part.arguments
-      if part.reportKind.len > 0:
-        p["reportKind"] = %part.reportKind
-      content.add(p)
-    j["content"] = content
+proc loadSession*(path: string): Session =
+  ## Loads a Session from a JSONL file. Returns nil if file not found or invalid.
+  if not fileExists(path):
+    return nil
+  try:
+    let lines = readFile(path).splitLines()
+    if lines.len == 0 or lines[0].strip().len == 0:
+      return nil
 
-    if msg.stopReason.len > 0:
-      j["stopReason"] = %msg.stopReason
+    let headerJ = parseJson(lines[0])
+    if headerJ.kind != JObject or headerJ["type"].getStr("") != "session":
+      return nil
 
-    f.writeLine($j)
+    result = Session.new()
+    result.id = headerJ["id"].getStr("")
+    result.timestamp = headerJ["timestamp"].getStr("")
+    result.cwd = headerJ["cwd"].getStr(".")
+    result.activeBranch = 0
+    result.tools = initTable[string, ToolHandler]()
+    result.messages = @[]
+
+    for i in 1 ..< lines.len:
+      let line = lines[i].strip()
+      if line.len == 0: continue
+      let j = parseJson(line)
+      if j.kind == JObject and j["type"].getStr("") == "message":
+        result.messages.add(messageFromJson(j))
+  except CatchableError:
+    return nil
