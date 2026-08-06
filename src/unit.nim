@@ -555,6 +555,15 @@ proc evalModelEvals*(run: var seq[Check]) =
   run.add(Check(name: "meanScore: empty = 0 (no crash)",
                 passed: meanScore(newSeq[float]()) == 0.0,
                 detail: ""))
+  # eval self-diagnosis: spread + saturation of a rubric's discrimination
+  run.add(Check(name: "stddev: constant scores -> no spread",
+                passed: stddev(@[1.0, 1.0, 1.0]) == 0.0, detail: ""))
+  run.add(Check(name: "stddev: variable scores -> positive spread",
+                passed: stddev(@[0.0, 1.0, 0.5]) > 0.2 and stddev(@[0.0, 1.0, 0.5]) < 0.6,
+                detail: "sd=" & $stddev(@[0.0, 1.0, 0.5])))
+  run.add(Check(name: "meanScore: raw mean matches expected",
+                passed: abs(meanScore(@[0.5, 1.0, 0.0]) - 0.5) < 0.001,
+                detail: "=" & $meanScore(@[0.5, 1.0, 0.0])))
   # per-part detailed scoring with explanations (deterministic program side)
   let sd = scoreDetailed("hello run_pipeline nope world",
                          Rubric(name: "t", required: @["run_pipeline"],

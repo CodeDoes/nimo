@@ -4,7 +4,7 @@
 ## Unlike unit tests (deterministic, offline), model evals are probabilistic
 ## and require the real model + backend.
 
-import std/[os, strutils, sequtils]
+import std/[os, strutils, sequtils, json, math]
 import ./orchestrator, ./harness
 
 type
@@ -169,6 +169,14 @@ proc meanScore*(scores: openArray[float]): float =
   for s in scores: sum += s
   result = sum / scores.len.float
 
+proc stddev*(xs: openArray[float]): float =
+  ## Sample spread across trials/repeated asks — eval self-diagnosis.
+  if xs.len < 2: return 0.0
+  let m = meanScore(xs)
+  var acc = 0.0
+  for x in xs: acc += (x - m) * (x - m)
+  result = sqrt(acc / (xs.len - 1).float)
+
 const
   # Fixed prompts for planning evals
   PlannerPrompts* = @[
@@ -210,112 +218,137 @@ proc runEval*(trials: int = 5): int =
   return 0
 
 when not defined(harnessOffline):
-  import std/[json, times]
-  import ./bootstrap, ./config, ./session_manager
+  import std/[json, times, math]
+  import ./bootstrap, ./config, ./session_manager, ./rwkv/state/cache
 
-  ## A "scoring state_bake" eval: bake (system+user) -> generate -> score.
-  ## The MODEL is the chaotic input; the SCORER is deterministic code. These
-  ## are evals (validate by eye/rate), NOT unit tests — the model output is
-  ## non-reproducible in the rough, so we assert basins, not exact tokens.
-  type ScoredScenario* = object
+  # ---------------------------------------------------------------------------
+  # Model-as-judge evals (RFC 9300): we do NOT hand-code rubrics that string-
+  # match replies. The model itself is the expert. We bake a judge state that
+  # knows how to score, then ask it to score an output on each metric, several
+  # times per metric (the judge is chaotic too — repeated asks average out).
+  #
+  # Maintenance: adding a metric is adding ONE line of prose (name + what to
+  # look for). No marker lists, no sentence counting, no thresholds.
+  # ---------------------------------------------------------------------------
+
+  const JudgeSystemPrompt* = """You are a strict, expert evaluator of assistant
+responses. When asked to score a reply on a metric, you reply with ONLY a
+single whole integer from 0 to 10 (10 = excellent on that metric, 0 = terrible).
+
+Example 1
+User prompt: my dog died
+Assistant reply: sorry to hear that
+Score on warmth: 2
+
+Example 2
+User prompt: my dog died
+Assistant reply: I am so sorry for your loss. Take all the time you need.
+Score on warmth: 9
+
+Now answer with exactly one integer between 0 and 10 and nothing else."""
+
+  type ScoreMetric* = object
+    name*: string        # metric label, e.g. "friendliness"
+    ask*: string         # one line telling the judge what this metric means
+
+  type JudgeScenario* = object
     name*: string
-    userMsg*: string
-    rubric*: Rubric
-    trials*: int
+    generatePrompt*: string   # prompt that produces the sample output to judge
+    focus*: string            # what trait the scenario probes (self-doc)
+    metrics*: seq[ScoreMetric]
+    trials*: int              # sample generations (1 keeps judge-repeat focus)
 
-  const ScoredScenarios* = @[
-    ScoredScenario(
+  const JudgeScenarios* = @[
+    JudgeScenario(
       name: "friendly tone on a hard day",
-      userMsg: "I had a rough day today.",
-      # Not classically testable: is the reply kind? Proxy = at least one warm
-      # marker + not dismissive + enough words to be a real reply.
-      rubric: Rubric(name: "friendly",
-                     anyOf: @["sorry", "hope", "glad", "better", "welcome",
-                              "friend", "understand", "tomorrow", "rest"],
-                     forbidden: @["ugh", "whatever", "too bad", "deal with"],
-                     minLen: 3),
-      trials: 3),
-    ScoredScenario(
+      generatePrompt: "I had a rough day today.",
+      focus: "empathy/tone",
+      metrics: @[
+        ScoreMetric(name: "friendliness",
+                    ask: "warm, kind, emotionally supportive; not curt or dismissive"),
+        ScoreMetric(name: "helpfulness",
+                    ask: "offers genuine support or a next step, not platitudes"),
+      ]),
+    JudgeScenario(
       name: "followed a length instruction",
-      userMsg: "Answer in at most two sentences. What is the capital of France?",
-      # Not classically testable: did it obey the *form* constraint? Proxy =
-      # sentence count <= 2 (concision) and no list formatting.
-      rubric: Rubric(name: "follow-instruction",
-                     maxSentences: 2,
-                     forbidden: @["1.", "-"],
-                     minLen: 2),
-      trials: 3),
-    ScoredScenario(
+      generatePrompt: "Answer in at most two sentences. What is the capital of France?",
+      focus: "instruction-following (form)",
+      metrics: @[
+        ScoreMetric(name: "instruction-following",
+                    ask: "obeyed the stated form/length constraint precisely"),
+        ScoreMetric(name: "accuracy",
+                    ask: "factually correct and directly answers the question"),
+      ]),
+    JudgeScenario(
       name: "engaging prose has pacing",
-      userMsg: "Tell me a short story about a fox crossing a river.",
-      # Not classically testable: is it a story with beats, not a curt line?
-      # Proxy = >= 3 sentence beats and a minimum of substance.
-      rubric: Rubric(name: "pacing",
-                     minSentences: 3,
-                     minLen: 10),
-      trials: 3),
-    ScoredScenario(
+      generatePrompt: "Tell me a short story about a fox crossing a river.",
+      focus: "prose pacing (narrative beats)",
+      metrics: @[
+        ScoreMetric(name: "pacing",
+                    ask: "good rhythm, varied sentence structure, not monotone"),
+        ScoreMetric(name: "engagement",
+                    ask: "holds interest, has narrative momentum"),
+      ]),
+    JudgeScenario(
       name: "vivid description engages senses",
-      userMsg: "Describe a storm over the sea in a few sentences.",
-      # Not classically testable: is the prose concrete/vivid? Proxy = at least
-      # one sensory word from a family, plus enough beats to paint a scene.
-      rubric: Rubric(name: "vivid",
-                     anyOf: @["wave", "sky", "wind", "thunder", "lightning",
-                              "ocean", "dark", "crash", "rain", "sea"],
-                     minSentences: 2,
-                     minLen: 5),
-      trials: 3),
+      generatePrompt: "Describe a storm over the sea in a few sentences.",
+      focus: "prose concreteness (sensory detail)",
+      metrics: @[
+        ScoreMetric(name: "vividness",
+                    ask: "concrete sensory detail, shows rather than tells"),
+        ScoreMetric(name: "imagery",
+                    ask: "evocative, memorable language"),
+      ]),
   ]
 
-  type ScenarioDiag* = object   # one rubric part, aggregated over trials
-    label*: string      # WHAT is checked
-    rate*: float        # fraction of trials where this part passed
-    why*: string        # observed evidence from the FIRST failing trial
-
-  type ScenarioRun* = object   # one scenario's continuous score
+  type MetricScore* = object
     name*: string
-    avg*: float       # mean of per-trial scores in [0,1]
-    scores*: seq[float]  # every trial's score, so spread is visible
-    diag*: seq[ScenarioDiag]  # per-part breakdown, degradation diagnosis
+    avg*: float            # mean of the judge's repeated scores, 0..10
+    scores*: seq[float]    # every judge answer (0..10), spread visible
+    unparsed*: int         # judge replies that weren't a number (self-diag)
+
+  type ScenarioRun* = object
+    name*: string
+    focus*: string
+    metrics*: seq[MetricScore]
+    trials*: int           # sample generations judged
 
   type ScoredRun* = object
     timestamp*: string
     model*: string
     seed*: int64
-    trials*: int
     scenarios*: seq[ScenarioRun]
-    overall*: float     # mean across all scenario trials
+    overall*: float        # mean of all judge scores, 0..10
 
   proc toJson(r: ScoredRun): JsonNode =
     var j = newJObject()
-    j["type"] = %"scored_eval"
+    j["type"] = %"judge_eval"
     j["timestamp"] = %r.timestamp
     j["model"] = %r.model
     j["seed"] = %r.seed
-    j["trials"] = %r.trials
     j["overall"] = %r.overall
     var scs = newJArray()
     for s in r.scenarios:
       var o = newJObject()
       o["name"] = %s.name
-      o["avg"] = %s.avg
-      var scores = newJArray()
-      for x in s.scores: scores.add(%x)
-      o["scores"] = scores
-      var diags = newJArray()
-      for d in s.diag:
-        var dj = newJObject()
-        dj["label"] = %d.label
-        dj["rate"] = %d.rate
-        dj["why"] = %d.why
-        diags.add(dj)
-      o["diag"] = diags
+      o["focus"] = %s.focus
+      var ms = newJArray()
+      for m in s.metrics:
+        var mj = newJObject()
+        mj["name"] = %m.name
+        mj["avg"] = %m.avg
+        mj["unparsed"] = %m.unparsed
+        var sc = newJArray()
+        for x in m.scores: sc.add(%x)
+        mj["scores"] = sc
+        ms.add(mj)
+      o["metrics"] = ms
       scs.add(o)
     j["scenarios"] = scs
     result = j
 
   proc loadScoredRun*(path: string): ScoredRun =
-    ## Loads a saved scored run (used as a baseline for degradation detection).
+    ## Loads a saved judge eval (used as a baseline / for --trend).
     if not fileExists(path): return ScoredRun()
     try:
       let j = parseJson(readFile(path))
@@ -323,75 +356,125 @@ when not defined(harnessOffline):
       result.timestamp = if j.hasKey("timestamp"): j["timestamp"].getStr("") else: ""
       result.model = if j.hasKey("model"): j["model"].getStr("") else: ""
       result.seed = if j.hasKey("seed"): j["seed"].getInt() else: 0
-      result.trials = if j.hasKey("trials"): j["trials"].getInt() else: 0
       result.overall = if j.hasKey("overall"): j["overall"].getFloat() else: 0.0
       if j.hasKey("scenarios") and j["scenarios"].kind == JArray:
         for o in j["scenarios"]:
           if o.kind != JObject: continue
           var s = ScenarioRun(
             name: (if o.hasKey("name"): o["name"].getStr("") else: ""),
-            avg: (if o.hasKey("avg"): o["avg"].getFloat() else: 0.0))
-          if o.hasKey("scores") and o["scores"].kind == JArray:
-            for x in o["scores"]:
-              if x.kind == JFloat or x.kind == JInt:
-                s.scores.add(x.getFloat())
-          if o.hasKey("diag") and o["diag"].kind == JArray:
-            for d in o["diag"]:
-              if d.kind != JObject: continue
-              s.diag.add(ScenarioDiag(
-                label: (if d.hasKey("label"): d["label"].getStr("") else: ""),
-                rate: (if d.hasKey("rate"): d["rate"].getFloat() else: 0.0),
-                why: (if d.hasKey("why"): d["why"].getStr("") else: "")))
+            focus: (if o.hasKey("focus"): o["focus"].getStr("") else: ""))
+          if o.hasKey("metrics") and o["metrics"].kind == JArray:
+            for m in o["metrics"]:
+              if m.kind != JObject: continue
+              var mm = MetricScore(
+                name: (if m.hasKey("name"): m["name"].getStr("") else: ""),
+                avg: (if m.hasKey("avg"): m["avg"].getFloat() else: 0.0),
+                unparsed: (if m.hasKey("unparsed"): m["unparsed"].getInt() else: 0))
+              if m.hasKey("scores") and m["scores"].kind == JArray:
+                for x in m["scores"]:
+                  if x.kind == JFloat or x.kind == JInt:
+                    mm.scores.add(x.getFloat())
+              s.metrics.add(mm)
           result.scenarios.add(s)
     except CatchableError:
       return ScoredRun()
 
+  proc deepCopyState(a: seq[float32]): seq[float32] =
+    ## Generation mutates the RNN state in place; seq assignment aliases, so
+    ## snapshots must be deep copies.
+    result = newSeq[float32](a.len)
+    for i in 0 ..< a.len: result[i] = a[i]
+
+  proc parseScore*(reply: string): float =
+    ## Pulls the first number out of the judge's reply (0..10). Returns -1 if
+    ## the judge didn't produce a number — counted as `unparsed` (self-diag).
+    var num = ""
+    var seen = false
+    for ch in reply:
+      if ch in {'0'..'9', '.'}:
+        num.add(ch)
+        seen = true
+      elif seen:
+        break
+    if not seen: return -1.0
+    try:
+      let v = parseFloat(num)
+      result = if v > 10.0: 10.0 elif v < 0.0: 0.0 else: v
+    except ValueError:
+      result = -1.0
+
+  proc bakeJudgeState(c: StateCache, s: Session, cfg: NimoConfig): seq[float32] =
+    ## Second bake on the SAME loaded model: the judge's instruction set. Kept
+    ## separate from the chat bake so scoring never bleeds into generation.
+    result = c.bakeContext(s.model, s.tok, cfg.modelPath, cfg.vocabPath,
+                           JudgeSystemPrompt)
+
+  proc askJudge(s: var Session, judge: seq[float32], generatePrompt: string,
+                reply: string, metric: ScoreMetric): float =
+    ## Present the sample to the judge, ask for a 0..10 score. The judge is
+    ## chaotic and sometimes omits a number, so we RE-ASK a few times and keep
+    ## the first parseable score. Returns -1 only if every attempt failed.
+    const maxAttempts = 4
+    const judgeMaxTokens = 14
+    s.state = deepCopyState(judge)
+    let ask = "You are judging an assistant's reply.\n" &
+              "User prompt: " & generatePrompt & "\n" &
+              "Assistant reply: " & reply & "\n" &
+              "Score on " & metric.name & " (" & metric.ask & "):"
+    for _ in 0 ..< maxAttempts:
+      # moderate temp so re-asks can land on a different scoring path
+      let r = s.generateTurn(ask, nil, DefaultTemp, DefaultTopP, judgeMaxTokens)
+      let v = parseScore(r)
+      if v >= 0.0: return v
+    result = -1.0
+
   proc runScoredEval*(cfg: NimoConfig, trials: int = 3,
                       cwd: string = getCurrentDir()): ScoredRun =
-    ## Boots the real model, bakes system+user, generates one reply per trial,
-    ## scores each against the rubric, and returns the CONTINUOUS per-scenario
-    ## means + overall. No pass/fail: the numbers themselves reveal drift.
+    ## 1) boot the real model with the CHAT bake; 2) snapshot it; 3) bake the
+    ## JUDGE state on the same model; 4) per scenario, generate a sample once,
+    ## then score it with the judge on every metric. Each generateTurn is a
+    ## distinct draw, so `trials` samples give `trials` independent scores per
+    ## metric without re-generating a fresh sample for every ask.
     result.timestamp = nowStr()
     result.model = cfg.modelPath
     result.seed = cfg.seed
-    var allScores: seq[float]
     let bs = bootstrapSession(cfg, cwd)
     if not bs.ok:
       echo "[model-eval] bootstrap failed:"
       for l in bs.lines: echo "  " & l
       return result
     var s = bs.session
-    for env in ScoredScenarios:
-      var trialScores: seq[float]
-      var trialDiags: seq[ScoredReply]   # detailed, for per-part aggregation
-      let n = if env.trials > 0: env.trials else: trials
-      for t in 0 ..< n:
-        var r = s.generateTurn(env.userMsg, nil, DefaultTemp, DefaultTopP, cfg.maxTokens)
-        let sd = scoreDetailed(r, env.rubric)
-        trialScores.add(sd.overall)
-        trialDiags.add(sd)
-      # Aggregate each rubric part across trials; attach the first failing why.
-      var diag: seq[ScenarioDiag]
-      if trialDiags.len > 0:
-        for ci in 0 ..< trialDiags[0].diagnostics.len:
-          var passes = 0
-          var firstWhy = ""
-          for td in trialDiags:
-            if ci < td.diagnostics.len and td.diagnostics[ci].passed:
-              inc passes
-            elif ci < td.diagnostics.len:
-              if firstWhy.len == 0: firstWhy = td.diagnostics[ci].why
-          diag.add(ScenarioDiag(
-            label: trialDiags[0].diagnostics[ci].label,
-            rate: passes.float / n.float,
-            why: firstWhy))
-      result.scenarios.add(ScenarioRun(name: env.name, avg: meanScore(trialScores),
-                                       scores: trialScores, diag: diag))
-      allScores.add(trialScores)
-    result.trials = allScores.len
-    result.overall = meanScore(allScores)
-
-
+    let chat = deepCopyState(s.state)            # pristine chat bake
+    let judge = bakeJudgeState(initStateCache(cfg.stateCacheDir), s, cfg)
+    var allMetrics: seq[float]
+    let nSamples = max(1, trials)
+    for sc in JudgeScenarios:
+      var run = ScenarioRun(name: sc.name, focus: sc.focus)
+      # per-metric collector (initialize one entry per metric)
+      var mSlots: seq[MetricScore]
+      for m in sc.metrics:
+        mSlots.add(MetricScore(name: m.name))
+      for rep in 0 ..< nSamples:
+        s.state = deepCopyState(chat)
+        let sample = s.generateTurn(sc.generatePrompt, nil, DefaultTemp,
+                                    DefaultTopP, cfg.maxTokens)
+        for mi, m in sc.metrics:
+          let v = askJudge(s, judge, sc.generatePrompt, sample, m)
+          if v < 0.0:
+            inc mSlots[mi].unparsed
+          else:
+            mSlots[mi].scores.add(v)
+      for mi, m in sc.metrics:
+        let mm = mSlots[mi]
+        mSlots[mi].avg =
+          if mm.scores.len > 0: (sum(mm.scores) / mm.scores.len.float) else: 0.0
+      run.metrics = mSlots
+      run.trials = nSamples
+      result.scenarios.add(run)
+      for mSl in mSlots:
+        allMetrics.add(mSl.avg)
+    result.overall = if allMetrics.len > 0:
+                       sum(allMetrics) / allMetrics.len.float else: 0.0
 
 proc main() =
   let args = commandLineParams()
@@ -407,9 +490,9 @@ Two families:
 
 Usage:
   nimo model-eval                    # planner evals (default 5 trials)
-  nimo model-eval --trials 10        # set trial count
-  nimo model-eval --scored           # real-model rubric-scored evals
-  nimo model-eval --scored --seed 42 # fixed seed (reproducible initial cond)
+  nimo model-eval --trials 10        # set repeat count per metric
+  nimo model-eval --scored           # model-as-judge scored evals (0-10)
+  nimo model-eval --scored --seed 42 # fixed seed (reproducible draws)
   nimo model-eval --scored --save results.json
   nimo model-eval --scored --baseline results.json   # delta + DEGRADED flag
 """
@@ -439,15 +522,31 @@ Usage:
       var cfg = loadConfig()
       if seed >= 0: cfg.seed = seed
       let r = runScoredEval(cfg, trials)
-      echo "[model-eval] scored state_bake  (" & r.timestamp & ")"
+      echo "[model-eval] judge-scored state_bake  (" & r.timestamp & ")"
       echo "  model=" & r.model & "  seed=" & $r.seed
+      echo "  scores are the MODEL's own 0-10 judgment (repeated asks, averaged)"
       for s in r.scenarios:
-        echo "  " & s.name & ": " & (s.avg * 100).formatFloat(ffDecimal, 1) &
-             "%  (" & $s.scores.len & " trials)"
-        for d in s.diag:
-          echo "      · " & d.label & ": " & (d.rate * 100).formatFloat(ffDecimal, 0) &
-               "%" & (if d.why.len > 0: "  — " & d.why else: "")
-      echo "  overall: " & (r.overall * 100).formatFloat(ffDecimal, 1) & "%"
+        echo "  " & s.name & "  (" & s.focus & ")"
+        for m in s.metrics:
+          let spread = if m.scores.len > 1:
+            "  spread ±" & stddev(m.scores).formatFloat(ffDecimal, 1) else: ""
+          echo "      · " & m.name & ": " & m.avg.formatFloat(ffDecimal, 1) &
+               "/10  (" & $m.scores.len & " judge asks)" & spread &
+               (if m.unparsed > 0: "  [" & $m.unparsed & " unparseable]" else: "")
+      echo "  overall: " & r.overall.formatFloat(ffDecimal, 1) & "/10"
+
+      # Auto-append to the eval history so degradation can be tracked over
+      # time, not just against one hand-picked baseline file.
+      let histDir = getCurrentDir() / ".nimo"
+      let histFile = histDir / "model-evals.jsonl"
+      try:
+        createDir(histDir)
+        let f = open(histFile, fmAppend)
+        f.writeLine($toJson(r))
+        f.close()
+        echo "  [history] appended " & histFile
+      except CatchableError:
+        discard
 
       # Optional baseline: diff this run against a saved one to surface
       # degradation (continuous delta, no pass/fail gate).
@@ -458,24 +557,26 @@ Usage:
         else:
           echo "  [baseline] diff vs " & baseline & " (" & b.timestamp & ")"
           for s in r.scenarios:
-            var delta = 0.0
-            var found = false
-            for bs in b.scenarios:
-              if bs.name == s.name:
-                delta = s.avg - bs.avg
-                found = true
-                break
-            if not found:
-              echo "  " & s.name & ": " & (s.avg * 100).formatFloat(ffDecimal, 1) & "% (new)"
-            else:
-              let d = delta * 100
-              let mark = if d < -5.0: " DEGRADED" elif d > 5.0: " improved" else: ""
-              echo "  " & s.name & ": " & (s.avg * 100).formatFloat(ffDecimal, 1) &
-                   "% (delta " & d.formatFloat(ffDecimal, 1) & "pp)" & mark
-          let od = (r.overall - b.overall) * 100
-          echo "  overall: " & (r.overall * 100).formatFloat(ffDecimal, 1) &
-               "% (delta " & od.formatFloat(ffDecimal, 1) & "pp)" &
-               (if od < -5.0: " DEGRADED" else: "")
+            for m in s.metrics:
+              var bm: MetricScore
+              var found = false
+              for bs in b.scenarios:
+                if bs.name == s.name:
+                  for mm in bs.metrics:
+                    if mm.name == m.name:
+                      bm = mm
+                      found = true
+                      break
+                if found: break
+              let d = (m.avg - bm.avg)
+              let mark = if d < -0.5: " DEGRADED" elif d > 0.5: " improved" else: ""
+              echo "  " & s.name & " / " & m.name & ": " &
+                   m.avg.formatFloat(ffDecimal, 1) &
+                   "/10 (delta " & d.formatFloat(ffDecimal, 1) & ")" & mark
+          let od = r.overall - b.overall
+          echo "  overall: " & r.overall.formatFloat(ffDecimal, 1) &
+               "/10 (delta " & od.formatFloat(ffDecimal, 1) & ")" &
+               (if od < -0.5: "  DEGRADED" else: "")
 
       if saveTo.len > 0:
         writeFile(saveTo, $toJson(r))
