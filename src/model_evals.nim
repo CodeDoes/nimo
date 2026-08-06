@@ -264,27 +264,21 @@ when not defined(harnessOffline):
 
   const JudgeSystemPrompt* = "You are a judge. Output only a number 0-10.\n\n" &
     "Criteria: friendliness \xe2\x80\x94 the sample should be warm and kind\n" &
-    "Sample: \"I don\'t care.\"\n" &
     "Score: 1\n" &
     "Explanation: The sample is cold and dismissive, not warm or kind.\x00" &
     "You are a judge. Output only a number 0-10.\n\n" &
     "Criteria: friendliness \xe2\x80\x94 the sample should be warm and kind\n" &
-    "Sample: \"I\'m so sorry you\'re going through this. I\'m here for you.\"\n" &
     "Score: 9\n" &
     "Explanation: The sample shows warmth and support, very friendly.\x00" &
     "You are a judge. Output only a number 0-10.\n\n" &
     "Criteria: conciseness \xe2\x80\x94 the sample should be brief (1-2 sentences)\n" &
-    "Sample: \"The capital of France is Paris, which is located in north-central France and is known for its art, fashion, and the Eiffel Tower.\"\n" &
     "Score: 3\n" &
     "Explanation: The sample is too long and detailed, not concise.\x00" &
     "You are a judge. Output only a number 0-10.\n\n" &
     "Criteria: conciseness \xe2\x80\x94 the sample should be brief (1-2 sentences)\n" &
-    "Sample: \"Paris.\"\n" &
     "Score: 8\n" &
     "Explanation: The sample is very brief, meets the conciseness criteria.\x00" &
     "\nCriteria: {metric} \xe2\x80\x94 {ask}\n" &
-    "Sample: {reply}\n" &
-    "Score:"
 
 
 
@@ -476,7 +470,7 @@ when not defined(harnessOffline):
     ## Present the sample to the judge, ask for a 0..10 score. No retry —
     ## every ask is fully logged so the raw judge reply is visible on failure.
     s.state = deepCopyState(judge)
-    let ask = """ & reply & """ & "\nScore on " & metric.name & " (" & metric.ask & "):"
+    let ask = "\"" & reply & "\"" & "\nScore on " & metric.name & " (" & metric.ask & "):"
     let r = s.generateTurn(ask, nil, DefaultTemp, DefaultTopP, 14)
     let v = parseScore(r)
     logAsk(scenario, rep, metric.name, generatePrompt, reply, r, v)
