@@ -218,7 +218,7 @@ proc runEval*(trials: int = 5): int =
   return 0
 
 when not defined(harnessOffline):
-  import std/[json, times, math]
+  import std/[json, times, math, os]
   import ./bootstrap, ./config, ./session_manager, ./rwkv/state/cache
 
   # ---------------------------------------------------------------------------
@@ -230,6 +230,37 @@ when not defined(harnessOffline):
   # Maintenance: adding a metric is adding ONE line of prose (name + what to
   # look for). No marker lists, no sentence counting, no thresholds.
   # ---------------------------------------------------------------------------
+
+  var gLog: File
+  var gLogOpen = false
+
+  proc openJudgeLog() =
+    ## Open the judge ask log so every generation and raw reply is captured.
+    try:
+      let p = getCurrentDir() / ".nimo"
+      createDir(p)
+      if open(gLog, p / "judge-asks.jsonl", fmWrite):
+        gLogOpen = true
+      else:
+        gLogOpen = false
+    except CatchableError:
+      gLogOpen = false
+
+  proc logAsk(scenario: string, rep: int, metric: string, genPrompt: string,
+              sample: string, judgeRaw: string, score: float) =
+    ## Log every judge ask fully — prompts, samples, raw replies, parsed score.
+    if not gLogOpen: return
+    let o = newJObject()
+    o["when"] = %nowStr()
+    o["scenario"] = %(scenario)
+    o["rep"] = %(repr(rep))
+    o["metric"] = %(metric)
+    o["prompt"] = %(genPrompt)
+    o["sample"] = %(sample)
+    o["judge_raw"] = %(judgeRaw)
+    o["score"] = %(repr(score))
+    o["parsed"] = %(if score >= 0.0: "yes" else: "no")
+    gLog.writeLine($o)
 
   const JudgeSystemPrompt* = """You are a strict, expert evaluator of assistant
 responses. When asked to score a reply on a metric, you reply with ONLY a
@@ -429,24 +460,24 @@ Now answer with exactly one integer between 0 and 10 and nothing else."""
     ## state on the SAME loaded model, independent of the global chat bake.
     result = c.bakeContext(s.model, s.tok, cfg.modelPath, cfg.vocabPath, context)
 
-  proc askJudge(s: var Session, judge: seq[float32], generatePrompt: string,
-                reply: string, metric: ScoreMetric): float =
-    ## Present the sample to the judge, ask for a 0..10 score. The judge is
-    ## chaotic and sometimes omits a number, so we RE-ASK a few times and keep
-    ## the first parseable score. Returns -1 only if every attempt failed.
-    const maxAttempts = 4
-    const judgeMaxTokens = 14
+  proc askJudge(s: var Session, judge: seq[float32], scenario: string,
+                rep: int, generatePrompt: string, reply: string,
+                metric: ScoreMetric): float =
+    ## Present the sample to the judge, ask for a 0..10 score. No retry —
+    ## every ask is fully logged so the raw judge reply is visible on failure.
     s.state = deepCopyState(judge)
     let ask = "You are judging an assistant's reply.\n" &
               "User prompt: " & generatePrompt & "\n" &
               "Assistant reply: " & reply & "\n" &
               "Score on " & metric.name & " (" & metric.ask & "):"
-    for _ in 0 ..< maxAttempts:
-      # moderate temp so re-asks can land on a different scoring path
-      let r = s.generateTurn(ask, nil, DefaultTemp, DefaultTopP, judgeMaxTokens)
-      let v = parseScore(r)
-      if v >= 0.0: return v
-    result = -1.0
+    let r = s.generateTurn(ask, nil, DefaultTemp, DefaultTopP, 14)
+    let v = parseScore(r)
+    logAsk(scenario, rep, metric.name, generatePrompt, reply, r, v)
+    if v < 0.0:
+      echo "[judge-fail] metric=" & metric.name & " scenario=" & scenario &
+           " prompt=" & generatePrompt &
+           " reply=\"" & reply.strip() & "\" judge_raw=\"" & r.strip() & "\""
+    result = v
 
   proc runScoredEval*(cfg: NimoConfig, trials: int = 3,
                       cwd: string = getCurrentDir()): ScoredRun =
@@ -458,6 +489,7 @@ Now answer with exactly one integer between 0 and 10 and nothing else."""
     result.timestamp = nowStr()
     result.model = cfg.modelPath
     result.seed = cfg.seed
+    openJudgeLog()
     let bs = bootstrapSession(cfg, cwd)
     if not bs.ok:
       echo "[model-eval] bootstrap failed:"
@@ -484,8 +516,9 @@ Now answer with exactly one integer between 0 and 10 and nothing else."""
         s.state = deepCopyState(base)
         let sample = s.generateTurn(sc.generatePrompt, nil, DefaultTemp,
                                     DefaultTopP, cfg.maxTokens)
+        logAsk(sc.name, rep, "__SAMPLE__", sc.generatePrompt, "", sample, -2.0)
         for mi, m in sc.metrics:
-          let v = askJudge(s, judge, sc.generatePrompt, sample, m)
+          let v = askJudge(s, judge, sc.name, rep, sc.generatePrompt, sample, m)
           if v < 0.0:
             inc mSlots[mi].unparsed
           else:
@@ -501,6 +534,7 @@ Now answer with exactly one integer between 0 and 10 and nothing else."""
         allMetrics.add(mSl.avg)
     result.overall = if allMetrics.len > 0:
                        sum(allMetrics) / allMetrics.len.float else: 0.0
+    close(gLog)
 
 proc main() =
   let args = commandLineParams()
