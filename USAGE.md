@@ -7,7 +7,7 @@ cd ~/dev/nimo
 devenv shell
 ```
 
-## Commands (All via nimble run)
+## Commands (All via nimble)
 
 ### Interactive Agent
 ```bash
@@ -21,22 +21,22 @@ nimble run generate -- --prompt "Hello" --max-length 10
 
 ### Health Check
 ```bash
-nimble run nimo -- doctor
+nimble run nimo doctor
 ```
 
 ### Run Tests
 ```bash
-nimble run unit
+nimble unit
 ```
 
 ### Create Plan from Goal
 ```bash
-nimble run nimo -- new "write a poem about roses"
+nimble run nimo new "write a poem about roses"
 ```
 
 ### Chat (simple)
 ```bash
-nimble run chat -- --backend cuda models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin
+nimble run chat
 ```
 
 ## Example Session
@@ -71,7 +71,7 @@ Your name is Alice.
 ```bash
 # Edit code, then recompile and run
 nimble run harness
-nimble run unit
+nimble unit
 nimble run generate -- --prompt "Hello"
 ```
 
