@@ -478,7 +478,8 @@ when not defined(harnessOffline):
     s.state = deepCopyState(judge)
     let ask = "Criteria: " & metric.name & " â " & metric.ask & "\n" &
               "Sample: \"" & reply & "\"\n" &
-              "Score:"
+              "Score:" & "\n" &
+              "Explanation:"
     let r = s.generateTurn(ask, nil, DefaultTemp, DefaultTopP, 14)
     let v = parseScore(r)
     logAsk(scenario, rep, metric.name, generatePrompt, reply, r, v)
