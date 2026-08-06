@@ -98,7 +98,7 @@ proc generateTurnStream*(s: var Session, userMsg: string, sink: TokenSink = nil,
   when not defined(harnessOffline):
     if s.model == nil:
       return "[nimo] Model not loaded"
-    let turnPrompt = "User: " & userMsg & "\n\nBot:"
+    let turnPrompt = "\x00" & "User: " & userMsg & "\n\nBot:"
     let turnTokens = s.tok.encode(turnPrompt)
     checkOk(s.model.evalSequenceInChunks(turnTokens, DefaultChunkSize, s.state, s.logits),
             "Failed to evaluate prompt")
