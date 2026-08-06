@@ -147,7 +147,7 @@ proc main() =
     printWarn &"Loading baked state from '{bakedStatePath}'"
     s.state.loadState(bakedStatePath)
   else:
-    let sysPrompt = "User: hi\n\nBot: Hello! How can I help you today?\n\n"
+    let sysPrompt = "You are nimo.\n\nUser: hi\n\nBot: Hello! How can I help you?\n\nUser: what is your name?\n\nBot: I am nimo.\n\nUser:"
     let sysTokens = s.tok.encode(sysPrompt)
     if sysTokens.len > 0:
       discard s.model.evalSequenceInChunks(sysTokens, DefaultChunkSize, s.state, s.logits)
@@ -173,7 +173,7 @@ proc main() =
     elif inputLine == "/reset":
       s = newSession(".")
       s.initModel(modelPath, vocabPath, backend.defaultGpuLayers)
-      let sysPrompt = "User: hi\n\nBot: Hello! How can I help you today?\n\n"
+      let sysPrompt = "You are nimo.\n\nUser: hi\n\nBot: Hello! How can I help you?\n\nUser: what is your name?\n\nBot: I am nimo.\n\nUser:"
       let sysTokens = s.tok.encode(sysPrompt)
       if sysTokens.len > 0:
         discard s.model.evalSequenceInChunks(sysTokens, DefaultChunkSize, s.state, s.logits)

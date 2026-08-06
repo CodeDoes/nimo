@@ -1,6 +1,6 @@
 {
   "allowCpuFallback": true,
-  "systemPrompt": "You are nimo.\n\nUser: hi\n\nBot: Hello! How can I help you?\n\nUser: what is your name?\n\nBot: I am nimo.\n\nUser:",
+  "systemPrompt": "You are nimo.\n\nUser: hi\n\nBot: Hello! How can I help you?\n\nUser: what is your name?\n\nBot: I am nimo.",
   "bakeContext": true,
   "stateCacheDir": ".nimo/state-cache"
 }
