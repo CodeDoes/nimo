@@ -1,7 +1,7 @@
 ## Simple Pipeline Tool for NIMO
 ## Implements a basic pipeline that can be called by the model.
 
-import std/[json, os, times]
+import std/[json, os, times, strutils]
 import ./session_manager, ./config  # config provides GenerateFn
 
 type
@@ -116,26 +116,45 @@ proc extractStep*(pipeline: var Pipeline, session: var session_manager.Session, 
     return stepId
 
 proc pipelineTool*(session: var session_manager.Session, arguments: string, generate: GenerateFn = nil): string =
-  ## Tool handler for run_pipeline
+  ## Tool handler for run_pipeline — generates content and writes it to a file
+  ## in the session's workspace (.nimo pipeline state + a named target file).
+  ##
+  ## Arguments JSON may carry:
+  ##   {"intent": "...", "target": "NOTES.md"}
+  ## If no target is given, writes to `output.md` under the workspace.
   var args: JsonNode
   try:
     args = parseJson(arguments)
   except:
     return "{\"error\": \"Invalid JSON arguments\"}"
-  
-  let intent = if "intent" in args: args["intent"].str else: "unknown task"
-  
+
+  let intent = if "intent" in args and args["intent"].kind == JString:
+                 args["intent"].str
+               elif "prompt" in args and args["prompt"].kind == JString:
+                 args["prompt"].str
+               else: "unknown task"
+
+  # Workspace-relative output target (sanitized to a bare filename).
+  var target = "output.md"
+  if "target" in args and args["target"].kind == JString:
+    let t = args["target"].str.strip()
+    if t.len > 0:
+      target = t
+  if "file" in args and args["file"].kind == JString and args["file"].str.strip().len > 0:
+    target = args["file"].str.strip()
+
   # Create a new pipeline
   var pipeline = newPipeline()
-  
+
   # Add steps based on intent (simplified for MVP)
-  discard pipeline.generateStep(session, "Generate", intent, target = "output.txt", generate = generate)
-  
+  discard pipeline.generateStep(session, "Generate", intent, target = target, generate = generate)
+
   # Complete pipeline
   pipeline.finishPipeline()
-  
-  # Save pipeline state
-  let pipelineFile = session.cwd / ".nimo" / (pipeline.id & ".json")
+
+  # Save pipeline state + write the produced content to the target file.
+  let wsRoot = if session.cwd.len > 0: session.cwd else: "."
+  let pipelineFile = wsRoot / ".nimo" / (pipeline.id & ".json")
   createDir(parentDir(pipelineFile))
   var j = newJObject()
   j["id"] = %pipeline.id
@@ -151,5 +170,21 @@ proc pipelineTool*(session: var session_manager.Session, arguments: string, gene
     steps.add(s)
   j["steps"] = steps
   writeFile(pipelineFile, j.pretty)
-  
-  return "[nimo] Pipeline " & pipeline.id & " completed with " & $pipeline.steps.len & " steps"
+
+  # Write the generated content to the requested target file.
+  var wroteTarget = false
+  for step in pipeline.steps:
+    if step.target.len > 0 and step.output.len > 0:
+      let absTarget =
+        if isAbsolute(step.target): step.target
+        else: wsRoot / step.target
+      let d = parentDir(absTarget)
+      if d.len > 0 and d != "." and not dirExists(d):
+        createDir(d)
+      writeFile(absTarget, step.output)
+      wroteTarget = true
+      target = absTarget
+
+  let written = if wroteTarget: " -> " & target else: ""
+  return "[nimo] Pipeline " & pipeline.id & " completed with " & $pipeline.steps.len &
+         " steps; " & (if wroteTarget: "wrote target " & target else: "no target written")

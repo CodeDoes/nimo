@@ -6,10 +6,10 @@
 ## injected as a parameter (`generate: GenerateFn`); pass `nil` to use the real
 ## model on this session (offline builds always get the placeholder).
 
-import std/[json, times, os, tables]
+import std/[json, times, os, tables, strutils]
 import ./config
 when not defined(harnessOffline):
-  import std/[strutils, random]
+  import std/[random]
   import ./rwkv, ./tokenizer, ./sampling, ./macros, ./rwkv/state/cache
 
 type
@@ -232,6 +232,68 @@ proc kindToStr*(k: ContentKind): string =
   of ckToolResult: "toolResult"
   of ckPlan: "plan"
   of ckReport: "report"
+
+proc loadSession*(s: Session, path: string): bool =
+  ## Loads a session file written by saveSession (the nimo JSONL format) back
+  ## into the given session. Returns false if the file is missing/unreadable.
+  if not fileExists(path):
+    return false
+  try:
+    let lines = readFile(path).splitLines()
+    var headerSeen = false
+    for ln in lines:
+      let t = ln.strip()
+      if t.len == 0: continue
+      let j = parseJson(t)
+      if j.kind != JObject: continue
+      if j.hasKey("type") and j["type"].getStr() == "session":
+        if not headerSeen:
+          headerSeen = true
+          if j.hasKey("id"): s.id = j["id"].getStr(s.id)
+          if j.hasKey("timestamp"): s.timestamp = j["timestamp"].getStr(s.timestamp)
+          if j.hasKey("cwd"): s.cwd = j["cwd"].getStr(s.cwd)
+        continue
+      if j.hasKey("type") and j["type"].getStr() == "message":
+        var m = Message()
+        m.id = if j.hasKey("id"): j["id"].getStr("") else: ""
+        m.parentId = if j.hasKey("parentId"): j["parentId"].getStr("") else: ""
+        m.timestamp = if j.hasKey("timestamp"): j["timestamp"].getStr("") else: ""
+        let roleStr = if j.hasKey("role"): j["role"].getStr("") else: ""
+        m.role =
+          case roleStr
+          of "user": mrUser
+          of "assistant": mrAssistant
+          of "toolResult": mrToolResult
+          else: mrAssistant
+        m.stopReason = if j.hasKey("stopReason"): j["stopReason"].getStr("") else: ""
+        if j.hasKey("content") and j["content"].kind == JArray:
+          for c in j["content"]:
+            if c.kind != JObject: continue
+            var part = ContentPart()
+            let kindStr = if c.hasKey("type"): c["type"].getStr("") else: ""
+            case kindStr
+            of "text": part.kind = ckText
+            of "think":
+              part.kind = ckThinking
+              part.text = if c.hasKey("thinking"): c["thinking"].getStr("") else: ""
+            of "thinking":
+              part.kind = ckThinking
+              part.text = if c.hasKey("text"): c["text"].getStr("") else: ""
+            of "toolCall": part.kind = ckToolCall
+            of "toolResult": part.kind = ckToolResult
+            of "plan": part.kind = ckPlan
+            of "report": part.kind = ckReport
+            else: part.kind = ckText
+            if c.hasKey("text"): part.text = c["text"].getStr("")
+            if c.hasKey("toolCallId"): part.toolCallId = c["toolCallId"].getStr("")
+            if c.hasKey("toolName"): part.toolName = c["toolName"].getStr("")
+            if c.hasKey("arguments"): part.arguments = c["arguments"].getStr("")
+            if c.hasKey("reportKind"): part.reportKind = c["reportKind"].getStr("")
+            m.content.add(part)
+        s.messages.add(m)
+    return headerSeen or s.messages.len > 0
+  except CatchableError:
+    return false
 
 proc saveSession*(s: Session, path: string) =
   let dir = parentDir(path)

@@ -27,6 +27,9 @@ proc acquireModelLock*(timeoutSec: int = 30): bool =
       # Try to acquire lock
       let pid = getCurrentProcessId()
       let timestamp = $epochTime()
+      let dir = parentDir(lockPath)
+      if dir.len > 0 and dir != "." and not dirExists(dir):
+        createDir(dir)
       writeFile(lockPath, timestamp & " " & $pid)
       return true
     except:
