@@ -4,6 +4,10 @@ AI harness for local RWKV-7 inference (Nim). Deterministic harness wrapping a
 non-deterministic model: `user -> pipeline -> chat/tool call -> answer`.
 Sessions follow the pi-agent JSONL message-tree format (parentId chains).
 
+> **Operating mode:** See [`MEGA_INSTRUCTIONS.md`](MEGA_INSTRUCTIONS.md) for
+> UX/DX priorities, step-by-step run cadence, tracking conventions, and the
+> decision framework. It supersedes this file when they conflict.
+
 ## Project overview
 
 - **Nim 2.2.10** app; model inference via `rwkv.cpp` (C/C++ backend, dlopen'd `librwkv.so`).
