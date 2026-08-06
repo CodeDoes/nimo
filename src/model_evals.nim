@@ -262,37 +262,28 @@ when not defined(harnessOffline):
     o["parsed"] = %(if score >= 0.0: "yes" else: "no")
     gLog.writeLine($o)
 
-  const JudgeSystemPrompt* = """You are a judge. Your job is to evaluate samples against criteria.
-Criteria: friendliness — the sample should be warm and kind
-Sample: "I don't care."
-Score: 1
-Explanation: The sample is cold and dismissive, not warm or kind.
+  const JudgeSystemPrompt* = "You are a judge. Output only a number 0-10.\n\n" &
+    "Criteria: friendliness \xe2\x80\x94 the sample should be warm and kind\n" &
+    "Sample: \"I don\'t care.\"\n" &
+    "Score: 1\n" &
+    "Explanation: The sample is cold and dismissive, not warm or kind.\x00" &
+    "Criteria: friendliness \xe2\x80\x94 the sample should be warm and kind\n" &
+    "Sample: \"I\'m so sorry you\'re going through this. I\'m here for you.\"\n" &
+    "Score: 9\n" &
+    "Explanation: The sample shows warmth and support, very friendly.\x00" &
+    "Criteria: conciseness \xe2\x80\x94 the sample should be brief (1-2 sentences)\n" &
+    "Sample: \"The capital of France is Paris, which is located in north-central France and is known for its art, fashion, and the Eiffel Tower.\"\n" &
+    "Score: 3\n" &
+    "Explanation: The sample is too long and detailed, not concise.\x00" &
+    "Criteria: conciseness \xe2\x80\x94 the sample should be brief (1-2 sentences)\n" &
+    "Sample: \"Paris.\"\n" &
+    "Score: 8\n" &
+    "Explanation: The sample is very brief, meets the conciseness criteria.\x00" &
+    "\nCriteria: {metric} \xe2\x80\x94 {ask}\n" &
+    "Sample: {reply}\n" &
+    "Score:"
 
-Example 2
-Criteria: friendliness — the sample should be warm and kind
-Sample: "I'm so sorry you're going through this. I'm here for you."
-Score: 9
-Explanation: The sample shows warmth and support, very friendly.
 
-Example 3
-Criteria: conciseness — the sample should be brief (1-2 sentences)
-Sample: "The capital of France is Paris, which is located in north-central France and is known for its art, fashion, and the Eiffel Tower."
-Score: 3
-Explanation: The sample is too long and detailed, not concise.
-
-Example 4
-Criteria: conciseness — the sample should be brief (1-2 sentences)
-Sample: "Paris."
-Score: 8
-Explanation: The sample is very brief, meets the conciseness criteria.
-
-Now evaluate:
-
-Criteria: {metric} — {ask}
-Sample: {reply}
-Score:
-Explanation:
-"""
 
   type ScoreMetric* = object
     name*: string        # metric label, e.g. "friendliness"
