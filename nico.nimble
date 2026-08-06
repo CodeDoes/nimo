@@ -6,6 +6,7 @@ license       = "MIT"
 srcDir        = "src"
 binDir        = "build"
 bin           = @["main", "generate", "chat", "test_rwkv_full", "bake_state", "nimwave_app", "harness", "quantize", "nimo", "jules"]
+installDirs   = @"bin"  # installs bin/ shim for PATH access
 
 # Dependencies
 requires "nim >= 2.0.0"

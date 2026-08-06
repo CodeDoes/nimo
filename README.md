@@ -5,24 +5,48 @@ Deterministic harness wrapping non-deterministic LLM inference. Sessions follow 
 ## Quick Start
 
 ```bash
+# Enter dev environment
+devenv shell
+
 # Build
 nimble build
 
-# Quantize model
-nimo quantize model-f16.bin Q4_K model-q4k.bin
+# Run the interactive agent (multi-turn conversation)
+./bin/nimo harness
 
-# Generate with CUDA
-nimo generate --backend cuda --model model-q4k.bin --prompt "Hello" --max-length 10
+# Generate text
+./bin/nimo generate --prompt "Hello"
 
-# Chat
-nimo chat --backend cuda model-q4k.bin
+# Health check
+./bin/nimo doctor
 
-# Run evals
-nimo unit
+# Run tests
+./bin/nimo unit
+```
 
-# Workspace
-nimo workspace create myproject
-nimo workspace use myproject
+### First-time setup
+
+```bash
+# Clone and enter dev environment
+git clone <repo>
+cd nimo
+devenv shell
+
+# Build binaries
+nimble build
+
+# Verify GPU is working
+./bin/nimo doctor
+
+# Try the harness
+./bin/nimo harness
+```
+
+### Using `nimo` without `./bin/` prefix
+
+Add to your shell profile:
+```bash
+export PATH="$PATH:/path/to/nimo/bin"
 ```
 
 ## Features
