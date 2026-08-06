@@ -26,7 +26,14 @@ devenv shell nimo-doctor
 
 ### Run Tests
 ```bash
+# L0 (in-process unit) + L1 (CLI integration, scripted model) — fast, offline
+devenv shell nimo-test
+
+# L0 only
 devenv shell nimo-unit
+
+# L2: real-model smoke (GPU/CPU)
+devenv shell scripts/smoke_test.sh
 ```
 
 ### Create Plan from Goal
@@ -82,7 +89,7 @@ Your name is Alice.
 ```bash
 # Edit code, then recompile and run
 devenv shell nimo-harness
-devenv shell nimo-unit
+devenv shell nimo-test             # L0 + L1 tests (fast, offline)
 devenv shell nimo-generate -- --prompt "Hello"
 ```
 
