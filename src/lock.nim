@@ -5,7 +5,7 @@ import std/[os, strutils, times]
 
 const LockFileName = ".nimo/model.lock"
 
-proc acquireModelLock(timeoutSec: int = 30): bool =
+proc acquireModelLock*(timeoutSec: int = 30): bool =
   ## Try to acquire the model lock. Returns true if acquired, false if timeout.
   let lockPath = getCurrentDir() / LockFileName
   let startTime = epochTime()
@@ -37,7 +37,7 @@ proc acquireModelLock(timeoutSec: int = 30): bool =
   
   return false
 
-proc releaseModelLock() =
+proc releaseModelLock*() =
   ## Release the model lock
   let lockPath = getCurrentDir() / LockFileName
   if fileExists(lockPath):
