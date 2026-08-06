@@ -282,9 +282,6 @@ when not defined(harnessOffline):
     "Sample: \"Paris.\"\n" &
     "Score: 8\n" &
     "Explanation: The sample is very brief, meets the conciseness criteria.\x00" &
-
-
-
   type ScoreMetric* = object
     name*: string        # metric label, e.g. "friendliness"
     ask*: string         # one line telling the judge what this metric means
