@@ -9,6 +9,7 @@
 
 import std/[os]
 import ./config, ./session_manager
+import ./lock
 
 when not defined(harnessOffline):
   import std/[strutils]
@@ -45,7 +46,18 @@ proc bootstrapSession*(cfg: NimoConfig, cwd: string = getCurrentDir()): Bootstra
 when not defined(harnessOffline):
   proc bootstrapOnline(cfg: NimoConfig, cwd: string): BootstrapResult =
     ## The real-model bootstrap (only compiled in online builds).
+    ## Uses a file lock to prevent multiple processes from loading the model
+    ## simultaneously (which causes OOM on GPUs with limited VRAM).
+    
+    # Acquire model load lock
+    if not acquireModelLock():
+      result.ok = false
+      result.lines.add "[gpu] ERROR: Another process is loading the model. Waiting..."
+      result.lines.add "Try again in a moment, or run: pkill -f 'nimo|build/harness'"
+      return
+    
     var s = newSession(cwd)
+    defer: releaseModelLock()
 
     # 1. Backend selection (RFC 7500): config > runtime flags > rwkv default >
     #    backend libs. selectBackend is the single controlled switch point.
