@@ -7,9 +7,9 @@ cd ~/dev/nimo
 devenv shell
 ```
 
-## Commands (All via nimble)
+## Commands
 
-### Interactive Agent
+### Interactive Agent (Recommended)
 ```bash
 nimble run harness
 ```
