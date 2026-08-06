@@ -151,8 +151,6 @@ proc main() =
     let sysTokens = s.tok.encode(sysPrompt)
     if sysTokens.len > 0:
       discard s.model.evalSequenceInChunks(sysTokens, DefaultChunkSize, s.state, s.logits)
-    styledEcho(styleBright, fgCyan, "User: hi")
-    styledEcho(styleBright, fgGreen, "Bot:  Hello! How can I help you today?")
 
   while true:
     stdout.write("\nUser: ")
@@ -177,8 +175,6 @@ proc main() =
       let sysTokens = s.tok.encode(sysPrompt)
       if sysTokens.len > 0:
         discard s.model.evalSequenceInChunks(sysTokens, DefaultChunkSize, s.state, s.logits)
-      styledEcho(styleBright, fgCyan, "User: hi")
-      styledEcho(styleBright, fgGreen, "Bot:  Hello! How can I help you today?")
       continue
 
     stdout.write("Bot:  ")

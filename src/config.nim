@@ -25,7 +25,7 @@ const
   DefaultThreads* = 8
   DefaultGpuLayers* = -1  # -1 = derive from model shape + free VRAM (no magic number)
   DefaultConfigFile* = "nimo.json"
-  DefaultMaxTokens* = 200
+  DefaultMaxTokens* = 50              # Safe default to prevent loops; override in nimo.json
   DefaultQuantFormat* = ""          # "" = load model as-is; e.g. "Q4_K" -> raw->quantize->cache
   DefaultModelCacheDir* = ".nimo/model-cache"
   DefaultStateCacheDir* = ".nimo/state-cache"
