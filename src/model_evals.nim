@@ -282,9 +282,6 @@ when not defined(harnessOffline):
     "Sample: \"Paris.\"\n" &
     "Score: 8\n" &
     "Explanation: The sample is very brief, meets the conciseness criteria.\x00" &
-    "\nCriteria: {metric} \xe2\x80\x94 {ask}\n" &
-    "Sample: {reply}\n" &
-    "Score:"
 
 
 
