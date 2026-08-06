@@ -477,6 +477,12 @@ proc main() =
       inc i; opts.prompt = paramStr(i); opts.oneShot = true
     elif a == "--script-replies" and i < paramCount():
       inc i; cfg.scriptReplies = paramStr(i)
+    elif a == "--seed" and i < paramCount():
+      inc i
+      try: cfg.seed = parseInt(paramStr(i))
+      except ValueError:
+        echo "Error: invalid --seed value (expected integer)"
+        quit(1)
     elif a == "--max-tokens" and i < paramCount():
       inc i
       try: opts.maxTokens = parseInt(paramStr(i))

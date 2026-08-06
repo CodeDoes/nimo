@@ -155,7 +155,7 @@ when not defined(harnessOffline):
     # 4. Load the model (RFC 8000 state bake happens inside initModel).
     try:
       s.initModel(modelToLoad, cfg.vocabPath, layers,
-                  cfg.systemPrompt, cfg.stateCacheDir, cfg.bakeContext)
+                  cfg.systemPrompt, cfg.stateCacheDir, cfg.bakeContext, cfg.seed)
       result.lines.add "[model] loaded."
       if cfg.bakeContext and cfg.systemPrompt.len > 0:
         result.lines.add "[model] cached state for system prompt (" & cfg.stateCacheDir & ")."

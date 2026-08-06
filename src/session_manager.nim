@@ -73,11 +73,12 @@ when not defined(harnessOffline):
                   gpuLayers: int = DefaultGpuLayers,
                   systemPrompt: string = "",
                   stateCacheDir: string = "",
-                  bakeContext: bool = false) =
+                  bakeContext: bool = false,
+                  seed: int64 = -1) =
     s.tok = loadWorldTokenizer(vocabPath)
     s.model = initRwkvModel(modelPath, DefaultThreads, gpuLayers.uint32)
     s.logits = s.model.newLogits()
-    s.rng = initRand(cpuTime().int64)
+    s.rng = if seed >= 0: initRand(seed) else: initRand(cpuTime().int64)
     s.state = s.model.newState()
     # RFC 8000: bake the fixed system context once, resume from it on later runs.
     if systemPrompt.len > 0 and stateCacheDir.len > 0:

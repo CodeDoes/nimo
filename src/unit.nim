@@ -526,6 +526,29 @@ proc evalModelEvals*(run: var seq[Check]) =
                 passed: result.trials > 0 and result.rate >= 0.0,
                 detail: "rate=" & $result.rate & " trials=" & $result.trials))
 
+  # The rubric scorer is deterministic code — exact assertions are valid here.
+  # It is the *program* half of the "scoring state_bake" eval: the model is a
+  # chaotic input, the scorer is a fixed function of (system+user, reply).
+  let good = scoreReply("[tool] run_pipeline {\"intent\": \"write a poem\"}",
+    Rubric(name: "toolcall", expectToolCall: true, required: @["run_pipeline"],
+           forbidden: @["poop"], minLen: 4))
+  run.add(Check(name: "scorer: tool-call reply satisfies rubric",
+                passed: good == 1.0,
+                detail: "score=" & $good))
+  let bad = scoreReply("poop here",
+    Rubric(name: "toolcall", expectToolCall: true, required: @["run_pipeline"],
+           forbidden: @["poop"], minLen: 4))
+  run.add(Check(name: "scorer: missing tool + forbidden word fails",
+                passed: bad < 1.0 and bad > 0.0,
+                detail: "score=" & $bad))
+  run.add(Check(name: "scorer: empty rubric is neutral (1.0)",
+                passed: scoreReply("anything", Rubric(name: "empty")) == 1.0,
+                detail: ""))
+  let pr = passRate([0.8, 0.9, 0.2], 0.7)
+  run.add(Check(name: "passRate: fraction above threshold",
+                passed: abs(pr - 2.0/3.0) < 0.001,
+                detail: "rate=" & $pr))
+
 proc evalJules*(run: var seq[Check]) =
   # Pure helpers for the jules CLI, offline (no network).
   # stateIcon maps known states to empjiji; unknown stays neutral.

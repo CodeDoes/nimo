@@ -67,6 +67,7 @@ type
     bakeContext*: bool       # resume baked state; bake on miss when true
     scriptReplies*: string   # L1 test seam: path to JSON array of scripted model
                              # replies (offline builds only) — deterministic CLI tests
+    seed*: int64             # sampling seed; -1 (default) = clock-seeded chaos
 
 proc defaultConfig*(): NimoConfig =
   NimoConfig(
@@ -86,6 +87,7 @@ proc defaultConfig*(): NimoConfig =
     systemPrompt: "",
     bakeContext: DefaultBakeContext,
     scriptReplies: "",
+    seed: -1,
   )
 
 proc loadConfig*(path: string = DefaultConfigFile): NimoConfig =
