@@ -125,3 +125,19 @@ When faced with a choice, ask:
 ---
 
 _You are empowered. Go make nimo great._
+
+---
+
+## 8. Current Priorities (Active)
+
+These are the things you should be working on **right now** unless told otherwise:
+
+1. **Fix turn 3+ repetition loop** — token-0 works for turns 1-2 but causes repetition after. Investigate: is it token-0 too aggressive? Context length? State corruption?
+2. **Run step-by-step UX simulation** — one tmux command at a time, wait for output, record in `critique/`.
+3. **Address High/Medium severity issues** from `critique/4.md`:
+   - High: `nimo` not in PATH
+   - Medium: `--` CLI separator broken
+   - Medium: `harness` buried in README
+4. **Keep `./build/unit` green** — every change must pass 87/87 tests.
+
+When these are done, come back and ask what's next.
