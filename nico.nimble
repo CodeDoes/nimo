@@ -119,7 +119,8 @@ task harness, "Run the harness (interactive agent)":
   if not fileExists("rwkv.cpp/librwkv_cuda.so"):
     build_libsTask()
   mkdir "build"
-  exec "nim c --path:src -o:build/harness src/harness.nim && build/harness"
+  exec "nim c --path:src -o:build/harness src/harness.nim"
+  exec "./build/harness"
 
 task generate, "Run generate command":
   if not fileExists("rwkv.cpp/librwkv_cuda.so"):
