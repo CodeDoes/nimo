@@ -145,7 +145,7 @@ proc main() =
               cfg.systemPrompt, cfg.stateCacheDir, cfg.bakeContext)
 
   while true:
-    stdout.write("\nUser: ")
+    stdout.write("> ")
     stdout.flushFile()
     var inputLine: string
     try:
@@ -166,13 +166,13 @@ proc main() =
                   cfg.systemPrompt, cfg.stateCacheDir, cfg.bakeContext)
       continue
 
-    stdout.write("Bot:  ")
+    stdout.write("Bot: ")
     stdout.flushFile()
     let reply = s.generateTurnStream(inputLine, proc(token: string) =
-      stdout.write(token)
-      stdout.flushFile())
+      if token != "\x00":
+        stdout.write(token)
+        stdout.flushFile())
     echo ""
-    logChatInteraction(inputLine, reply)
 
 when isMainModule:
   main()
