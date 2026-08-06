@@ -262,23 +262,37 @@ when not defined(harnessOffline):
     o["parsed"] = %(if score >= 0.0: "yes" else: "no")
     gLog.writeLine($o)
 
-  const JudgeSystemPrompt* = """You are a judge. For each evaluation, you will be given criteria and an output. Your task is to provide a score and motivation.
+  const JudgeSystemPrompt* = """You are a judge. Your job is to evaluate samples against criteria.
+Criteria: friendliness — the sample should be warm and kind
+Sample: "I don't care."
+Score: 1
+Explanation: The sample is cold and dismissive, not warm or kind.
 
-Criteria: friendliness
-Output: "I'm sorry to hear that"
-Score: 2
-Motivation: Too cold for the situation
-
-Criteria: helpfulness
-Output: "I am so sorry for your loss. Take all the time you need."
+Example 2
+Criteria: friendliness — the sample should be warm and kind
+Sample: "I'm so sorry you're going through this. I'm here for you."
 Score: 9
-Motivation: Genuine support and next step
+Explanation: The sample shows warmth and support, very friendly.
 
-Now evaluate the following:
+Example 3
+Criteria: conciseness — the sample should be brief (1-2 sentences)
+Sample: "The capital of France is Paris, which is located in north-central France and is known for its art, fashion, and the Eiffel Tower."
+Score: 3
+Explanation: The sample is too long and detailed, not concise.
 
-Criteria: {metric}
-Output: "{reply}"
-Score:"""
+Example 4
+Criteria: conciseness — the sample should be brief (1-2 sentences)
+Sample: "Paris."
+Score: 8
+Explanation: The sample is very brief, meets the conciseness criteria.
+
+Now evaluate:
+
+Criteria: {metric} — {ask}
+Sample: {reply}
+Score:
+Explanation:
+"""
 
   type ScoreMetric* = object
     name*: string        # metric label, e.g. "friendliness"
@@ -344,7 +358,7 @@ Score:"""
       focus: "context recall across turns (the point of state_bake)",
       metrics: @[ScoreMetric(
         name: "consistency",
-        ask: "the reply honors the earlier conversation — the user's name is Priya and they love astronomy; the answer should reflect that, not ignore or contradict it"
+        ask: "Does the sample honor facts established earlier in the conversation? If the user said their name is Priya and they love astronomy, the reply should reference these facts correctly. Ignoring, contradicting, or hallucinating new facts scores low."
       )]),
   ]
 
