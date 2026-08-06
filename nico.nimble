@@ -6,7 +6,6 @@ license       = "MIT"
 srcDir        = "src"
 binDir        = "build"
 bin           = @["main", "generate", "chat", "test_rwkv_full", "bake_state", "nimwave_app", "harness", "quantize", "nimo", "jules"]
-installDirs   = @"bin"  # installs bin/ shim for PATH access
 
 # Dependencies
 requires "nim >= 2.0.0"
@@ -108,3 +107,22 @@ task nimwave, "Run the NIMWAVE TUI dashboard":
     build_libsTask()
   mkdir "build"
   exec "nim c -r -o:build/nimwave_app src/nimwave_app.nim"
+
+task run, "Compile and run a Nim source file (auto-builds if needed)":
+  ## Usage: nimble run <source_file> [args...]
+  ## Example: nimble run harness, nimble run nimo -- harness
+  echo "Usage: nimble run <source_file> [args...]"
+  echo "Example: nimble run harness, nimble run nimo -- harness"
+  quit(1)
+
+task harness, "Run the harness (interactive agent)":
+  if not fileExists("rwkv.cpp/librwkv_cuda.so"):
+    build_libsTask()
+  mkdir "build"
+  exec "nim c --path:src -o:build/harness src/harness.nim && build/harness"
+
+task generate, "Run generate command":
+  if not fileExists("rwkv.cpp/librwkv_cuda.so"):
+    build_libsTask()
+  mkdir "build"
+  exec "nim c --path:src -o:build/generate src/generate.nim && build/generate"
