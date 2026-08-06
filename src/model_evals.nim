@@ -476,9 +476,7 @@ when not defined(harnessOffline):
     ## Present the sample to the judge, ask for a 0..10 score. No retry —
     ## every ask is fully logged so the raw judge reply is visible on failure.
     s.state = deepCopyState(judge)
-    let ask = "Criteria: " & metric.name & " — " & metric.ask & "\n" &
-              "Sample: \"" & reply & "\"\n" &
-              "Score:"
+    let ask = "\"" & reply & "\"" & "\nScore on " & metric.name & " (" & metric.ask & "):"
     let r = s.generateTurn(ask, nil, DefaultTemp, DefaultTopP, 14)
     let v = parseScore(r)
     logAsk(scenario, rep, metric.name, generatePrompt, reply, r, v)
