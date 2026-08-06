@@ -141,16 +141,8 @@ proc main() =
     quit(1)
 
   var s = newSession(".")
-  s.initModel(modelPath, vocabPath, backend.defaultGpuLayers)
-
-  if bakedStatePath.len > 0 and fileExists(bakedStatePath):
-    printWarn &"Loading baked state from '{bakedStatePath}'"
-    s.state.loadState(bakedStatePath)
-  else:
-    let sysPrompt = "You are nimo.\n\nUser: hi\n\nBot: Hello! How can I help you?\n\nUser: what is your name?\n\nBot: I am nimo.\n\nUser:"
-    let sysTokens = s.tok.encode(sysPrompt)
-    if sysTokens.len > 0:
-      discard s.model.evalSequenceInChunks(sysTokens, DefaultChunkSize, s.state, s.logits)
+  s.initModel(modelPath, cfg.vocabPath, backend.defaultGpuLayers,
+              cfg.systemPrompt, cfg.stateCacheDir, cfg.bakeContext)
 
   while true:
     stdout.write("\nUser: ")
@@ -170,11 +162,8 @@ proc main() =
       break
     elif inputLine == "/reset":
       s = newSession(".")
-      s.initModel(modelPath, vocabPath, backend.defaultGpuLayers)
-      let sysPrompt = "You are nimo.\n\nUser: hi\n\nBot: Hello! How can I help you?\n\nUser: what is your name?\n\nBot: I am nimo.\n\nUser:"
-      let sysTokens = s.tok.encode(sysPrompt)
-      if sysTokens.len > 0:
-        discard s.model.evalSequenceInChunks(sysTokens, DefaultChunkSize, s.state, s.logits)
+      s.initModel(modelPath, cfg.vocabPath, backend.defaultGpuLayers,
+                  cfg.systemPrompt, cfg.stateCacheDir, cfg.bakeContext)
       continue
 
     stdout.write("Bot:  ")
