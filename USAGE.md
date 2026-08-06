@@ -7,42 +7,37 @@ cd ~/dev/nimo
 devenv shell
 ```
 
-## Commands
+## Commands (via devenv)
 
-### Interactive Agent (Recommended)
+### Interactive Agent
 ```bash
-nimble run harness
+devenv shell nimo-harness
 ```
 
 ### Generate Text
 ```bash
-nimble run generate -- --prompt "Hello" --max-length 10
+devenv shell nimo-generate -- --prompt "Hello" --max-length 10
 ```
 
 ### Health Check
 ```bash
-nimble run nimo doctor
+devenv shell nimo-doctor
 ```
 
 ### Run Tests
 ```bash
-nimble unit
+devenv shell nimo-unit
 ```
 
 ### Create Plan from Goal
 ```bash
-nimble run nimo new "write a poem about roses"
-```
-
-### Chat (simple)
-```bash
-nimble run chat
+devenv shell nimo-new "write a poem about roses"
 ```
 
 ## Example Session
 
 ```bash
-$ nimble run harness
+$ devenv shell nimo-harness
 
 nimo harness — user -> pipeline -> tool call -> answer
 Config file: nimo.json
@@ -64,15 +59,15 @@ Your name is Alice.
 
 - **Fresh cache**: If conversation gets weird, clear cache: `rm -rf .nimo/state-cache`
 - **GPU memory**: Only one process can load the model at a time
-- **Quick test**: `echo 'hi' | nimble run harness`
+- **Quick test**: `echo 'hi' | devenv shell nimo-harness`
 
 ## Dev Workflow
 
 ```bash
 # Edit code, then recompile and run
-nimble run harness
-nimble unit
-nimble run generate -- --prompt "Hello"
+devenv shell nimo-harness
+devenv shell nimo-unit
+devenv shell nimo-generate -- --prompt "Hello"
 ```
 
 ## Git Tags

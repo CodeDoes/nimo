@@ -30,10 +30,28 @@
     pkgs.ocl-icd
   ]}:$DEVENV_ROOT/rwkv.cpp:$DEVENV_ROOT/rwkv.cpp/ggml/src:.";
 
-  scripts.build-cuda.exec = ''
-    cd $DEVENV_ROOT/rwkv.cpp
-    rm -rf CMakeCache.txt CMakeFiles
-    cmake . -DRWKV_CUBLAS=ON -DCMAKE_CUDA_ARCHITECTURES="86" -DCMAKE_BUILD_TYPE=Release
-    make -j$(nproc)
+  scripts.nimo-harness.exec = ''
+    cd $DEVENV_ROOT
+    nimble run harness "$@"
+  '';
+
+  scripts.nimo-generate.exec = ''
+    cd $DEVENV_ROOT
+    nimble run generate -- "$@"
+  '';
+
+  scripts.nimo-doctor.exec = ''
+    cd $DEVENV_ROOT
+    nimble run nimo doctor "$@"
+  '';
+
+  scripts.nimo-unit.exec = ''
+    cd $DEVENV_ROOT
+    nimble unit "$@"
+  '';
+
+  scripts.nimo-new.exec = ''
+    cd $DEVENV_ROOT
+    nimble run nimo new "$@"
   '';
 }
