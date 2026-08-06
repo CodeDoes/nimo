@@ -548,6 +548,31 @@ proc evalModelEvals*(run: var seq[Check]) =
   run.add(Check(name: "passRate: fraction above threshold",
                 passed: abs(pr - 2.0/3.0) < 0.001,
                 detail: "rate=" & $pr))
+  let ms = meanScore([0.8, 1.0, 0.6])
+  run.add(Check(name: "meanScore: continuous mean (degradation-sensitive)",
+                passed: abs(ms - 0.8) < 0.001,
+                detail: "mean=" & $ms))
+  run.add(Check(name: "meanScore: empty = 0 (no crash)",
+                passed: meanScore(newSeq[float]()) == 0.0,
+                detail: ""))
+  # per-part detailed scoring with explanations (deterministic program side)
+  let sd = scoreDetailed("hello run_pipeline nope world",
+                         Rubric(name: "t", required: @["run_pipeline"],
+                                forbidden: @["nope"], minLen: 3))
+  run.add(Check(name: "scoreDetailed: overall is weighted mean",
+                passed: abs(sd.overall - 2.0/3.0) < 0.001, detail: "=" & $sd.overall))
+  run.add(Check(name: "scoreDetailed: one diagnostic per rubric part + why",
+                passed: sd.diagnostics.len == 3 and
+                        sd.diagnostics[0].why.contains("found") and
+                        (not sd.diagnostics[1].passed) and
+                        sd.diagnostics[1].why.contains("nope"),
+                detail: "diags=" & $sd.diagnostics.len))
+  let sdBad = scoreDetailed("no tools here",
+                            Rubric(name: "t", required: @["run_pipeline"]))
+  run.add(Check(name: "scoreDetailed: explains the failing part",
+                passed: (not sdBad.diagnostics[0].passed) and
+                        sdBad.diagnostics[0].why.contains("NOT found"),
+                detail: sdBad.diagnostics[0].why))
 
 proc evalJules*(run: var seq[Check]) =
   # Pure helpers for the jules CLI, offline (no network).
