@@ -325,7 +325,8 @@ on the same loaded model, then ask it to score generated samples on metrics.
 
 **Working approach:**
 - Bake judge state with clear Criteria/Sample/Score/Explanation pattern
-- Repeat "You are a judge. Output only a number 0-10." for EACH example
+- Start with "You are a judge. Output only a number 0-10."
+- Repeat "You are a judge. Output only a number 0-10." before EACH example
 - Use `\x00` between examples to separate them
 - Metrics should explain HOW scoring works (not just what to look for)
 - Log all judge asks to `.nimo/judge-asks.jsonl` for diagnosis
