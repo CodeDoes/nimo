@@ -262,21 +262,23 @@ when not defined(harnessOffline):
     o["parsed"] = %(if score >= 0.0: "yes" else: "no")
     gLog.writeLine($o)
 
-  const JudgeSystemPrompt* = """You are a strict, expert evaluator of assistant
-responses. When asked to score a reply on a metric, you reply with ONLY a
-single whole integer from 0 to 10 (10 = excellent on that metric, 0 = terrible).
+  const JudgeSystemPrompt* = """You are a judge. For each evaluation, you will be given criteria and an output. Your task is to provide a score and motivation.
 
-Example 1
-User prompt: my dog died
-Assistant reply: sorry to hear that
-Score on warmth: 2
+Criteria: friendliness
+Output: "I'm sorry to hear that"
+Score: 2
+Motivation: Too cold for the situation
 
-Example 2
-User prompt: my dog died
-Assistant reply: I am so sorry for your loss. Take all the time you need.
-Score on warmth: 9
+Criteria: helpfulness
+Output: "I am so sorry for your loss. Take all the time you need."
+Score: 9
+Motivation: Genuine support and next step
 
-Now answer with exactly one integer between 0 and 10 and nothing else."""
+Now evaluate the following:
+
+Criteria: {metric}
+Output: "{reply}"
+Score:"""
 
   type ScoreMetric* = object
     name*: string        # metric label, e.g. "friendliness"
@@ -539,23 +541,22 @@ Now answer with exactly one integer between 0 and 10 and nothing else."""
 proc main() =
   let args = commandLineParams()
   if args.len == 0:
-    echo """nimo model-eval — Black-box model probes
-
-Two families:
-  * planner compilation (offline, deterministic) — the default
-  * scored state_bake   (online, real model) — bake system+user -> generate
-    -> score against a rubric; reports CONTINUOUS per-scenario means + overall
-    percent. No pass/fail: numbers alone surface degradation. EVALS are
-    validated by eye/delta, NOT exact-match unit tests — the model is chaotic.
-
-Usage:
-  nimo model-eval                    # planner evals (default 5 trials)
-  nimo model-eval --trials 10        # set repeat count per metric
-  nimo model-eval --scored           # model-as-judge scored evals (0-10)
-  nimo model-eval --scored --seed 42 # fixed seed (reproducible draws)
-  nimo model-eval --scored --save results.json
-  nimo model-eval --scored --baseline results.json   # delta + DEGRADED flag
-"""
+    echo "nimo model-eval — Black-box model probes"
+    echo ""
+    echo "Two families:"
+    echo "  * planner compilation (offline, deterministic) — the default"
+    echo "  * scored state_bake   (online, real model) — bake system+user -> generate"
+    echo "    -> score against a rubric; reports CONTINUOUS per-scenario means + overall"
+    echo "    percent. No pass/fail: numbers alone surface degradation. EVALS are"
+    echo "    validated by eye/delta, NOT exact-match unit tests — the model is chaotic."
+    echo ""
+    echo "Usage:"
+    echo "  nimo model-eval                    # planner evals (default 5 trials)"
+    echo "  nimo model-eval --trials 10        # set repeat count per metric"
+    echo "  nimo model-eval --scored           # model-as-judge scored evals (0-10)"
+    echo "  nimo model-eval --scored --seed 42 # fixed seed (reproducible draws)"
+    echo "  nimo model-eval --scored --save results.json"
+    echo "  nimo model-eval --scored --baseline results.json   # delta + DEGRADED flag"
     quit(0)
 
   var trials = 5
