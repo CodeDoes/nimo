@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# PATH shim for nimo — enables running `nimo` from repo root
+set -eu
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(dirname "$SCRIPT_DIR")"
+export PATH="$REPO_DIR/build:$PATH"
+export LD_LIBRARY_PATH="$REPO_DIR/rwkv.cpp:$REPO_DIR/rwkv.cpp/ggml/src:${LD_LIBRARY_PATH:-}"
+# Use full path to avoid recursion
+exec "$REPO_DIR/build/nimo" "$@"
