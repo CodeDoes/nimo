@@ -301,3 +301,52 @@ The flow: `user → (think) → text|tool_call → tool_result → user → ...`
 | 8 | Model — RWKV & Quantization |
 | 9 | Infrastructure — Logging, Eval, Test |
 | 9500+ | Speculative research (clearly marked) |
+
+## Model Evals (RFC 9300)
+
+`src/model_evals.nim` — Black-box model probes. Two families:
+1. **Planner compilation** (offline, deterministic) — the default
+2. **Scored state_bake** (online, real model) — model-as-judge evals
+
+### Model-as-Judge Evals
+
+The model itself is the judge. We bake a second state (`JudgeSystemPrompt`)
+on the same loaded model, then ask it to score generated samples on metrics.
+
+**Critical finding (RTX 2050, 2.9B model):**
+- The 2.9B model **cannot reliably output just a number** regardless of:
+  - Prompt format (instruction, few-shot, delimited)
+  - Examples with/without `\x00` separators
+  - Temperature (0.1-0.7)
+  - State-baking technique
+- Failure modes: echoes prompt, echoes examples, hallucinates, outputs "User"/"Bot"
+- Success rate: ~10-20% of asks produce a parseable number
+- The model-as-judge approach works mechanically but the small model is a weak judge
+
+**Working approach:**
+- Bake judge state with clear Criteria/Sample/Score/Explanation pattern
+- Use `\x00` between examples to separate them
+- Metrics should explain HOW scoring works (not just what to look for)
+- Log all judge asks to `.nimo/judge-asks.jsonl` for diagnosis
+- Accept ~40-80% unparseable rate and report it
+
+```bash
+nim c -o:build/model_evals src/model_evals.nim
+./build/model_evals --scored --trials 1 --seed 42
+```
+
+### State-Bake Soundness
+
+`src/test_state_bake.nim` — 4 deterministic checks on tiny model:
+- Load tiny deterministic model
+- Checkpoint == continue (bitwise logits)
+- Cache file size matches state
+- Save/load round-trips byte-for-byte
+
+```bash
+nimble state_bake_test
+```
+
+**Key insight:** State-bake works correctly (bitwise sound). The problem is
+the model's inability to follow out-of-distribution instructions, not the
+baking mechanism.
