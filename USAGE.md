@@ -34,6 +34,17 @@ devenv shell nimo-unit
 devenv shell nimo-new "write a poem about roses"
 ```
 
+### One-shot prompt (user -> agent cycle -> exit)
+```bash
+# NOTE: `--` separates devenv's own flags from the script's args (devenv uses
+# -s/--system itself, so it must come after --)
+devenv shell nimo-harness -- -p "write a haiku about AI"
+
+# with a session file (resumes prior turns) + workspace
+devenv shell nimo-harness -- -w . -s .nimo/active-session.jsonl -p "write a file called NOTES.md with 20 things to do during summer"
+# -> streams the answer, writes NOTES.md, saves the session, exits
+```
+
 ### Chat (simple)
 ```bash
 devenv shell nimo-chat --backend cuda models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin
