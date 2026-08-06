@@ -1,38 +1,46 @@
 # PROGRESS.md
 
-## Current Focus
-- **UX/DX simulation** — running user journey tests, capturing observations
-- **Multi-turn conversation fix** — state baking with examples + token-0 stop sequence
-- **Next**: Address High/Medium severity issues from critique/4.md
+## Current State
+- **Baseline: `v0.1.0`** — solid working state
+- **Multi-turn**: 6 turns verified (Alice remembered, math correct, haiku generated)
+- **Tests**: 87/87 pass
+- **Backend**: CUDA on RTX 2050
 
-## Done
-- [x] UX simulation step 1-3: PATH issue, `nimble run`, generate command
-- [x] UX simulation step 4-6: chat, doctor, unit tests
-- [x] UX simulation step 7: harness basic flow
-- [x] **Fixed**: token-0 before `User:` in `generateTurnStream` (`session_manager.nim:101`) — but this alone didn't fix the loop
-- [x] **Fixed**: state bake now includes conversation examples in `nimo.json` — this is what actually fixes the loop
-- [x] **Fixed**: `\x00` stop sequence check in generation loop (`session_manager.nim:117`) — prevents infinite generation
-- [x] Verified: 5-turn conversation works (Alice remembered, math correct, no loops)
-- [x] 87/87 unit tests pass
-- [x] Created `critique/4.md` with full UX observations
-- [x] Created `MEGA_INSTRUCTIONS.md` with operating principles
+## Working
+- [x] `./build/harness` — interactive agent (6+ turns)
+- [x] `./build/generate` — single-shot text generation
+- [x] `./build/nimo doctor` — health check
+- [x] `./build/unit` — 87/87 tests
+- [x] State baking with examples in nimo.json
+- [x] Token-0 stop sequence prevents loops
 
-## In Progress
-- [ ] Fix repetition loop on turn 3+ (token-0 may be too aggressive)
-- [ ] Run full UX simulation with step-by-step tmux
-- [ ] Address High/Medium severity issues from critique
+## Known Issues
+- [ ] `chat` command has output formatting bugs (shows "User: Bot:" prefix)
+- [ ] `generate` is slow (~800ms/token) — may need GPU optimization
+- [ ] `nimo` not in PATH — users must run `./build/nimo` or `nimble run nimo`
+- [ ] CLI `--` separator broken in `nimble run`
 
-## Next
-- [ ] Investigate turn 3+ repetition — is it token-0, context length, or state corruption?
-- [ ] Add `PROGRESS.md` updates after each session
-- [ ] Document `--` CLI separator fix or workaround
+## Next Priorities
+1. Fix chat command output formatting
+2. Add `bin/nimo` PATH shim
+3. Fix CLI `--` separator
+4. Optimize generate speed
+5. Add README quick start with working examples
 
-## Blockers
-- None currently
+## Commands
+```bash
+# Harness (agent loop)
+./build/harness
 
-## Notes
-- token-0 (`\x00`) is essential for turn boundaries but may need tuning for longer conversations
-- GPU is healthy (P8 idle, 3763 MiB free on RTX 2050)
-- All builds use CUDA backend
+# Generate
+./build/generate --backend cuda --prompt "Hello" --max-length 10
 
-_Last updated: 2026-08-06_
+# Chat
+./build/chat --backend cuda models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin
+
+# Tests
+./build/unit
+
+# Health
+./build/nimo doctor
+```
