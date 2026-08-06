@@ -57,6 +57,6 @@
 
   scripts.nimo-chat.exec = ''
     cd $DEVENV_ROOT
-    nimble run chat -- "$@"
+    nimble run chat "$@"
   '';
 }
