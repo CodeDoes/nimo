@@ -1,27 +1,55 @@
 ## haiku.nim - Generate haikus about AI using the real model
 ## Demonstrates the observable workflow with real inference.
-## Run with: LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:$LD_LIBRARY_PATH" nim c -o:build/haiku demos/haiku.nim && ./build/haiku
+## Usage: LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:$LD_LIBRARY_PATH" ./build/haiku "<prompt>"
+##        LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:$LD_LIBRARY_PATH" ./build/haiku --use-default-prompt
 
-import std/[times, os, json]
+import std/[times, os, json, strutils]
 import ../src/config, ../src/bootstrap, ../src/session_manager
 
 const
-  Prompts = @["write a haiku about AI", "write a haiku about robots", "write a haiku about code"]
+  DefaultPrompts = @["write a haiku about AI", "write a haiku about robots", "write a haiku about code"]
   OutputDir = ".nimo/demos/haikus"
   OutputFile = OutputDir / "all_generated.jsonl"
   Schema = "Haiku"
 
 proc main() =
+  # Parse args
+  var useDefaults = false
+  var prompts: seq[string] = @[]
+  
+  for i in 1 .. paramCount():
+    let arg = paramStr(i)
+    if arg == "--use-default-prompt":
+      useDefaults = true
+    elif arg.startsWith("--"):
+      echo "Error: unknown option: " & arg
+      quit(1)
+    else:
+      prompts.add(arg)
+  
+  # Require either NL input or --use-default-prompt
+  if prompts.len == 0 and not useDefaults:
+    echo """Usage: ./haiku "<prompt>" [more prompts...]
+       ./haiku --use-default-prompt
+
+Examples:
+  ./haiku "write a haiku about AI"
+  ./haiku "write a haiku about AI" "robots love code"
+  ./haiku --use-default-prompt
+"""
+    quit(1)
+  
+  # Set prompts
+  if useDefaults and prompts.len == 0:
+    prompts = DefaultPrompts
+  
   echo "=== Haiku Generator (Real Model) ==="
+  echo "Prompts: " & $prompts.len
   echo ""
   
   # Create output directory
   if not dirExists(OutputDir):
     createDir(OutputDir)
-    echo "Created: " & OutputDir
-  
-  echo "Output file: " & OutputFile
-  echo "File exists before: " & $fileExists(OutputFile)
   
   # Load config
   let cfg = loadConfig()
@@ -46,13 +74,11 @@ proc main() =
   let f = open(OutputFile, fmAppend)
   defer: f.close()
   
-  echo "File exists after open: " & $fileExists(OutputFile)
-  
   var runId = now().format("yyyyMMddHHmmss")
   echo "Run ID: " & runId
   echo ""
   
-  for i, prompt in Prompts:
+  for i, prompt in prompts:
     echo "--- Haiku " & $(i + 1) & " ---"
     echo "Prompt: " & prompt
     echo ""
@@ -90,8 +116,7 @@ proc main() =
     echo ""
   
   echo "=== Complete ==="
-  echo "Trace saved to: " & OutputFile
-  echo "File exists after: " & $fileExists(OutputFile)
+  echo "Trace appended to: " & OutputFile
 
 when isMainModule:
   main()
