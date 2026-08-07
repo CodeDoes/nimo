@@ -4,8 +4,10 @@
 ## Unlike unit tests (deterministic, offline), model evals are probabilistic
 ## and require the real model + backend.
 
-import std/[os, strutils, sequtils, json, math]
+import std/[os, strutils, json, math]
 import ./orchestrator, ./harness
+import ./bootstrap, ./config, ./session_manager, ./rwkv/state/cache
+
 
 type
   EvalResult* = object
@@ -217,331 +219,327 @@ proc runEval*(trials: int = 5): int =
   
   return 0
 
-when not defined(harnessOffline):
-  import std/[json, times, math, os]
-  import ./bootstrap, ./config, ./session_manager, ./rwkv/state/cache
+# ---------------------------------------------------------------------------
+# Model-as-judge evals (RFC 9300): we do NOT hand-code rubrics that string-
+# match replies. The model itself is the expert. We bake a judge state that
+# knows how to score, then ask it to score an output on each metric, several
+# times per metric (the judge is chaotic too — repeated asks average out).
+#
+# Maintenance: adding a metric is adding ONE line of prose (name + what to
+# look for). No marker lists, no sentence counting, no thresholds.
+# ---------------------------------------------------------------------------
 
-  # ---------------------------------------------------------------------------
-  # Model-as-judge evals (RFC 9300): we do NOT hand-code rubrics that string-
-  # match replies. The model itself is the expert. We bake a judge state that
-  # knows how to score, then ask it to score an output on each metric, several
-  # times per metric (the judge is chaotic too — repeated asks average out).
-  #
-  # Maintenance: adding a metric is adding ONE line of prose (name + what to
-  # look for). No marker lists, no sentence counting, no thresholds.
-  # ---------------------------------------------------------------------------
+var gLog: File
+var gLogOpen = false
 
-  var gLog: File
-  var gLogOpen = false
-
-  proc openJudgeLog() =
-    ## Open the judge ask log so every generation and raw reply is captured.
-    try:
-      let p = getCurrentDir() / ".nimo"
-      createDir(p)
-      if open(gLog, p / "judge-asks.jsonl", fmWrite):
-        gLogOpen = true
-      else:
-        gLogOpen = false
-    except CatchableError:
+proc openJudgeLog() =
+  ## Open the judge ask log so every generation and raw reply is captured.
+  try:
+    let p = getCurrentDir() / ".nimo"
+    createDir(p)
+    if open(gLog, p / "judge-asks.jsonl", fmWrite):
+      gLogOpen = true
+    else:
       gLogOpen = false
+  except CatchableError:
+    gLogOpen = false
 
-  proc logAsk(scenario: string, rep: int, metric: string, genPrompt: string,
-              sample: string, judgeRaw: string, score: float) =
-    ## Log every judge ask fully — prompts, samples, raw replies, parsed score.
-    if not gLogOpen: return
-    let o = newJObject()
-    o["when"] = %nowStr()
-    o["scenario"] = %(scenario)
-    o["rep"] = %(repr(rep))
-    o["metric"] = %(metric)
-    o["prompt"] = %(genPrompt)
-    o["sample"] = %(sample)
-    o["judge_raw"] = %(judgeRaw)
-    o["score"] = %(repr(score))
-    o["parsed"] = %(if score >= 0.0: "yes" else: "no")
-    gLog.writeLine($o)
+proc logAsk(scenario: string, rep: int, metric: string, genPrompt: string,
+            sample: string, judgeRaw: string, score: float) =
+  ## Log every judge ask fully — prompts, samples, raw replies, parsed score.
+  if not gLogOpen: return
+  let o = newJObject()
+  o["when"] = %nowStr()
+  o["scenario"] = %(scenario)
+  o["rep"] = %(repr(rep))
+  o["metric"] = %(metric)
+  o["prompt"] = %(genPrompt)
+  o["sample"] = %(sample)
+  o["judge_raw"] = %(judgeRaw)
+  o["score"] = %(repr(score))
+  o["parsed"] = %(if score >= 0.0: "yes" else: "no")
+  gLog.writeLine($o)
 
-  const JudgeSystemPrompt* = "You are a judge. Output only a number 0-10.\n\n" &
-    "Criteria: friendliness \xe2\x80\x94 the sample should be warm and kind\n" &
-    "Sample: \"I don\'t care.\"\n" &
-    "Score: 1\n" &
-    "Explanation: The sample is cold and dismissive, not warm or kind.\x00" &
-    "You are a judge. Output only a number 0-10.\n\n" &
-    "Criteria: friendliness \xe2\x80\x94 the sample should be warm and kind\n" &
-    "Sample: \"I\'m so sorry you\'re going through this. I\'m here for you.\"\n" &
-    "Score: 9\n" &
-    "Explanation: The sample shows warmth and support, very friendly.\x00" &
-    "You are a judge. Output only a number 0-10.\n\n" &
-    "Criteria: conciseness \xe2\x80\x94 the sample should be brief (1-2 sentences)\n" &
-    "Sample: \"The capital of France is Paris, which is located in north-central France and is known for its art, fashion, and the Eiffel Tower.\"\n" &
-    "Score: 3\n" &
-    "Explanation: The sample is too long and detailed, not concise.\x00" &
-    "You are a judge. Output only a number 0-10.\n\n" &
-    "Criteria: conciseness \xe2\x80\x94 the sample should be brief (1-2 sentences)\n" &
-    "Sample: \"Paris.\"\n" &
-    "Score: 8\n" &
-    "Explanation: The sample is very brief, meets the conciseness criteria.\x00" &
-    "\nCriteria: {metric} \xe2\x80\x94 {ask}\n" &
-    "Sample: {reply}\n" &
-    "Score:"
+const JudgeSystemPrompt* = "You are a judge. Output only a number 0-10.\n\n" &
+  "Criteria: friendliness \xe2\x80\x94 the sample should be warm and kind\n" &
+  "Sample: \"I don\'t care.\"\n" &
+  "Score: 1\n" &
+  "Explanation: The sample is cold and dismissive, not warm or kind.\x00" &
+  "You are a judge. Output only a number 0-10.\n\n" &
+  "Criteria: friendliness \xe2\x80\x94 the sample should be warm and kind\n" &
+  "Sample: \"I\'m so sorry you\'re going through this. I\'m here for you.\"\n" &
+  "Score: 9\n" &
+  "Explanation: The sample shows warmth and support, very friendly.\x00" &
+  "You are a judge. Output only a number 0-10.\n\n" &
+  "Criteria: conciseness \xe2\x80\x94 the sample should be brief (1-2 sentences)\n" &
+  "Sample: \"The capital of France is Paris, which is located in north-central France and is known for its art, fashion, and the Eiffel Tower.\"\n" &
+  "Score: 3\n" &
+  "Explanation: The sample is too long and detailed, not concise.\x00" &
+  "You are a judge. Output only a number 0-10.\n\n" &
+  "Criteria: conciseness \xe2\x80\x94 the sample should be brief (1-2 sentences)\n" &
+  "Sample: \"Paris.\"\n" &
+  "Score: 8\n" &
+  "Explanation: The sample is very brief, meets the conciseness criteria.\x00" &
+  "\nCriteria: {metric} \xe2\x80\x94 {ask}\n" &
+  "Sample: {reply}\n" &
+  "Score:"
 
 
 
-  type ScoreMetric* = object
-    name*: string        # metric label, e.g. "friendliness"
-    ask*: string         # one line telling the judge what this metric means
+type ScoreMetric* = object
+  name*: string        # metric label, e.g. "friendliness"
+  ask*: string         # one line telling the judge what this metric means
 
-  type JudgeScenario* = object
-    name*: string
-    generatePrompt*: string   # prompt that produces the sample output to judge
-    focus*: string            # what trait the scenario probes (self-doc)
-    metrics*: seq[ScoreMetric]
-    trials*: int              # sample generations (1 keeps judge-repeat focus)
-    preamble*: string         # optional chat-format turns establishing context
+type JudgeScenario* = object
+  name*: string
+  generatePrompt*: string   # prompt that produces the sample output to judge
+  focus*: string            # what trait the scenario probes (self-doc)
+  metrics*: seq[ScoreMetric]
+  trials*: int              # sample generations (1 keeps judge-repeat focus)
+  preamble*: string         # optional chat-format turns establishing context
 
-  const JudgeScenarios* = @[
-    JudgeScenario(
-      name: "friendly tone on a hard day",
-      generatePrompt: "I had a rough day today.",
-      focus: "empathy/tone",
-      metrics: @[
-        ScoreMetric(name: "friendliness",
-                    ask: "warm, kind, emotionally supportive; not curt or dismissive"),
-        ScoreMetric(name: "helpfulness",
-                    ask: "offers genuine support or a next step, not platitudes"),
-      ]),
-    JudgeScenario(
-      name: "followed a length instruction",
-      generatePrompt: "Answer in at most two sentences. What is the capital of France?",
-      focus: "instruction-following (form)",
-      metrics: @[
-        ScoreMetric(name: "instruction-following",
-                    ask: "obeyed the stated form/length constraint precisely"),
-        ScoreMetric(name: "accuracy",
-                    ask: "factually correct and directly answers the question"),
-      ]),
-    JudgeScenario(
-      name: "engaging prose has pacing",
-      generatePrompt: "Tell me a short story about a fox crossing a river.",
-      focus: "prose pacing (narrative beats)",
-      metrics: @[
-        ScoreMetric(name: "pacing",
-                    ask: "good rhythm, varied sentence structure, not monotone"),
-        ScoreMetric(name: "engagement",
-                    ask: "holds interest, has narrative momentum"),
-      ]),
-    JudgeScenario(
-      name: "vivid description engages senses",
-      generatePrompt: "Describe a storm over the sea in a few sentences.",
-      focus: "prose concreteness (sensory detail)",
-      metrics: @[
-        ScoreMetric(name: "vividness",
-                    ask: "concrete sensory detail, shows rather than tells"),
-        ScoreMetric(name: "imagery",
-                    ask: "evocative, memorable language"),
-      ]),
-    # Cross-turn coherence: state_bake's real point. Bakes an establishing context
-    # (preamble turns) then asks the model to answer a question that depends on
-    # facts established in those earlier turns. The judge scores whether the
-    # reply is consistent with the prior conversation.
-    JudgeScenario(
-      name: "cross-turn coherence (named context)",
-      preamble: "\x00User: My name is Priya and I love astronomy.\n\nBot: Nice to meet you, Priya! Astronomy is a fascinating subject.\n\nUser: It's the stars and planets that interest me most.\n\nBot: The cosmos is amazing — you're in good company with your curiosity!",
-      generatePrompt: "What is my name and what do I love?",
-      focus: "context recall across turns (the point of state_bake)",
-      metrics: @[ScoreMetric(
-        name: "consistency",
-        ask: "Does the sample honor facts established earlier in the conversation? If the user said their name is Priya and they love astronomy, the reply should reference these facts correctly. Ignoring, contradicting, or hallucinating new facts scores low."
-      )]),
-  ]
+const JudgeScenarios* = @[
+  JudgeScenario(
+    name: "friendly tone on a hard day",
+    generatePrompt: "I had a rough day today.",
+    focus: "empathy/tone",
+    metrics: @[
+      ScoreMetric(name: "friendliness",
+                  ask: "warm, kind, emotionally supportive; not curt or dismissive"),
+      ScoreMetric(name: "helpfulness",
+                  ask: "offers genuine support or a next step, not platitudes"),
+    ]),
+  JudgeScenario(
+    name: "followed a length instruction",
+    generatePrompt: "Answer in at most two sentences. What is the capital of France?",
+    focus: "instruction-following (form)",
+    metrics: @[
+      ScoreMetric(name: "instruction-following",
+                  ask: "obeyed the stated form/length constraint precisely"),
+      ScoreMetric(name: "accuracy",
+                  ask: "factually correct and directly answers the question"),
+    ]),
+  JudgeScenario(
+    name: "engaging prose has pacing",
+    generatePrompt: "Tell me a short story about a fox crossing a river.",
+    focus: "prose pacing (narrative beats)",
+    metrics: @[
+      ScoreMetric(name: "pacing",
+                  ask: "good rhythm, varied sentence structure, not monotone"),
+      ScoreMetric(name: "engagement",
+                  ask: "holds interest, has narrative momentum"),
+    ]),
+  JudgeScenario(
+    name: "vivid description engages senses",
+    generatePrompt: "Describe a storm over the sea in a few sentences.",
+    focus: "prose concreteness (sensory detail)",
+    metrics: @[
+      ScoreMetric(name: "vividness",
+                  ask: "concrete sensory detail, shows rather than tells"),
+      ScoreMetric(name: "imagery",
+                  ask: "evocative, memorable language"),
+    ]),
+  # Cross-turn coherence: state_bake's real point. Bakes an establishing context
+  # (preamble turns) then asks the model to answer a question that depends on
+  # facts established in those earlier turns. The judge scores whether the
+  # reply is consistent with the prior conversation.
+  JudgeScenario(
+    name: "cross-turn coherence (named context)",
+    preamble: "\x00User: My name is Priya and I love astronomy.\n\nBot: Nice to meet you, Priya! Astronomy is a fascinating subject.\n\nUser: It's the stars and planets that interest me most.\n\nBot: The cosmos is amazing — you're in good company with your curiosity!",
+    generatePrompt: "What is my name and what do I love?",
+    focus: "context recall across turns (the point of state_bake)",
+    metrics: @[ScoreMetric(
+      name: "consistency",
+      ask: "Does the sample honor facts established earlier in the conversation? If the user said their name is Priya and they love astronomy, the reply should reference these facts correctly. Ignoring, contradicting, or hallucinating new facts scores low."
+    )]),
+]
 
-  type MetricScore* = object
-    name*: string
-    avg*: float            # mean of the judge's repeated scores, 0..10
-    scores*: seq[float]    # every judge answer (0..10), spread visible
-    unparsed*: int         # judge replies that weren't a number (self-diag)
+type MetricScore* = object
+  name*: string
+  avg*: float            # mean of the judge's repeated scores, 0..10
+  scores*: seq[float]    # every judge answer (0..10), spread visible
+  unparsed*: int         # judge replies that weren't a number (self-diag)
 
-  type ScenarioRun* = object
-    name*: string
-    focus*: string
-    metrics*: seq[MetricScore]
-    trials*: int           # sample generations judged
+type ScenarioRun* = object
+  name*: string
+  focus*: string
+  metrics*: seq[MetricScore]
+  trials*: int           # sample generations judged
 
-  type ScoredRun* = object
-    timestamp*: string
-    model*: string
-    seed*: int64
-    scenarios*: seq[ScenarioRun]
-    overall*: float        # mean of all judge scores, 0..10
+type ScoredRun* = object
+  timestamp*: string
+  model*: string
+  seed*: int64
+  scenarios*: seq[ScenarioRun]
+  overall*: float        # mean of all judge scores, 0..10
 
-  proc toJson(r: ScoredRun): JsonNode =
-    var j = newJObject()
-    j["type"] = %"judge_eval"
-    j["timestamp"] = %r.timestamp
-    j["model"] = %r.model
-    j["seed"] = %r.seed
-    j["overall"] = %r.overall
-    var scs = newJArray()
-    for s in r.scenarios:
-      var o = newJObject()
-      o["name"] = %s.name
-      o["focus"] = %s.focus
-      var ms = newJArray()
-      for m in s.metrics:
-        var mj = newJObject()
-        mj["name"] = %m.name
-        mj["avg"] = %m.avg
-        mj["unparsed"] = %m.unparsed
-        var sc = newJArray()
-        for x in m.scores: sc.add(%x)
-        mj["scores"] = sc
-        ms.add(mj)
-      o["metrics"] = ms
-      scs.add(o)
-    j["scenarios"] = scs
-    result = j
+proc toJson(r: ScoredRun): JsonNode =
+  var j = newJObject()
+  j["type"] = %"judge_eval"
+  j["timestamp"] = %r.timestamp
+  j["model"] = %r.model
+  j["seed"] = %r.seed
+  j["overall"] = %r.overall
+  var scs = newJArray()
+  for s in r.scenarios:
+    var o = newJObject()
+    o["name"] = %s.name
+    o["focus"] = %s.focus
+    var ms = newJArray()
+    for m in s.metrics:
+      var mj = newJObject()
+      mj["name"] = %m.name
+      mj["avg"] = %m.avg
+      mj["unparsed"] = %m.unparsed
+      var sc = newJArray()
+      for x in m.scores: sc.add(%x)
+      mj["scores"] = sc
+      ms.add(mj)
+    o["metrics"] = ms
+    scs.add(o)
+  j["scenarios"] = scs
+  result = j
 
-  proc loadScoredRun*(path: string): ScoredRun =
-    ## Loads a saved judge eval (used as a baseline / for --trend).
-    if not fileExists(path): return ScoredRun()
-    try:
-      let j = parseJson(readFile(path))
-      if j.kind != JObject: return ScoredRun()
-      result.timestamp = if j.hasKey("timestamp"): j["timestamp"].getStr("") else: ""
-      result.model = if j.hasKey("model"): j["model"].getStr("") else: ""
-      result.seed = if j.hasKey("seed"): j["seed"].getInt() else: 0
-      result.overall = if j.hasKey("overall"): j["overall"].getFloat() else: 0.0
-      if j.hasKey("scenarios") and j["scenarios"].kind == JArray:
-        for o in j["scenarios"]:
-          if o.kind != JObject: continue
-          var s = ScenarioRun(
-            name: (if o.hasKey("name"): o["name"].getStr("") else: ""),
-            focus: (if o.hasKey("focus"): o["focus"].getStr("") else: ""))
-          if o.hasKey("metrics") and o["metrics"].kind == JArray:
-            for m in o["metrics"]:
-              if m.kind != JObject: continue
-              var mm = MetricScore(
-                name: (if m.hasKey("name"): m["name"].getStr("") else: ""),
-                avg: (if m.hasKey("avg"): m["avg"].getFloat() else: 0.0),
-                unparsed: (if m.hasKey("unparsed"): m["unparsed"].getInt() else: 0))
-              if m.hasKey("scores") and m["scores"].kind == JArray:
-                for x in m["scores"]:
-                  if x.kind == JFloat or x.kind == JInt:
-                    mm.scores.add(x.getFloat())
-              s.metrics.add(mm)
-          result.scenarios.add(s)
-    except CatchableError:
-      return ScoredRun()
+proc loadScoredRun*(path: string): ScoredRun =
+  ## Loads a saved judge eval (used as a baseline / for --trend).
+  if not fileExists(path): return ScoredRun()
+  try:
+    let j = parseJson(readFile(path))
+    if j.kind != JObject: return ScoredRun()
+    result.timestamp = if j.hasKey("timestamp"): j["timestamp"].getStr("") else: ""
+    result.model = if j.hasKey("model"): j["model"].getStr("") else: ""
+    result.seed = if j.hasKey("seed"): j["seed"].getInt() else: 0
+    result.overall = if j.hasKey("overall"): j["overall"].getFloat() else: 0.0
+    if j.hasKey("scenarios") and j["scenarios"].kind == JArray:
+      for o in j["scenarios"]:
+        if o.kind != JObject: continue
+        var s = ScenarioRun(
+          name: (if o.hasKey("name"): o["name"].getStr("") else: ""),
+          focus: (if o.hasKey("focus"): o["focus"].getStr("") else: ""))
+        if o.hasKey("metrics") and o["metrics"].kind == JArray:
+          for m in o["metrics"]:
+            if m.kind != JObject: continue
+            var mm = MetricScore(
+              name: (if m.hasKey("name"): m["name"].getStr("") else: ""),
+              avg: (if m.hasKey("avg"): m["avg"].getFloat() else: 0.0),
+              unparsed: (if m.hasKey("unparsed"): m["unparsed"].getInt() else: 0))
+            if m.hasKey("scores") and m["scores"].kind == JArray:
+              for x in m["scores"]:
+                if x.kind == JFloat or x.kind == JInt:
+                  mm.scores.add(x.getFloat())
+            s.metrics.add(mm)
+        result.scenarios.add(s)
+  except CatchableError:
+    return ScoredRun()
 
-  proc deepCopyState(a: seq[float32]): seq[float32] =
-    ## Generation mutates the RNN state in place; seq assignment aliases, so
-    ## snapshots must be deep copies.
-    result = newSeq[float32](a.len)
-    for i in 0 ..< a.len: result[i] = a[i]
+proc deepCopyState(a: seq[float32]): seq[float32] =
+  ## Generation mutates the RNN state in place; seq assignment aliases, so
+  ## snapshots must be deep copies.
+  result = newSeq[float32](a.len)
+  for i in 0 ..< a.len: result[i] = a[i]
 
-  proc parseScore*(reply: string): float =
-    ## Pulls the first number out of the judge's reply (0..10). Returns -1 if
-    ## the judge didn't produce a number — counted as `unparsed` (self-diag).
-    var num = ""
-    var seen = false
-    for ch in reply:
-      if ch in {'0'..'9', '.'}:
-        num.add(ch)
-        seen = true
-      elif seen:
-        break
-    if not seen: return -1.0
-    try:
-      let v = parseFloat(num)
-      result = if v > 10.0: 10.0 elif v < 0.0: 0.0 else: v
-    except ValueError:
-      result = -1.0
+proc parseScore*(reply: string): float =
+  ## Pulls the first number out of the judge's reply (0..10). Returns -1 if
+  ## the judge didn't produce a number — counted as `unparsed` (self-diag).
+  var num = ""
+  var seen = false
+  for ch in reply:
+    if ch in {'0'..'9', '.'}:
+      num.add(ch)
+      seen = true
+    elif seen:
+      break
+  if not seen: return -1.0
+  try:
+    let v = parseFloat(num)
+    result = if v > 10.0: 10.0 elif v < 0.0: 0.0 else: v
+  except ValueError:
+    result = -1.0
 
-  proc bakeJudgeState(c: StateCache, s: Session, cfg: NimoConfig): seq[float32] =
-    ## Second bake on the SAME loaded model: the judge's instruction set. Kept
-    ## separate from the chat bake so scoring never bleeds into generation.
-    result = c.bakeContext(s.model, s.tok, cfg.modelPath, cfg.vocabPath,
-                           JudgeSystemPrompt)
+proc bakeJudgeState(c: StateCache, s: Session, cfg: NimoConfig): seq[float32] =
+  ## Second bake on the SAME loaded model: the judge's instruction set. Kept
+  ## separate from the chat bake so scoring never bleeds into generation.
+  result = c.bakeContext(s.model, s.tok, cfg.modelPath, cfg.vocabPath,
+                         JudgeSystemPrompt)
 
-  proc bakeChatState(c: StateCache, s: Session, cfg: NimoConfig,
-                     context: string): seq[float32] =
-    ## Bake an arbitrary chat-format context (a cross-turn preamble) into a
-    ## state on the SAME loaded model, independent of the global chat bake.
-    result = c.bakeContext(s.model, s.tok, cfg.modelPath, cfg.vocabPath, context)
+proc bakeChatState(c: StateCache, s: Session, cfg: NimoConfig,
+                   context: string): seq[float32] =
+  ## Bake an arbitrary chat-format context (a cross-turn preamble) into a
+  ## state on the SAME loaded model, independent of the global chat bake.
+  result = c.bakeContext(s.model, s.tok, cfg.modelPath, cfg.vocabPath, context)
 
-  proc askJudge(s: var Session, judge: seq[float32], scenario: string,
-                rep: int, generatePrompt: string, reply: string,
-                metric: ScoreMetric): float =
-    ## Present the sample to the judge, ask for a 0..10 score. No retry —
-    ## every ask is fully logged so the raw judge reply is visible on failure.
-    s.state = deepCopyState(judge)
-    let ask = "\"" & reply & "\"" & "\nScore on " & metric.name & " (" & metric.ask & "):"
-    let r = s.generateTurn(ask, nil, DefaultTemp, DefaultTopP, 14)
-    let v = parseScore(r)
-    logAsk(scenario, rep, metric.name, generatePrompt, reply, r, v)
-    if v < 0.0:
-      echo "[judge-fail] metric=" & metric.name & " scenario=" & scenario &
-           " prompt=" & generatePrompt &
-           " reply=\"" & reply.strip() & "\" judge_raw=\"" & r.strip() & "\""
-    result = v
+proc askJudge(s: var Session, judge: seq[float32], scenario: string,
+              rep: int, generatePrompt: string, reply: string,
+              metric: ScoreMetric): float =
+  ## Present the sample to the judge, ask for a 0..10 score. No retry —
+  ## every ask is fully logged so the raw judge reply is visible on failure.
+  s.state = deepCopyState(judge)
+  let ask = "\"" & reply & "\"" & "\nScore on " & metric.name & " (" & metric.ask & "):"
+  let r = s.generateTurn(ask, nil, DefaultTemp, DefaultTopP, 14)
+  let v = parseScore(r)
+  logAsk(scenario, rep, metric.name, generatePrompt, reply, r, v)
+  if v < 0.0:
+    echo "[judge-fail] metric=" & metric.name & " scenario=" & scenario &
+         " prompt=" & generatePrompt &
+         " reply=\"" & reply.strip() & "\" judge_raw=\"" & r.strip() & "\""
+  result = v
 
-  proc runScoredEval*(cfg: NimoConfig, trials: int = 3,
-                      cwd: string = getCurrentDir()): ScoredRun =
-    ## 1) boot the real model with the CHAT bake; 2) snapshot it; 3) bake the
-    ## JUDGE state on the same model; 4) per scenario, generate a sample once,
-    ## then score it with the judge on every metric. Each generateTurn is a
-    ## distinct draw, so `trials` samples give `trials` independent scores per
-    ## metric without re-generating a fresh sample for every ask.
-    result.timestamp = nowStr()
-    result.model = cfg.modelPath
-    result.seed = cfg.seed
-    openJudgeLog()
-    let bs = bootstrapSession(cfg, cwd)
-    if not bs.ok:
-      echo "[model-eval] bootstrap failed:"
-      for l in bs.lines: echo "  " & l
-      return result
-    var s = bs.session
-    let chat = deepCopyState(s.state)            # pristine chat bake
-    let cache = initStateCache(cfg.stateCacheDir)
-    let judge = bakeJudgeState(cache, s, cfg)
-    var allMetrics: seq[float]
-    let nSamples = max(1, trials)
-    for sc in JudgeScenarios:
-      var run = ScenarioRun(name: sc.name, focus: sc.focus)
-      # per-metric collector (initialize one entry per metric)
-      var mSlots: seq[MetricScore]
-      for m in sc.metrics:
-        mSlots.add(MetricScore(name: m.name))
-      # cross-turn scenarios bake their own establishing context; otherwise use
-      # the pristine chat bake so every scenario starts from the same baseline.
-      let base = if sc.preamble.len > 0:
-                   bakeChatState(cache, s, cfg, sc.preamble) else:
-                   chat
-      for rep in 0 ..< nSamples:
-        s.state = deepCopyState(base)
-        let sample = s.generateTurn(sc.generatePrompt, nil, DefaultTemp,
-                                    DefaultTopP, cfg.maxTokens)
-        logAsk(sc.name, rep, "__SAMPLE__", sc.generatePrompt, "", sample, -2.0)
-        for mi, m in sc.metrics:
-          let v = askJudge(s, judge, sc.name, rep, sc.generatePrompt, sample, m)
-          if v < 0.0:
-            inc mSlots[mi].unparsed
-          else:
-            mSlots[mi].scores.add(v)
+proc runScoredEval*(cfg: NimoConfig, trials: int = 3,
+                    cwd: string = getCurrentDir()): ScoredRun =
+  ## 1) boot the real model with the CHAT bake; 2) snapshot it; 3) bake the
+  ## JUDGE state on the same model; 4) per scenario, generate a sample once,
+  ## then score it with the judge on every metric. Each generateTurn is a
+  ## distinct draw, so `trials` samples give `trials` independent scores per
+  ## metric without re-generating a fresh sample for every ask.
+  result.timestamp = nowStr()
+  result.model = cfg.modelPath
+  result.seed = cfg.seed
+  openJudgeLog()
+  let bs = bootstrapSession(cfg, cwd)
+  if not bs.ok:
+    echo "[model-eval] bootstrap failed:"
+    for l in bs.lines: echo "  " & l
+    return result
+  var s = bs.session
+  let chat = deepCopyState(s.state)            # pristine chat bake
+  let cache = initStateCache(cfg.stateCacheDir)
+  let judge = bakeJudgeState(cache, s, cfg)
+  var allMetrics: seq[float]
+  let nSamples = max(1, trials)
+  for sc in JudgeScenarios:
+    var run = ScenarioRun(name: sc.name, focus: sc.focus)
+    # per-metric collector (initialize one entry per metric)
+    var mSlots: seq[MetricScore]
+    for m in sc.metrics:
+      mSlots.add(MetricScore(name: m.name))
+    # cross-turn scenarios bake their own establishing context; otherwise use
+    # the pristine chat bake so every scenario starts from the same baseline.
+    let base = if sc.preamble.len > 0:
+                 bakeChatState(cache, s, cfg, sc.preamble) else:
+                 chat
+    for rep in 0 ..< nSamples:
+      s.state = deepCopyState(base)
+      let sample = s.generateTurn(sc.generatePrompt, nil, DefaultTemp,
+                                  DefaultTopP, cfg.maxTokens)
+      logAsk(sc.name, rep, "__SAMPLE__", sc.generatePrompt, "", sample, -2.0)
       for mi, m in sc.metrics:
-        let mm = mSlots[mi]
-        mSlots[mi].avg =
-          if mm.scores.len > 0: (sum(mm.scores) / mm.scores.len.float) else: 0.0
-      run.metrics = mSlots
-      run.trials = nSamples
-      result.scenarios.add(run)
-      for mSl in mSlots:
-        allMetrics.add(mSl.avg)
-    result.overall = if allMetrics.len > 0:
-                       sum(allMetrics) / allMetrics.len.float else: 0.0
-    close(gLog)
+        let v = askJudge(s, judge, sc.name, rep, sc.generatePrompt, sample, m)
+        if v < 0.0:
+          inc mSlots[mi].unparsed
+        else:
+          mSlots[mi].scores.add(v)
+    for mi, m in sc.metrics:
+      let mm = mSlots[mi]
+      mSlots[mi].avg =
+        if mm.scores.len > 0: (sum(mm.scores) / mm.scores.len.float) else: 0.0
+    run.metrics = mSlots
+    run.trials = nSamples
+    result.scenarios.add(run)
+    for mSl in mSlots:
+      allMetrics.add(mSl.avg)
+  result.overall = if allMetrics.len > 0:
+                     sum(allMetrics) / allMetrics.len.float else: 0.0
+  close(gLog)
 
 proc main() =
   let args = commandLineParams()
@@ -583,71 +581,70 @@ proc main() =
     elif a == "--save" and i + 1 < args.len:
       saveTo = args[i + 1]
 
-  when not defined(harnessOffline):
-    if scored:
-      var cfg = loadConfig()
-      if seed >= 0: cfg.seed = seed
-      let r = runScoredEval(cfg, trials)
-      echo "[model-eval] judge-scored state_bake  (" & r.timestamp & ")"
-      echo "  model=" & r.model & "  seed=" & $r.seed
-      echo "  scores are the MODEL's own 0-10 judgment (repeated asks, averaged)"
-      for s in r.scenarios:
-        echo "  " & s.name & "  (" & s.focus & ")"
-        for m in s.metrics:
-          let spread = if m.scores.len > 1:
-            "  spread ±" & stddev(m.scores).formatFloat(ffDecimal, 1) else: ""
-          echo "      · " & m.name & ": " & m.avg.formatFloat(ffDecimal, 1) &
-               "/10  (" & $m.scores.len & " judge asks)" & spread &
-               (if m.unparsed > 0: "  [" & $m.unparsed & " unparseable]" else: "")
-      echo "  overall: " & r.overall.formatFloat(ffDecimal, 1) & "/10"
+  if scored:
+    var cfg = loadConfig()
+    if seed >= 0: cfg.seed = seed
+    let r = runScoredEval(cfg, trials)
+    echo "[model-eval] judge-scored state_bake  (" & r.timestamp & ")"
+    echo "  model=" & r.model & "  seed=" & $r.seed
+    echo "  scores are the MODEL's own 0-10 judgment (repeated asks, averaged)"
+    for s in r.scenarios:
+      echo "  " & s.name & "  (" & s.focus & ")"
+      for m in s.metrics:
+        let spread = if m.scores.len > 1:
+          "  spread ±" & stddev(m.scores).formatFloat(ffDecimal, 1) else: ""
+        echo "      · " & m.name & ": " & m.avg.formatFloat(ffDecimal, 1) &
+             "/10  (" & $m.scores.len & " judge asks)" & spread &
+             (if m.unparsed > 0: "  [" & $m.unparsed & " unparseable]" else: "")
+    echo "  overall: " & r.overall.formatFloat(ffDecimal, 1) & "/10"
 
-      # Auto-append to the eval history so degradation can be tracked over
-      # time, not just against one hand-picked baseline file.
-      let histDir = getCurrentDir() / ".nimo"
-      let histFile = histDir / "model-evals.jsonl"
-      try:
-        createDir(histDir)
-        let f = open(histFile, fmAppend)
-        f.writeLine($toJson(r))
-        f.close()
-        echo "  [history] appended " & histFile
-      except CatchableError:
-        discard
+    # Auto-append to the eval history so degradation can be tracked over
+    # time, not just against one hand-picked baseline file.
+    let histDir = getCurrentDir() / ".nimo"
+    let histFile = histDir / "model-evals.jsonl"
+    try:
+      createDir(histDir)
+      let f = open(histFile, fmAppend)
+      f.writeLine($toJson(r))
+      f.close()
+      echo "  [history] appended " & histFile
+    except CatchableError:
+      discard
 
-      # Optional baseline: diff this run against a saved one to surface
-      # degradation (continuous delta, no pass/fail gate).
-      if baseline.len > 0:
-        let b = loadScoredRun(baseline)
-        if b.scenarios.len == 0:
-          echo "  [baseline] no data in " & baseline
-        else:
-          echo "  [baseline] diff vs " & baseline & " (" & b.timestamp & ")"
-          for s in r.scenarios:
-            for m in s.metrics:
-              var bm: MetricScore
-              var found = false
-              for bs in b.scenarios:
-                if bs.name == s.name:
-                  for mm in bs.metrics:
-                    if mm.name == m.name:
-                      bm = mm
-                      found = true
-                      break
-                if found: break
-              let d = (m.avg - bm.avg)
-              let mark = if d < -0.5: " DEGRADED" elif d > 0.5: " improved" else: ""
-              echo "  " & s.name & " / " & m.name & ": " &
-                   m.avg.formatFloat(ffDecimal, 1) &
-                   "/10 (delta " & d.formatFloat(ffDecimal, 1) & ")" & mark
-          let od = r.overall - b.overall
-          echo "  overall: " & r.overall.formatFloat(ffDecimal, 1) &
-               "/10 (delta " & od.formatFloat(ffDecimal, 1) & ")" &
-               (if od < -0.5: "  DEGRADED" else: "")
+    # Optional baseline: diff this run against a saved one to surface
+    # degradation (continuous delta, no pass/fail gate).
+    if baseline.len > 0:
+      let b = loadScoredRun(baseline)
+      if b.scenarios.len == 0:
+        echo "  [baseline] no data in " & baseline
+      else:
+        echo "  [baseline] diff vs " & baseline & " (" & b.timestamp & ")"
+        for s in r.scenarios:
+          for m in s.metrics:
+            var bm: MetricScore
+            var found = false
+            for bs in b.scenarios:
+              if bs.name == s.name:
+                for mm in bs.metrics:
+                  if mm.name == m.name:
+                    bm = mm
+                    found = true
+                    break
+              if found: break
+            let d = (m.avg - bm.avg)
+            let mark = if d < -0.5: " DEGRADED" elif d > 0.5: " improved" else: ""
+            echo "  " & s.name & " / " & m.name & ": " &
+                 m.avg.formatFloat(ffDecimal, 1) &
+                 "/10 (delta " & d.formatFloat(ffDecimal, 1) & ")" & mark
+        let od = r.overall - b.overall
+        echo "  overall: " & r.overall.formatFloat(ffDecimal, 1) &
+             "/10 (delta " & od.formatFloat(ffDecimal, 1) & ")" &
+             (if od < -0.5: "  DEGRADED" else: "")
 
-      if saveTo.len > 0:
-        writeFile(saveTo, $toJson(r))
-        echo "  [saved] " & saveTo
-      quit(0)
+    if saveTo.len > 0:
+      writeFile(saveTo, $toJson(r))
+      echo "  [saved] " & saveTo
+    quit(0)
 
   discard runEval(trials)
 

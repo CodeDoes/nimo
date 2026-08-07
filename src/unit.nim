@@ -212,13 +212,7 @@ proc evalModelCache*(run: var seq[Check]) =
   run.add(Check(name: "different format -> different cache path",
                 passed: mc.quantizedPath(raw, "Q4_K") != mc.quantizedPath(raw, "Q5_1")))
 
-  # offline ensureQuantized reports the would-be path and doesn't crash
-  let (offPath, offCached) = mc.ensureQuantized(raw, "Q4_K")
-  run.add(Check(name: "offline ensureQuantized is safe (no librwkv needed)",
-                passed: offPath == p1 and offCached == fileExists(p1),
-                detail: offPath))
-
-  # already-quantized raw model is used as-is
+  # already-quantized raw model is used as-is (no backend needed)
   blob[20] = char(12)   # dtype = Q4_K
   let qraw = tmpDir / "raw-q4k.bin"
   writeFile(qraw, blob)
@@ -675,14 +669,14 @@ proc evalJules*(run: var seq[Check]) =
   # planNeedsApproval / planText / lastAgentMessage power the supervisor.
   let planAct = parseJson("""[{"planGenerated":{"plan":{"steps":[
       {"title":"Make build","description":"wrap nimble commands"},
-      {"title":"Run unit","description":"nim c -d:harnessOffline"}]}}}]""")
+      {"title":"Run unit","description":"nim c -o:build/unit src/unit.nim"}]}}}]""")
   let approvedAct = parseJson("""[{"planGenerated":{"plan":{}}},{"planApproved":{}}]""")
   let agentQ = parseJson("""[{"agentMessaged":{"agentMessage":"please pick a target"}}]""")
   run.add(Check(name: "jules: supervisor helpers (plan/approve/question)",
                 passed: planNeedsApproval(planAct) and
                         not planNeedsApproval(approvedAct) and
                         "Make build" in planText(planAct) and
-                        "nim c -d:harnessOffline" in planText(planAct) and
+                        "nim c -o:build/unit" in planText(planAct) and
                         lastAgentMessage(agentQ) == "please pick a target",
                 detail: "needsApproval=" & $planNeedsApproval(planAct) &
                          " plan=" & planText(planAct).replace("\n", "/")))

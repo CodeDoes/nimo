@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # nimo L1 CLI integration tests (offline, deterministic, no GPU/model).
 #
-# Spawns the REAL harness binary built with -d:harnessOffline, driven by a
+# Spawns the harness binary (one binary for real+stub), driven by a
 # scripted model (--script-replies <json array>). Asserts black-box behavior:
 # exit codes, stdout, session JSONL, written files, workspace, resume.
 #

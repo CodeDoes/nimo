@@ -45,10 +45,6 @@ Example:
   printInfo &"Layers:   {h.nLayer}, Embed:  {h.nEmbed}, Vocab: {h.nVocab}"
   echo SepThin
 
-  when defined(harnessOffline):
-    printError "Quantization not available in offline mode."
-    quit(1)
-
   try:
     bindBackend("rwkv.cpp/librwkv.so")
   except RwkvException as e:

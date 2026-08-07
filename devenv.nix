@@ -52,11 +52,11 @@
 
   scripts.nimo-test.exec = ''
     cd $DEVENV_ROOT
-    # L0: in-process offline unit suite (fast, no model)
-    nim c -d:harnessOffline -o:build/unit src/unit.nim
+    # L0: unit suite — runs on the runtime stub (no build flag)
+    nim c --path:src -o:build/unit src/unit.nim
     build/unit
-    # L1: black-box CLI integration with a scripted model (fast, no model)
-    nim c -d:harnessOffline -o:build/harness_offline src/harness.nim
+    # L1: black-box CLI integration with a scripted stub model
+    nim c --path:src -o:build/harness_offline src/harness.nim
     bash scripts/cli_test.sh
     echo "=== nimo test: L0 + L1 done. Add L2 real-model smoke with: scripts/smoke_test.sh"
   '';

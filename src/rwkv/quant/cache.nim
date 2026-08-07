@@ -5,14 +5,12 @@
 ## quantized copy cached by a content signature, so re-runs skip the CPU/GPU
 ## cost of quantization. Mirrors rfc/8150-quantization.md.
 ##
-## Offline-safe: every hash/key/path computation compiles and runs under
-## `-d:harnessOffline`; only the actual rwkv.cpp quantizer call is gated to
-## online builds.
+## No compile-time offline fork: the quantizer call is only reached when a
+## real model is actually being loaded (runtime decision, bootstrap.nim).
 
 import std/[os, strutils, times, sha1]
 import ../../config, rwkv/model/header
-when not defined(harnessOffline):
-  import ../../rwkv
+import ../../rwkv
 
 type
   ModelCache* = object
@@ -62,18 +60,13 @@ proc ensureQuantized*(c: ModelCache, rawPath: string, format: string):
     return (rawPath, true)   # already quantized; load as-is
 
   let outPath = c.quantizedPath(rawPath, format)
-  when not defined(harnessOffline):
-    if fileExists(outPath):
-      return (outPath, true)
-    if format.len == 0:
-      return (rawPath, true)
-    createDir(c.cacheDir)
-    setPrintErrors(nil, false)
-    if not quantizeModelFile(rawPath, outPath, format):
-      raise newException(IOError, "Quantization of '" & rawPath & "' to '" &
-                         format & "' failed.")
-    return (outPath, false)
-  else:
-    # Offline builds can't invoke the quantizer; report the would-be path.
-    result.path = outPath
-    result.cached = fileExists(outPath)
+  if fileExists(outPath):
+    return (outPath, true)
+  if format.len == 0:
+    return (rawPath, true)
+  createDir(c.cacheDir)
+  setPrintErrors(nil, false)
+  if not quantizeModelFile(rawPath, outPath, format):
+    raise newException(IOError, "Quantization of '" & rawPath & "' to '" &
+                       format & "' failed.")
+  return (outPath, false)

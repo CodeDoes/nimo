@@ -9,15 +9,14 @@
 ## `runHarnessTurn` — the chat's own per-turn driver. The REPL is a human
 ## driving the identical machinery.
 ##
-## Offline-safe: with -d:harnessOffline model-backed commands use the stub
-## generator; ws/planner/session/story-validate work with no GPU.
+## Runtime capability is decided at boot (`bootstrapSession`), not at compile
+## time: if a backend/model is usable we get the real model, else a clearly
+## labeled runtime stub (`[stub] no model`). No `-d:` fork exists.
 
 import std/[os, json]
 import ./config, ./orchestrator, ./workspace, ./story, ./bootstrap, ./harness
 import ./session_manager
-
-when not defined(harnessOffline):
-  import ./gpu
+import ./gpu
 
 type
   ReplContext* = object
@@ -208,11 +207,8 @@ proc cmdPlanner(tokens: seq[string]): int =
   return 0
 
 proc cmdCuda(): int =
-  when defined(harnessOffline):
-    echo "offline build — no GPU probe (use an online `nimo repl cuda status`)"
-  else:
-    let rep = gpuProbe()
-    echo rep.describe()
+  let rep = gpuProbe()
+  echo rep.describe()
   return 0
 
 proc cmdStateList(ctx: var ReplContext): int =

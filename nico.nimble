@@ -45,9 +45,9 @@ task build_all, "Build all Nim executables into build/":
   exec "nim c -o:build/nimo src/nimo.nim"
   exec "nim c -o:build/repl src/repl.nim"
 
-task unit, "Run the unit test suite (offline, no model needed)":
+task unit, "Run the unit test suite (deterministic stub, no model needed)":
   mkdir "build"
-  exec "nim c -d:harnessOffline --path:src -o:build/unit src/unit.nim"
+  exec "nim c --path:src -o:build/unit src/unit.nim"
   exec "build/unit"
 
 task state_bake_test, "Deterministic state_bake equivalence (tiny model)":

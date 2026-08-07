@@ -5,13 +5,13 @@
 ## (model file signature | vocab file hash | context hash), so sessions can
 ## resume instantly instead of re-evaluating the prompt every time.
 ##
-## Cache math (keys, paths, save/load) is offline-safe; only the actual bake
-## (tokenize + eval) needs the real model backend.
+## Cache math (keys, paths, save/load) needs no backend; only the actual bake
+## (tokenize + eval) touches the model, and that only happens when a real
+## model is present (runtime decision — no compile-time fork).
 
 import std/[os, strutils, sha1]
 import ./config, ./model_cache
-when not defined(harnessOffline):
-  import ./rwkv, ./tokenizer, ./macros
+import ./rwkv, ./tokenizer, ./macros
 
 type
   StateCache* = object
@@ -72,8 +72,7 @@ proc loadCachedState*(c: StateCache, modelPath, vocabPath, context: string,
   if not loadStateFromFile(result, p):
     return @[]
 
-when not defined(harnessOffline):
-  proc bakeContext*(c: StateCache, model: RwkvModel, tok: WorldTokenizer,
+proc bakeContext*(c: StateCache, model: RwkvModel, tok: WorldTokenizer,
                     modelPath, vocabPath, context: string): seq[float32] =
     ## Tokenizes `context`, runs it through the model to produce the state,
     ## caches it keyed by (model, vocab, context), and returns it.
@@ -90,8 +89,8 @@ when not defined(harnessOffline):
               "Failed to evaluate context for state baking")
     saveStateToFile(result, c.statePath(key))
 
-  proc resumeFromCache*(c: StateCache, model: RwkvModel, tok: WorldTokenizer,
-                        modelPath, vocabPath, context: string): seq[float32] =
-    ## Like `bakeContext` but never evaluates: returns nil unless the state is
-    ## already cached (strict resume, no bake-on-miss).
-    c.loadCachedState(modelPath, vocabPath, context, model.stateLen)
+proc resumeFromCache*(c: StateCache, model: RwkvModel, tok: WorldTokenizer,
+                      modelPath, vocabPath, context: string): seq[float32] =
+  ## Like `bakeContext` but never evaluates: returns nil unless the state is
+  ## already cached (strict resume, no bake-on-miss).
+  c.loadCachedState(modelPath, vocabPath, context, model.stateLen)

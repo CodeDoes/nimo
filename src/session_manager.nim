@@ -1,16 +1,15 @@
 ## Session Manager for NIMO Harness
 ## Manages messages, tools, and JSONL logging.
 ##
-## Build with `-d:harnessOffline` to strip the RWKV model backend, letting the
-## harness (and unit tests) run without rwkv.cpp / a GPU model. Generation is
-## injected as a parameter (`generate: GenerateFn`); pass `nil` to use the real
-## model on this session (offline builds always get the placeholder).
+## Build and run with NO compile-time model/stub fork: a session either has a
+## real model (set via initModel) or not (model == nil -> placeholder). Which
+## one happens is decided at runtime by bootstrapSession, never at compile
+## time. Generation is injected as a parameter (`generate: GenerateFn`); pass
+## `nil` to use the real model on this session (nil + no model = placeholder).
 
-import std/[json, times, os, tables, strutils]
+import std/[json, times, os, tables, strutils, random]
 import ./config
-when not defined(harnessOffline):
-  import std/[random]
-  import ./rwkv, ./tokenizer, ./sampling, ./macros, ./rwkv/state/cache
+import ./rwkv, ./tokenizer, ./sampling, ./macros, ./rwkv/state/cache
 
 type
   ContentKind* = enum
@@ -48,12 +47,11 @@ type
     branches*: seq[string]
     activeBranch*: int
     tools*: Table[string, ToolHandler]
-    when not defined(harnessOffline):
-      model*: RwkvModel
-      tok*: WorldTokenizer
-      state*: seq[float32]
-      logits*: seq[float32]
-      rng*: Rand
+    model*: RwkvModel
+    tok*: WorldTokenizer
+    state*: seq[float32]
+    logits*: seq[float32]
+    rng*: Rand
 
 proc nowStr*(): string =
   let t = now()
@@ -68,8 +66,7 @@ proc newSession*(cwd: string = "."): Session =
   result.activeBranch = 0
   result.tools = initTable[string, ToolHandler]()
 
-when not defined(harnessOffline):
-  proc initModel*(s: var Session, modelPath, vocabPath: string,
+proc initModel*(s: var Session, modelPath, vocabPath: string,
                   gpuLayers: int = DefaultGpuLayers,
                   systemPrompt: string = "",
                   stateCacheDir: string = "",
@@ -96,42 +93,39 @@ proc generateTurnStream*(s: var Session, userMsg: string, sink: TokenSink = nil,
     if sink != nil and result.len > 0:
       sink(result) # scripted generators have no token boundary to expose
     return
-  when not defined(harnessOffline):
-    if s.model == nil:
-      return "[nimo] Model not loaded"
-    let turnPrompt = "\x00" & "User: " & userMsg & "\n\nBot:"
-    let turnTokens = s.tok.encode(turnPrompt)
-    checkOk(s.model.evalSequenceInChunks(turnTokens, DefaultChunkSize, s.state, s.logits),
-            "Failed to evaluate prompt")
+  if s.model == nil:
+    result = "[stub] no model loaded"
+    if sink != nil: sink(result)
+    return
+  let turnPrompt = "\x00" & "User: " & userMsg & "\n\nBot:"
+  let turnTokens = s.tok.encode(turnPrompt)
+  checkOk(s.model.evalSequenceInChunks(turnTokens, DefaultChunkSize, s.state, s.logits),
+          "Failed to evaluate prompt")
 
-    var reply = ""
-    var validState = s.state
-    for step in 0 ..< maxTokens:
-      let token = sampleLogits(s.logits, temperature = temp, topP = topP, rng = s.rng)
-      if token == 0:
-        s.state = validState
-        break
-      let tokenStr = s.tok.decodeToken(token.uint32)
-      reply.add(tokenStr)
-      if sink != nil:
-        sink(tokenStr)
-      if tokenStr == "\x00" or endsWithStopSequence(reply):
-        s.state = validState
-        break
-      if not s.model.eval(token.uint32, s.state, s.logits):
-        break
-      validState = s.state
-
-    # End-of-turn cleanup
-    let endTokens = s.tok.encode("\n\n")
-    if endTokens.len > 0:
-      discard s.model.evalSequence(endTokens, s.state, s.logits)
-
-    return reply.strip()
-  else:
-    result = "[nimo] No model available (offline)"
+  var reply = ""
+  var validState = s.state
+  for step in 0 ..< maxTokens:
+    let token = sampleLogits(s.logits, temperature = temp, topP = topP, rng = s.rng)
+    if token == 0:
+      s.state = validState
+      break
+    let tokenStr = s.tok.decodeToken(token.uint32)
+    reply.add(tokenStr)
     if sink != nil:
-      sink(result)
+      sink(tokenStr)
+    if tokenStr == "\x00" or endsWithStopSequence(reply):
+      s.state = validState
+      break
+    if not s.model.eval(token.uint32, s.state, s.logits):
+      break
+    validState = s.state
+
+  # End-of-turn cleanup
+  let endTokens = s.tok.encode("\n\n")
+  if endTokens.len > 0:
+    discard s.model.evalSequence(endTokens, s.state, s.logits)
+
+  return reply.strip()
 
 proc generateTurn*(s: var Session, userMsg: string, generate: GenerateFn = nil,
                    temp: float32 = DefaultTemp, topP: float32 = DefaultTopP,

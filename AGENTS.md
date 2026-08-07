@@ -202,7 +202,9 @@ Small RWKV models frequently emit bare JSON instead of `[tool]` — the fallback
 ## Architecture
 
 - `src/session_manager.nim` — messages, tool registry, JSONL save, `genStub`.
-  `-d:harnessOffline` strips the RWKV backend (unit tests run without rwkv.cpp).
+- `src/bootstrap.nim` — runtime real-vs-stub decision: `canRunRealModel` (model
+  file exists + a backend lib dlopen's) else a `[stub]` scripted/placeholder
+  generation. One binary everywhere — no build flag.
 - `src/gpu.nim` — CUDA Driver API probe (`gpuProbe`) + fallback policy (`decideGpu`).
 - `src/model_cache.nim` — raw -> quantize -> cache: content-addressed quantized
   model cache (sha1 of size/mtime/head), auto-quantize via `quant` config.
@@ -218,10 +220,17 @@ Small RWKV models frequently emit bare JSON instead of `[tool]` — the fallback
 
 ## Conventions
 
+> **I HATE `grep`** (this machine's `grep` floods stderr with
+> `libpcre2 ... no version information available` noise on every run, and it
+> obscures real output). Prefer `rg`/`ag`/`ack`/`find`/`awk` when searching —
+> or strip noise with `grep ... 2>/dev/null`. Never make `grep` the first tool> in a multi-step search that needs readable output.
+
 - RFC-first: behavior is specified in `rfc/` (4-digit numbering, e.g. 3000-pipeline,
   9300-eval). Read the relevant RFC before changing behavior.
 - Session JSONL must stay **one JSON object per line** (compact `$j`, not `pretty`).
-- Don't break `-d:harnessOffline` builds — the eval suite depends on it.
+- Real-vs-stub is a RUNTIME decision (`bootstrapSession`), not a compile flag.
+  Tests run on the deterministic stub via `--script-replies <json>` or a config
+  with a missing model path — the eval suite depends on this staying green.
 - Keep tool handlers deterministic; model output is the only non-determinism.
 - Agent work should leave the unit test suite green: `devenv shell nimo-unit`.
 

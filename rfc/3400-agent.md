@@ -59,11 +59,12 @@ The session message tree still records user → steps → results → answer (se
 [1000-session.md](1000-session.md)); it now also records the running plan and
 checkpoints.
 
-## Offline mode
+## Stub mode
 
-With `-d:harnessOffline`, no model is loaded: the session uses a scripted
-generator (`genStub`) so interpretation, execution, and evals run without
-rwkv.cpp.
+With no usable backend + model, `bootstrapSession` degrades at runtime to a
+scripted/placeholder stub (`genStub`) — no build flag, one binary everywhere.
+Unit tests and evals run on this stub; `--script-replies <json>` drives it
+deterministically at the CLI level.
 
 ## See Also
 
