@@ -13,14 +13,12 @@ const
 
 proc randomHaiku(prompt: string): string =
   ## Generate a random haiku response
-  result = """{"lines": ["", "", ""], "wordCount": """
-  var words: seq[string]
-  case rand(3)
-  of 0: words = @["bits of light", "thinking in silicon", "quiet minds"]
-  of 1: words = @["electric dreams", "binary rain", "silent thoughts"]
-  of 2: words = @["metal hands", "coding dreams", "electric heart"]
-  result.add "\"" & words[0] & "\", \"" & words[1] & "\", \"" & words[2] & "\"")
-  result.add ", "wordCount": " & $words.join(" ").countLines() & "}"
+  let words = case rand(3)
+    of 0: @["bits of light", "thinking in silicon", "quiet minds"]
+    of 1: @["electric dreams", "binary rain", "silent thoughts"]
+    else: @["metal hands", "coding dreams", "electric heart"]
+  let wordCount = words.len
+  result = """{"lines": ["""" & words[0] & """", """ & words[1] & """", """ & words[2] & """], "wordCount": """ & $wordCount & """}"""
 
 proc main() =
   echo "=== Haiku Generator (Batch) ==="
