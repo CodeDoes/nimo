@@ -111,7 +111,10 @@ task haiku, "Run haiku demo (observable workflow with real model)":
   for i in 1 .. paramCount():
     if i > 1: args.add(" ")
     args.add(paramStr(i))
-  exec("./build/haiku" & args)
+  if args.len > 0:
+    exec("./build/haiku" & args)
+  else:
+    exec("./build/haiku")
 
 task run, "Compile and run a source file (auto-builds if needed)":
   ## Usage: nimble run <source_file> [args...]
