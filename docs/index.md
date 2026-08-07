@@ -25,7 +25,7 @@ notes, and reports — all stored in neat project folders called *workspaces*.
 
 1. **You type a command** — `nimo` reads it and hands it to the right tool.
 2. **Settings are gathered** — from `nimo.json`, then environment variables.
-3. **A backend is chosen** — CUDA (GPU), CPU, or Vulkan. The GPU is checked
+3. **A backend is chosen** — CUDA (GPU) or Vulkan. The GPU is checked
    first so a broken card gives a clear message instead of a crash.
 4. **The model loads** — from a quantized file, reusing a cached copy if one
    exists so you don't re-quantize every time.

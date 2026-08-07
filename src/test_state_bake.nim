@@ -59,7 +59,7 @@ proc runStateBakeTest() =
   doAssert fileExists(TinyModel), "tiny test model missing: " & TinyModel
 
   var model: RwkvModel
-  step("load tiny deterministic model"):
+  step("load tiny deterministic model") do ():
     model = initRwkvModel(TinyModel, nThreads = 2, nGpuLayers = 0)
 
   # A deterministic token sequence (ids < 256 so the tiny model evals them).
@@ -74,7 +74,7 @@ proc runStateBakeTest() =
   var logitsContinue: seq[float32]
   var logitsResume: seq[float32]
 
-  step("checkpoint == continue (bitwise logits)"):
+  step("checkpoint == continue (bitwise logits)") do ():
     # path A: evaluate all tokens in one shot
     var sA = model.newState()
     var lA = model.newLogits()
@@ -94,12 +94,12 @@ proc runStateBakeTest() =
 
     assertFloatsEqual(logitsContinue, logitsResume, "continue-vs-checkpoint logits")
 
-  step("cache file exists & size matches state"):
+  step("cache file exists & size matches state") do ():
     let sp = statePath(cache, stateCacheKey(TinyModel, VocabPath, "ctx"))
     doAssert fileExists(sp), "no cache file: " & sp
     doAssert getFileSize(sp) == model.stateLen * sizeof(float32)
 
-  step("save/load round-trips state byte-for-byte"):
+  step("save/load round-trips state byte-for-byte") do ():
     var orig = model.newState()
     var ol = model.newLogits()
     discard model.evalSequenceInChunks(context, 4, orig, ol)

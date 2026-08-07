@@ -280,10 +280,10 @@ Example:
   var sinkText = ""
   let gen: GenerateFn = proc(prompt: string): string =
     "[stub] " & prompt
-  let result = plan.run(gen, sink = proc(t: string) = sinkText.add(t), maxSteps = 256)
+  let runResult = plan.run(gen, sink = proc(t: string) = sinkText.add(t), maxSteps = 256)
   
-  echo "[run] Completed: " & $result.completed
-  echo "[run] Steps run: " & $result.stepsRun
+  echo "[run] Completed: " & $runResult.completed
+  echo "[run] Steps run: " & $runResult.stepsRun
   if sinkText.len > 0:
     echo "[run] Output:"
     echo sinkText
@@ -324,7 +324,9 @@ Example:
 
 
 proc main() =
-  let args = commandLineParams()
+  var args = commandLineParams()
+  if args.len > 0 and args[0] == "--":
+    args = args[1 .. ^1]
   if args.len == 0:
     echo """nimo -- RWKV inference CLI
 

@@ -7,6 +7,8 @@ srcDir        = "src"
 binDir        = "build"
 bin           = @["main", "generate", "chat", "test_rwkv_full", "test_state_bake", "bake_state", "nimwave_app", "harness", "quantize", "nimo", "jules", "repl"]
 
+import std/os
+
 # Dependencies
 requires "nim >= 2.0.0"
 requires "illwave"
@@ -127,9 +129,14 @@ task run, "Compile and run a source file (auto-builds if needed)":
   # Run with args
   if paramCount() > 1:
     var args = ""
+    var started = false
     for i in 2 .. paramCount():
-      if i > 2: args.add(" ")
-      args.add(paramStr(i))
+      let p = paramStr(i)
+      if p == "--" and not started:
+        continue
+      started = true
+      if args.len > 0: args.add(" ")
+      args.add(quoteShell(p))
     let runCmd = outPath & " " & args
     exec(runCmd)
   else:
