@@ -1,9 +1,9 @@
-## haiku.nim - Generate haikus about AI
-## Demonstrates the observable workflow with batch generation.
-## Accumulates traces across runs.
-## Run with: nim c -o:build/haiku demos/haiku.nim && ./build/haiku
+## haiku.nim - Generate haikus about AI using the real model
+## Demonstrates the observable workflow with real inference.
+## Run with: LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:$LD_LIBRARY_PATH" nim c -o:build/haiku demos/haiku.nim && ./build/haiku
 
 import std/[times, os, json, random]
+import ../src/config, ../src/bootstrap, ../src/session_manager, ../src/engine, ../src/program
 
 const
   Prompts = @["write a haiku about AI", "write a haiku about robots", "write a haiku about code"]
@@ -11,23 +11,30 @@ const
   OutputFile = OutputDir / "all_generated.jsonl"
   Schema = "Haiku"
 
-proc randomHaiku(prompt: string): string =
-  ## Generate a random haiku response
-  let words = case rand(3)
-    of 0: @["bits of light", "thinking in silicon", "quiet minds"]
-    of 1: @["electric dreams", "binary rain", "silent thoughts"]
-    else: @["metal hands", "coding dreams", "electric heart"]
-  let wordCount = words.len
-  result = "{\"lines\": [\"" & words[0] & "\", \"" & words[1] & "\", \"" & words[2] & "\"], \"wordCount\": " & $wordCount & "}"
-
 proc main() =
-  echo "=== Haiku Generator (Batch) ==="
+  echo "=== Haiku Generator (Real Model) ==="
   echo ""
   
   createDir(OutputDir)
   
-  # Seed random with current time for variety
-  randomize()
+  # Load config
+  let cfg = loadConfig()
+  echo "Model: " & cfg.modelPath
+  echo "Backend: " & $cfg.backend
+  echo ""
+  
+  # Bootstrap session
+  let bs = bootstrapSession(cfg, getCurrentDir())
+  echo "Bootstrap ok: " & $bs.ok
+  echo "Bootstrap stub: " & $bs.stub
+  for line in bs.lines: echo "  " & line
+  echo ""
+  
+  if not bs.ok:
+    echo "ERROR: Failed to bootstrap session"
+    quit(1)
+  
+  var s = bs.session
   
   # Open trace file (append mode)
   let f = open(OutputFile, fmAppend)
@@ -44,8 +51,8 @@ proc main() =
     
     let t0 = cpuTime()
     
-    # Simulate generate() call with randomization
-    let output = randomHaiku(prompt)
+    # Real generate call
+    let output = s.generateTurn(prompt, bs.generate, cfg.temperature, cfg.topP, cfg.maxTokens)
     let elapsed = cpuTime() - t0
     
     # Observable event (JSONL)
@@ -56,11 +63,11 @@ proc main() =
     event["output"] = %(output)
     event["elapsed"] = %(elapsed)
     event["tokensIn"] = %(8)
-    event["tokensOut"] = %(12)
-    event["temperature"] = %(0.7)
-    event["topP"] = %(0.7)
-    event["maxTokens"] = %(50)
-    event["backend"] = %("cuda")
+    event["tokensOut"] = %(output.len div 4)
+    event["temperature"] = %(cfg.temperature)
+    event["topP"] = %(cfg.topP)
+    event["maxTokens"] = %(cfg.maxTokens)
+    event["backend"] = %($cfg.backend)
     event["schema"] = %(Schema)
     event["step"] = %(i)
     event["planId"] = %("plan_" & runId)
