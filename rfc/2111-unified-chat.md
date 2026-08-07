@@ -115,6 +115,68 @@ The loop drains the inbox **between steps**, never mid-step.
 - [3600-engine.md](3600-engine.md) — the streaming executor (`engine.run`)
 - [2110-repl.md](2110-repl.md) — the protocol it supersedes
 
+## The action set: what the plan (and the chat) can do
+
+The plan DSL is the command DSL. Every plan step is a command the user can
+also type with `/`, and every command the user types is a step the plan can run.
+This is the single grammar.
+
+### Engine steps (the mechanical backbone)
+
+These are the atomic actions the executor runs, one per step. Each is
+invocable by the plan (and by the human via a matching command):
+
+| DSL command | Engine kind | What it does | Needs model? |
+|-------------|-------------|--------------|--------------|
+| `/generate ...` or `/plan generate ...` | `skGenerate` | produce prose via the model (the only thinking step) | yes |
+| `/extract <filter> from <source>` | `skExtract` | pull a focused slice from a source (model or memory lookup) | sometimes |nimo | `skExtract` | pull a focused slice from a source (model or memory lookup) | | sometimes |
+| `/summarize <input> to <length>` | `skSummarize` | condense to essence | yes |
+| `/validate <text>` | `skValidate` | deterministic gate: word count, paragraph count, repeating segments | no |
+| `/write <path> <content>` | `skWrite` | deterministic file output | no |
+| `/loop <items>` | `skLoop` | data-driven fan-out: splices a sub-plan per item | no (the loop itself; items come from prior steps) |
+| `/report <title>` | `skReport` | checkpoint visible to the user | no |
+
+### Chat-level verbs (wrappers around engine steps + chat state)
+
+| Verb | Description |
+|------|-------------|
+| `/send <text>` | start a new user turn (idle-only) |
+| `/steer <text>` | inject a directive at the next action boundary (does not interrupt the in-flight step) |
+| `/queue <text>` [on-action/on-finish] | hold until the chosen gate opens |
+| `/flush` | flush the queue immediately |
+| `/plan <goal>` | ask the agent to **produce a plan in the DSL** for the given goal |
+| `/run <plan-dsl>` | run a plan (or pasted plan text) through the same dispatcher |
+| `/save [path]` | persist the session JSONL |
+| `/quit` | end the session |
+
+### Workspace / session / story / state (the infra verbs, currently repl-only but folded into chat)
+
+These are the non-model, deterministic commands the planner's plan may also call:
+
+| Verb | Description |
+|------|-------------|
+| `/ws status \| list \| new <name> \| switch <path>` | workspace management |
+| `/session new [path] \| status` | session management |
+| `/story chapter validate <file>` | deterministic quality check |
+| `/story chapter write <path> -p <premise> [--skip-validate]` | generate a chapter (uses `skGenerate` internally) |
+| `/story wiki edit <file> -p <directive>` | update wiki entry (uses `skGenerate` internally) |
+| `/state list \| ingest -p <text> <file> \| load <file>` | baked-state cache ops |
+| `/cuda status` | GPU probe |
+| `/planner --dry <goal>` | deterministic `interpret` without the model (offline plan draft) |
+
+### Mapping to the existing codebase
+
+- **engine steps** come from `src/engine.nim` (the `kind` enum: `skExtract`, `skGenerate`, `skLoop`, `skReport`, `skSummarize`, `skValidate`, `skWrite`) and `src/program.nim` (the DSL serialization — already round-trips to/from JSON via `planToJson`).
+- **plan tool** is `pipelineTool` in `src/pipeline.nim` (the JSON-arguments tool the model currently emits as `[tool] run_pipeline {intent, target}`). Under 2111 this becomes the model's natural way to produce a plan that the dispatcher then parses.
+- **chat command verbs** (`/send`, `/steer`, `/queue`, `/flush`, `/save`, `/quit`, `/plan`, `/run`) live in the new threaded `chat.nim` dispatcher loop.
+- **infrastructure commands** (`/ws`, `/session`, `/story`, `/state`, `/cuda`, `/planner`) are currently in `repl.nim` — they fold into `chat` as `/`-prefixed commands, no reimplementation needed.
+
+### Unified invariant
+
+> **A plan is a script of commands in the same grammar a human types.**
+> The dispatcher runs them indistinguishably.
+> The agent emits one; the human pastes the same thing back — same code path.
+
 ## Follow-ups (this RFC does not implement)
 
 - [ ] Multithreaded `chat` (reader + agent threads; inbox with gates)
