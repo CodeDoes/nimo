@@ -34,7 +34,7 @@ The future is bright.
 ```
 
 ## Known Issues
-- [ ] State cache can corrupt across runs (clear with `rm -rf .nimo/state-cache`)
+- [x] State cache corruption self-heals (NaN guard re-bakes); capped at 512 MB (was: corrupt across runs, clear manually)
 - [ ] `nimo run` uses stub generator
 - [ ] CLI `--` separator broken in `nimble run`
 

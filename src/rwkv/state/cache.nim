@@ -8,7 +8,7 @@
 ## Cache math (keys, paths, save/load) is offline-safe; only the actual bake
 ## (tokenize + eval) needs the real model backend.
 
-import std/[os, sha1]
+import std/[os, strutils, sha1, algorithm]
 import ../../config, ../../model_cache
 when not defined(harnessOffline):
   import ../../rwkv, ../../tokenizer, ../../macros
@@ -17,10 +17,46 @@ type
   StateCache* = object
     cacheDir*: string
 
-const StateFileExt = ".state.bin"
+const
+  StateFileExt = ".state.bin"
+  StateCacheMaxBytes = 512 * 1024 * 1024   # 512 MB cap — states are 21 MB each
+
+proc pruneStateCache*(c: StateCache, maxBytes: int64 = StateCacheMaxBytes): int =
+  ## Deletes oldest cached state files until the cache fits under `maxBytes`.
+  ## Returns the number of files removed. Keeps the newest states (most likely
+  ## to match the current model/config).
+  if not dirExists(c.cacheDir):
+    return 0
+  var files: seq[(int64, string)]
+  for kind, p in walkDir(c.cacheDir):
+    if kind == pcFile and p.endsWith(StateFileExt):
+      try: files.add((getFileSize(p), p))
+      except CatchableError: discard
+  if files.len <= 1:
+    return 0
+  var total: int64 = 0
+  for (sz, _) in files: total += sz
+  files.sort(proc (a, b: (int64, string)): int =
+    # sort oldest-first so we remove from the oldest end
+    if a[1] < b[1]: result = -1
+    elif a[1] > b[1]: result = 1
+    else: result = 0)
+  var removed = 0
+  for (sz, p) in files:
+    if total <= maxBytes: break
+    try:
+      removeFile(p)
+      total -= sz
+      inc removed
+    except CatchableError: discard
+  removed
 
 proc initStateCache*(cacheDir: string = DefaultStateCacheDir): StateCache =
   result.cacheDir = cacheDir
+  # Keep cached states from taking over the disk across many runs/model
+  # variants: drop the oldest until under the cap. Harmless — a pruned state
+  # is simply re-baked on next use.
+  discard pruneStateCache(result)
 
 proc stateCacheKey*(modelPath, vocabPath, context: string): string =
   ## Cache key per RFC 8000: model file hash + vocab hash + prompt content.
@@ -65,6 +101,12 @@ proc loadStateFromFile*(state: var openArray[float32], path: string): bool =
     if f.readBuffer(addr state[0], state.len * sizeof(float32)) !=
        state.len * sizeof(float32):
       return false
+    # Sanity: a garbled/corrupted state (same size, junk bytes) shows up as
+    # NaN/Inf floats. Reject it so the caller treats the cache as a miss and
+    # re-bakes instead of silently generating garbage (RFC 8000 self-heal).
+    for v in state:
+      if v != v or v == Inf or v == -Inf:
+        return false
     return true
   except CatchableError:
     return false
