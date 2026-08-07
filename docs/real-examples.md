@@ -1,5 +1,20 @@
 # Real Examples — How the Nim-script DSL Actually Works
 
+## The Core Workflow
+
+```
+/plan "goal"      → produces plan, stores in _, shows it (does NOT execute)
+/run              → executes _ (last plan)
+/run _            → same, explicit
+/approve          → same, semantic
+Enter             → same, fastest
+/run 3            → resume from step 3
+/edit             → edit _ in editor
+/discard          → clear _
+```
+
+---
+
 ## Example 1: Simple Generate
 
 ```nim
@@ -22,6 +37,12 @@ say "done"
 **User sees:**
 ```
 nimo> /plan "write a haiku about AI"
+▶ produce plan
+  let haiku = structured Haiku "write a haiku about AI"
+  save "haiku.md", haiku
+  say "done"
+  
+nimo> /run          # or just press Enter
 ▶ generate
   wrote 47 bytes -> haiku.md
 ▶ done
@@ -72,14 +93,22 @@ say " wikis complete"
 
 **Engine trace:**
 ```
+nimo> /plan "generate character wikis from outline"
+▶ produce plan
+  for char in outline.characters:
+      let wiki = structured CharacterWiki "write wiki entry for: " & char
+      save "wikis/" & char & ".json", wiki
+      
+nimo> /run
 ▶ loop: characters (3 items)
-  ▶ generate: "write wiki entry for: Keeper"
+  ▶ generate
     wrote 847 bytes -> wikis/Keeper.json
-  ▶ generate: "write wiki entry for: Stranger"
+  ▶ generate
     wrote 623 bytes -> wikis/Stranger.json
-  ▶ generate: "write wiki entry for: Child"
+  ▶ generate
     wrote 412 bytes -> wikis/Child.json
 ▶ wikis complete
+nimo>
 ```
 
 ---
@@ -103,11 +132,18 @@ say "chapter 1 " & (if chapter.wordCount >= 500: "passed" else: "revised")
 
 **User sees:**
 ```
+nimo> /plan "write chapter 1 and validate"
+▶ produce plan
+  if chapter.wordCount < 500:
+      ... (revision logic)
+      
+nimo> /run
 ▶ generate
   validate: words=312 paras=3 quality=fail
 ▶ generate (revision)
   validate: words=547 paras=6 quality=pass
 ▶ chapter 1 revised
+nimo>
 ```
 
 ---
@@ -131,7 +167,7 @@ nimo> recall("preferences")
 
 ---
 
-## Example 6: Real Story Pipeline
+## Example 6: Full Story Pipeline
 
 ```nim
 # User types: /plan "write a 3-chapter story"
@@ -162,6 +198,10 @@ say "story complete: " & $outline.characters.len & " chars, 3 chapters"
 **Full trace:**
 ```
 nimo> /plan "write a 3-chapter story"
+▶ produce plan
+  # 12 steps, 3 loops
+  
+nimo> /run
 ▶ generate
   wrote 412 bytes -> outline.json
 ▶ loop: characters (4 items)
@@ -188,6 +228,7 @@ nimo> /plan "write a 3-chapter story"
     validate: words=589 quality=pass
     wrote 589 bytes -> chapters/ch3.md
 ▶ story complete: 4 chars, 3 chapters
+nimo>
 ```
 
 ---
@@ -293,45 +334,6 @@ let result = structured Result "consider: " & recall("important context")
 
 ---
 
-## What Makes This Work
-
-1. **Variables are inspectable** — you can `say` or `inspect` any variable at any point
-2. **Schema validation catches errors early** — wrong shape = error, not silent failure
-3. **Plans are editable** — paste, modify, re-run
-4. **Streaming is visible** — each step shows ▶ or ✔
-5. **Steer is boundary-safe** — never mid-generation, always at step boundary
-
----
-
-## Plan vs Run: The Key Distinction
-
-```
-nimo> /plan "write a haiku about AI"
-▶ produce plan
-  let haiku = structured Haiku "write a haiku about AI"
-  save "haiku.md", haiku
-  say "done"
-  
-  # Plan produced. Not executed.
-  # User can review, edit, then run.
-nimo> /run "let haiku = structured Haiku \"write a haiku about AI\"; save \"haiku.md\", haiku; say \"done\""
-▶ generate
-  wrote 47 bytes -> haiku.md
-▶ done
-nimo> 
-```
-
-**Separation of concerns:**
-- `/plan` = **compile** (like `nim check`)
-- `/run` = **execute** (like `nim run`)
-
-This lets you:
-1. See what the agent would do
-2. Edit the plan if needed
-3. Execute with confidence
-
----
-
 ## How It Feels
 
 ```
@@ -347,15 +349,14 @@ nimo> /plan "write a story about a lighthouse"
   ...
   
   # Plan has 12 steps. 3 loops. Ready to run.
-nimo> /run   # or just press Enter to accept
+nimo> /run   # or just press Enter
 ▶ generate
   wrote 412 bytes -> outline.json
 ▶ loop: characters (4 items)
   ...
 ▶ story complete
-nimo> 
+nimo>
 ```
-
 
 ---
 
@@ -366,8 +367,7 @@ Like Nim's REPL, `_` is implicitly set to the last plan produced:
 ```
 nimo> /plan "write a haiku"
 ▶ produce plan
-  let haiku = structured Haiku "write a haiku about AI"
-  save "haiku.md", haiku
+  let haiku = structured Haiku "..."
   
 nimo> /run _        # explicit
 ▶ generate
@@ -376,7 +376,6 @@ nimo> /run _        # explicit
 nimo> /plan "write a poem"
 ▶ produce plan
   let poem = structured Poem "..."
-  ...
   
 nimo> /run          # runs the last plan (poem, not haiku)
 ▶ generate
@@ -421,6 +420,5 @@ nimo> /run          # run the edited plan
 
 ```
 nimo> /discard      # clear `_`, no run
-nimo> 
+nimo>
 ```
-
