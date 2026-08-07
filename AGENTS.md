@@ -211,7 +211,8 @@ Small RWKV models frequently emit bare JSON instead of `[tool]` — the fallback
 - `src/state_cache.nim` — context-read -> state -> cache (RFC 8000): baked state
   keyed by (model sig | vocab hash | context); resume-on-miss via `bakeContext`.
 - `src/harness.nim` — agent loop + tool parsing + CLI (loads `nimo.json`).
-- `src/chat.nim` — (future) unified interactive entry with `/send /steer /queue /plan` verbs; see [RFC 2111](rfc/2111-unified-chat.md).
+- `src/chat.nim` — (future) unified interactive entry with Nim-script plan\   template support (`structured()` primitive, variables, loops). See
+  [RFC 2111](rfc/2111-unified-chat.md).
 - `src/pipeline.nim` — `run_pipeline` tool: steps, target files, state in `.nimo/`.
 - `src/session.nim` — low-level RWKV session (real generation).
 - `src/config.nim` — `NimoConfig` (model/vocab/layers/quant/caches + env overrides).
