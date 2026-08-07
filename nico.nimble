@@ -106,12 +106,20 @@ task haiku, "Run haiku demo (observable workflow with real model)":
     build_libsTask()
   mkdir "build"
   exec "nim c --path:src -o:build/haiku demos/haiku.nim"
-  # Pass through all args after -- using paramCount/paramStr (available in nimble tasks)
-  var args = ""
-  for i in 2 .. paramCount():
-    if i > 2: args.add(" ")
-    args.add(paramStr(i))
-  exec("./build/haiku " & args)
+  # Extract user args after -- (skip nimble internals)
+  var userArgs = ""
+  var foundSep = false
+  for i in 1 .. paramCount():
+    let p = paramStr(i)
+    if p == "--":
+      foundSep = true
+    elif foundSep:
+      if userArgs.len > 0: userArgs.add(" ")
+      userArgs.add(p)
+  if userArgs.len > 0:
+    exec("./build/haiku " & userArgs)
+  else:
+    exec("./build/haiku")
 
 task run, "Compile and run a source file (auto-builds if needed)":
   ## Usage: nimble run <source_file> [args...]

@@ -1,9 +1,9 @@
 ## haiku.nim - Generate haikus about AI using the real model
 ## Demonstrates the observable workflow with real inference.
-## Usage: LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:$LD_LIBRARY_PATH" ./build/haiku "<prompt>"
-##        LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:$LD_LIBRARY_PATH" ./build/haiku --use-default-prompt
+## Usage: LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:$LD_LIBRARY_PATH" nimble haiku -- --use-default-prompt
+##        LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:$LD_LIBRARY_PATH" nimble haiku -- "write a haiku about X"
 
-import std/[times, os, json, strutils]
+import std/[times, os, json]
 import ../src/config, ../src/bootstrap, ../src/session_manager
 
 const
@@ -29,13 +29,13 @@ proc main() =
   
   # Require either NL input or --use-default-prompt
   if prompts.len == 0 and not useDefaults:
-    echo """Usage: ./haiku "<prompt>" [more prompts...]
-       ./haiku --use-default-prompt
+    echo """Usage: nimble haiku -- "<prompt>" [more prompts...]
+       nimble haiku -- --use-default-prompt
 
 Examples:
-  ./haiku "write a haiku about AI"
-  ./haiku "write a haiku about AI" "robots love code"
-  ./haiku --use-default-prompt
+  nimble haiku -- "write a haiku about AI"
+  nimble haiku -- "write a haiku about AI" "robots love code"
+  nimble haiku -- --use-default-prompt
 """
     quit(1)
   
@@ -50,6 +50,10 @@ Examples:
   # Create output directory
   if not dirExists(OutputDir):
     createDir(OutputDir)
+  
+  echo "Output dir: " & OutputDir
+  echo "Output file: " & OutputFile
+  echo "File exists before: " & $fileExists(OutputFile)
   
   # Load config
   let cfg = loadConfig()
@@ -73,6 +77,8 @@ Examples:
   # Open trace file (append mode)
   let f = open(OutputFile, fmAppend)
   defer: f.close()
+  
+  echo "File exists after open: " & $fileExists(OutputFile)
   
   var runId = now().format("yyyyMMddHHmmss")
   echo "Run ID: " & runId
@@ -117,6 +123,7 @@ Examples:
   
   echo "=== Complete ==="
   echo "Trace appended to: " & OutputFile
+  echo "File exists after: " & $fileExists(OutputFile)
 
 when isMainModule:
   main()
