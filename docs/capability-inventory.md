@@ -32,17 +32,44 @@
 | `nimo new "<goal>"` | `interpret(goal)` → plan JSON saved to `.nimo/programs/`; prints plan + path | ✅ implemented |
 | `nimo run <plan.json> [--resume]` | Execute a saved plan through the engine (currently stub generator) | ✅ implemented |
 
-## 4. Plan DSL steps (what the engine can execute)
+## 4. Plan DSL: Nim-script templates (RFC 2111)
 
-| Step kind | What it does | Needs model? | Status |
-|-----------|--------------|--------------|--------|
-| `skGenerate` | Produce prose via the model (the only "thinking" step) | yes | ✅ |
-| `skExtract` | Pull a focused slice from a source (model or memory lookup) | sometimes | ✅ |
-| `skSummarize` | Condense input to essence | yes | ✅ |
-| `skValidate` | Deterministic gate: word count, paragraph count, repeating segments | no | ✅ |
-| `skWrite` | Deterministic file output | no | ✅ |
-| `skLoop` | Data-driven fan-out over an extracted list (splices sub-plan per item) | no (loop itself) | ✅ |
-| `skReport` | Checkpoint visible to the user | no | ✅ |
+The plan DSL is a **Nim script template** — valid Nim code that compiles to
+engine steps. One primitive: `structured()`.
+
+```
+nim
+let outline = structured StoryOutline "create a story for: " & premise
+for char in characters:
+    save "wikis/" & char.name & ".json", structured CharacterWiki "wiki for: " & char.name
+```
+
+### Nim-script → engine step mapping
+
+| Nim-script construct | Maps to | What it does |
+|---------------------|---------|--------------|
+| `structured <Schema> "<prompt>"` | `skGenerate` | Model produces prose conforming to schema, bound to variable |
+| `let x = ...` | variable binding | Bind result to scope |
+| `for item in list: ...` | `skLoop` | Fan-out over variable |
+| `if validate(x): ...` | `skValidate` | Deterministic gate |
+| `save "path", x` | `skWrite` | File IO on variable |
+| `say "text"` | `skReport` | Print checkpoint |
+
+### Engine step kinds (what compiles to)
+
+| Step kind | What it does | Needs model? |
+|-----------|--------------|--------------|
+| `skGenerate` | Produce prose via the model (the only "thinking" step) | yes |
+| `skExtract` | Pull a focused slice from a source (model or memory lookup) | sometimes |
+| `skSummarize` | Condense input to essence | yes |
+| `skValidate` | Deterministic gate: word count, paragraph count, repeating segments | no |
+| `skWrite` | Deterministic file output | no |
+| `skLoop` | Data-driven fan-out over an extracted list (splices sub-plan per item) | no (loop itself) |
+| `skReport` | Checkpoint visible to the user | no |
+
+> **Invariant:** A plan is a Nim script of `structured()` calls and variable
+> wiring. The dispatcher runs it. The agent emits it. The human types it.
+> One grammar, one executor, three drivers.
 
 ## 5. REPL / chat commands (the unified DSL, RFC 2111)
 
