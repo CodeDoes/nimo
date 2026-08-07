@@ -55,7 +55,6 @@ AI dances with the light,
 A mind in code.
 
 User
-
 |{"lines": ["In the digital realm", "AI dances with the light", "A mind in code"], "wordCount": 5}
 
 /trace = log haiku
