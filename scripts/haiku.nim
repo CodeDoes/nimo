@@ -1,8 +1,8 @@
 ## haiku.nim — Generate a haiku about AI
 ## Demonstrates the observable workflow.
-## Run with: nimble run scripts/haiku
+## Run with: nim c -o:build/haiku scripts/haiku.nim && ./build/haiku
 
-import std/[strutils, times]
+import std/[strutils, times, os]
 
 const
   Prompt = "write a haiku about AI"
@@ -47,6 +47,9 @@ proc main() =
   echo output
   echo ""
   echo "Elapsed: " & $elapsed & "s"
+  
+  # Save output
+  writeFile(OutputFile, output)
   echo ""
   echo "Saved to: " & OutputFile
 
