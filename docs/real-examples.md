@@ -356,3 +356,71 @@ nimo> /run   # or just press Enter to accept
 nimo> 
 ```
 
+
+---
+
+## The `_` Convention (REPL-style)
+
+Like Nim's REPL, `_` is implicitly set to the last plan produced:
+
+```
+nimo> /plan "write a haiku"
+▶ produce plan
+  let haiku = structured Haiku "write a haiku about AI"
+  save "haiku.md", haiku
+  
+nimo> /run _        # explicit
+▶ generate
+  wrote 47 bytes -> haiku.md
+  
+nimo> /plan "write a poem"
+▶ produce plan
+  let poem = structured Poem "..."
+  ...
+  
+nimo> /run          # runs the last plan (poem, not haiku)
+▶ generate
+  ...
+  
+nimo> /approve      # same as /run
+▶ generate
+  ...
+  
+nimo> Enter         # also runs last plan
+▶ generate
+  ...
+```
+
+## Resume from Step
+
+```
+nimo> /plan "write a 3-chapter story"
+▶ produce plan (12 steps)
+  
+nimo> /run 3        # run from step 3 onward
+▶ resume from step 3
+  ...
+```
+
+## Edit Before Run
+
+```
+nimo> /plan "write a haiku"
+▶ produce plan
+  let haiku = structured Haiku "..."
+  
+nimo> /edit         # open plan in editor
+  # ... edit ...
+  
+nimo> /run          # run the edited plan
+▶ generate
+  ...
+```
+
+## Clear the Last Plan
+
+```
+nimo> /discard      # clear `_`, no run
+nimo> 
+```
+
