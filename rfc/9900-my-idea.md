@@ -44,4 +44,34 @@
 
 ## Haiku
 ```
+/prompt = "write a haiku about AI"
+|write a haiku about AI
+
+/generate structured Haiku "write a haiku about AI"
+>In the digital realm,
+AI dances with the light,
+A mind in code.
+
+User
+|{"lines": ["In the digital realm", "AI dances with the light", "A mind in code"], "wordCount": 5}
+
+/trace
+|{"id":"gen_...","prompt":"write a haiku about AI","output":"...","elapsed":6.53,"tokensOut":17,"backend":"cuda","schema":"Haiku"}
+```
+
+## Haiku
+```
+/prompt = "write a haiku about AI"
+|write a haiku about AI
+
+/generate structured Haiku "write a haiku about AI"
+>In the digital realm,
+AI dances with the light,
+A mind in code.
+
+User
+|{"lines": ["In the digital realm", "AI dances with the light", "A mind in code"], "wordCount": 5}
+
+/trace
+|{"id":"gen_...","prompt":"write a haiku about AI","output":"...","elapsed":6.53,"tokensOut":17,"backend":"cuda","schema":"Haiku"}
 ```
