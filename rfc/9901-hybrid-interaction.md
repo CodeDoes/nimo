@@ -3,19 +3,27 @@
 **Status:** conceptual design
 **Category:** 2 — CLI / User Interface
 
-## The Idea
+## The Hierarchy
 
-A hybrid interaction model that blends structured DSL with natural language:
+Three layers, each produces the next:
 
 ```
-/                           <- plan DSL mode (structured)
+/plan "goal"     ──► produces / DSL script
+/ DSL script     ──► when run, produces > NL context
+> NL context     ──► fed to model → produces | response
+```
+
+## Full Interaction
+
+```
+/                           <- plan DSL mode (produced by /plan)
   generate format(
     ("Current Time", current_time())
     ("Recent Sessions", recall "recent sessions")
     ("User Profile", recall "user profile")
     ("Instructions", "A simple greeting")
   )
->                           <- natural language mode (prose)
+>                           <- natural language mode (produced by running /)
   Recent Sessions:
   - Session 1: ...
   - Session 2: ...
@@ -26,119 +34,104 @@ A hybrid interaction model that blends structured DSL with natural language:
   
   Instructions:
   A simple greeting
-|                           <- output boundary
+|                           <- output boundary (produced by model)
   Hello there! Last night was wild wasn't it!
 ```
 
-## Syntax
-
-| Symbol | Mode | Purpose |
-|--------|------|---------|
-| `/` | Plan DSL | Structured context assembly |
-| `>` | Natural language | Prose context, instructions |
-| `|` | Output | Model response boundary |
-
 ## How It Works
 
-1. **Start with `/`** — enter plan DSL mode
-2. **Assemble context** — use `generate format(...)` to gather structured data
-3. **Switch to `>`** — enter natural language mode for prose context
-4. **Add instructions** — natural language guidance for the model
-5. **Output appears at `|`** — model response
+1. **User types** `/plan "write a greeting"`
+2. **Agent produces** the `/` DSL script (structured context assembly)
+3. **User runs** `/run` (or presses Enter)
+4. **DSL executes** — assembles context from time, memory, literals
+5. **Context becomes** the `>` natural language block
+6. **Model generates** the `|` response from that context
 
-## Why This Matters
+## Syntax
 
-- **Best of both worlds** — structured context + natural language framing
-- **Transparent** — you can see exactly what context was assembled
-- **Editable** — mix DSL and prose in the same plan
-- **Debuggable** — see context before generation
+| Symbol | Mode | Produced by |
+|--------|------|-------------|
+| `/` | Plan DSL | `/plan` command |
+| `>` | Natural language | DSL execution (context assembly) |
+| `|` | Output | Model generation |
 
-## Example: Greeting Workflow
+## Example: Greeting
 
 ```
-/
-  generate format(
-    ("Time", current_time())
-    ("User", recall "user profile")
-    ("Context", "A friendly greeting")
-  )
->
-  It's morning. The user likes poetry.
-  Write a greeting that references the time of day.
-|
+/plan "write a greeting"
+▶ produce plan
+  / generate format(
+      ("Time", current_time())
+      ("User", recall "profile")
+      ("Instructions", "friendly greeting")
+    )
+
+/ run
+▶ execute
+  > It's morning. User likes poetry.
+  > Write a friendly greeting.
+  |
   Good morning! The dawn brings new possibilities.
 ```
 
 ## Example: Story Generation
 
 ```
-/
-  generate format(
-    ("Premise", "A lighthouse keeper discovers a message in a bottle")
-    ("Tone", "melancholy")
-    ("Length", "short")
-  )
->
-  Write a short story about a lighthouse keeper who finds a message in a bottle.
-  The tone should be melancholy — lonely, reflective, with a hint of hope.
-|
+/plan "write a short story about a lighthouse"
+▶ produce plan
+  / generate format(
+      ("Premise", "lighthouse keeper finds message in bottle")
+      ("Tone", "melancholy")
+      ("Length", "short")
+    )
+
+/ run
+▶ execute
+  > Premise: lighthouse keeper finds message in bottle
+  > Tone: melancholy — lonely, reflective, hint of hope
+  > Length: short (300-500 words)
+  |
   The bottle bobbed against the rocks like a lost child...
 ```
 
+## Why This Matters
+
+- **Transparent** — you see each layer: plan, context, response
+- **Editable** — can edit any layer before execution
+- **Debuggable** — can inspect context before generation
+- **Hierarchical** — each layer produces the next
+
 ## Implementation
 
-This would be a new input mode in `chat.nim`:
+The plan script, when executed, assembles context and passes it to generate:
 
 ```nim
-# Pseudo-code for the hybrid parser
-proc parseHybrid(input: string): Plan =
-  var lines = input.splitLines()
-  var plan = newPlan()
+proc executeDSL(script: string): string =
+  # Parse the / script
+  let parts = parseDSL(script)
   
-  for line in lines:
-    if line.startsWith("/"):
-      # Plan DSL mode
-      plan.add(parseDSL(line))
-    elif line.startsWith(">"):
-      # Natural language mode
-      plan.addContext(line[1..].strip())
-    elif line.startsWith("|"):
-      # Output boundary (already generated)
-      plan.output = line[1..].strip()
+  # Assemble context (the > part)
+  var context = ""
+  for (label, expr) in parts:
+    let value = evaluate(expr)  # current_time(), recall(), literal
+    context.add(label & ": " & value & "\n")
   
-  return plan
+  # Generate response (the | part)
+  return generate(context)
 ```
 
 ## Relationship to Existing DSL
 
 This doesn't replace `structured()` — it **wraps** it:
 
-```nim
-# Existing (pure DSL)
+```
+# Existing (flat)
 let response = structured Response "context: ..."
 
-# Hybrid (DSL + natural language)
-/
-  generate format(
-    ("Context", recall "user profile")
-  )
->
-  Write a friendly greeting.
-|
-  Hello there!
+# Hybrid (hierarchical)
+/ generate format(("Context", recall "profile"))
+> Context: ...
+| Response...
 ```
 
-The hybrid mode is sugar on top of the same engine.
-
-## Questions
-
-1. **Is this needed?** Or is `structured()` + natural language prompts enough?
-2. **Where does this live?** In `chat.nim`? As a new input mode?
-3. **How does it interact with `/plan`?** Can you produce a hybrid plan?
-
-## Next Steps
-
-If this is valuable:
-1. Add to RFC 2111 as a new input mode
-2. Implement in `chat.nim`
-3. Add examples to `docs/examples/`
+The hybrid mode makes the context assembly **visible** and **editable**.
