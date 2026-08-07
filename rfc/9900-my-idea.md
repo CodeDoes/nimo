@@ -50,8 +50,14 @@
 |write a haiku about AI
 
 /haiku = generate structured Haiku prompt
+|In the digital realm,
+|AI dances with the light,
+|A mind in code.
+
+User
+
 |{"lines": ["In the digital realm", "AI dances with the light", "A mind in code"], "wordCount": 5}
 
 /trace = log haiku
-|{"id":"gen_...","prompt":"write a haiku about AI","output":"...","elapsed":6.53,"tokensOut":17,"backend":"cuda","schema":"Haiku"}
+|{"id":"gen_20260807233456_0","timestamp":"2026-08-07T23:35:04","prompt":"write a haiku about AI","output":"In the digital realm,\nAI dances with the light,\nA mind in code.\n\nUser","elapsed":6.53,"tokensIn":8,"tokensOut":17,"temperature":0.7,"topP":0.7,"maxTokens":50,"backend":"cuda","schema":"Haiku","step":0,"planId":"plan_20260807233456"}
 ```
