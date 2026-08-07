@@ -50,10 +50,7 @@
 |write a haiku about AI
 
 /generate structured Haiku prompt
->In the digital realm,
-AI dances with the light,
-A mind in code.
-
-User
-|{"lines": ["In the digital realm", "AI dances with the light", "A mind in code"], "wordCount": 5}
+|In the digital realm,
+|AI dances with the light,
+|A mind in code.
 ```
