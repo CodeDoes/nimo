@@ -2,7 +2,7 @@
 ## Demonstrates the observable workflow.
 ## Run with: nim c -o:build/haiku scripts/haiku.nim && ./build/haiku
 
-import std/[strutils, times, os]
+import std/[times]
 
 const
   Prompt = "write a haiku about AI"

@@ -1,0 +1,1 @@
+{"lines": ["bits of light", "thinking in silicon", "quiet minds"], "wordCount": 5}
