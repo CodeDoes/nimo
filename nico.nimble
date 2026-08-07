@@ -106,7 +106,12 @@ task haiku, "Run haiku demo (observable workflow with real model)":
     build_libsTask()
   mkdir "build"
   exec "nim c --path:src -o:build/haiku demos/haiku.nim"
-  exec "./build/haiku " & commandLineParams().join(" ")
+  # Pass through all args after -- using paramCount/paramStr (available in nimble tasks)
+  var args = ""
+  for i in 2 .. paramCount():
+    if i > 2: args.add(" ")
+    args.add(paramStr(i))
+  exec("./build/haiku " & args)
 
 task run, "Compile and run a source file (auto-builds if needed)":
   ## Usage: nimble run <source_file> [args...]
