@@ -20,8 +20,8 @@
 ## Build:       nimble state_bake_test
 ## Run:        LD_LIBRARY_PATH=... ./test_state_bake
 
-import std/[os, strformat, strutils, math, random, sequtils]
-import ./rwkv, ./macros, ./state_cache
+import std/[os, strutils, math, sequtils]
+import ./rwkv, ./state_cache
 
 const
   TinyModel* = "rwkv.cpp/tests/tiny-rwkv-4v0-660K-FP32.bin"

@@ -9,6 +9,8 @@
 ## bindBackend(path) — after that, every call below goes through the bound lib.
 
 import std/[macros, strformat, dynlib]
+when defined(linux):
+  import posix
 import ./config
 import ./rwkv/backend/types, ./rwkv/backend/cuda/cuda_backend, ./rwkv/backend/vulkan/vulkan_backend
 
@@ -214,11 +216,41 @@ proc decodeError*(flags: uint32): string =
   elif category.len > 0: category
   else: detail
 
+proc withSilentBackendInit[T](body: proc (): T): T =
+  ## rwkv.cpp's ggml prints verbose CUDA init chatter (ggml_cuda_init:
+  ## GGML_CUDA_FORCE_*…) to stdout/stderr on every model load. That noise is
+  ## not useful to a human, so we silence both streams only for the duration of
+  ## the backend init call and restore them right after. Real errors are not
+  ## lost: a failed load sets the library's last-error string, which the caller
+  ## reads via rwkv_get_last_error.
+  when defined(linux):
+    # dup stdout+stderr to a scratch fd, point them at /dev/null, run, restore.
+    let oldOut = dup(1)
+    let oldErr = dup(2)
+    let devNull = open("/dev/null", O_WRONLY)
+    if devNull >= 0 and oldOut >= 0 and oldErr >= 0:
+      discard dup2(devNull, 1)
+      discard dup2(devNull, 2)
+      result = body()
+      discard dup2(oldOut, 1)
+      discard dup2(oldErr, 2)
+      discard close(oldOut)
+      discard close(oldErr)
+      discard close(devNull)
+    else:
+      result = body()
+      if oldOut >= 0: discard close(oldOut)
+      if oldErr >= 0: discard close(oldErr)
+      if devNull >= 0: discard close(devNull)
+  else:
+    result = body()
+
 proc initRwkvModel*(modelPath: string, nThreads: uint32 = 4, nGpuLayers: uint32 = 99): RwkvModel =
   ## Loads model from GGML format file, offloading up to nGpuLayers to GPU VRAM.
   ## Binds the default backend automatically if none was selected explicitly.
   ensureBackend()
-  let ctx = rwkv_init_from_file(modelPath.cstring, nThreads, nGpuLayers)
+  let ctx = withSilentBackendInit(proc (): RwkvContext =
+    rwkv_init_from_file(modelPath.cstring, nThreads, nGpuLayers))
   if ctx == nil:
     let err = rwkv_get_last_error(nil)
     raise newException(RwkvException, "Failed to load RWKV model from '" & modelPath & "': " & decodeError(err))

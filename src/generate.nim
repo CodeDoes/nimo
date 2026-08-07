@@ -3,8 +3,8 @@
 
 import std/[os, strutils, strformat, times, options]
 import cli, ./session_manager, ./config, ./tokenizer, ./rwkv, ./sampling, ./logger, ./macros,
-       ./rwkv/model/header, ./rwkv/backend/cuda/cuda_backend,
-       ./rwkv/backend/vulkan/vulkan_backend, ./lock
+       ./rwkv/model/header,
+       ./lock
 
 type
   GenOpts = object

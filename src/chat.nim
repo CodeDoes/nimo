@@ -1,10 +1,8 @@
 ## RWKV Interactive Chat — CLI with session management
 ## Usage: nimo chat --backend cuda --model <path> [--device gpu-0]
 
-import std/[os, strutils, strformat, terminal, options]
-import cli, ./session_manager, ./config, ./tokenizer, ./rwkv, ./logger,
-       ./rwkv/backend/cuda/cuda_backend,
-       ./rwkv/backend/vulkan/vulkan_backend
+import std/[os, strutils, strformat, options]
+import cli, ./session_manager, ./config, ./rwkv, ./logger
 
 type
   ChatOpts = object

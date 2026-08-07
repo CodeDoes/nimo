@@ -6,6 +6,7 @@
 - **Tests**: 103/103 pass
 - **Backend**: CUDA on RTX 2050
 - **Dev workflow**: devenv shell nimo-* commands
+- **UX**: clean startup — no ggml_cuda_init chatter; `nimble build`/`unit`/`doctor` green
 
 ## Working
 - [x] `devenv shell nimo-harness` — interactive agent (3+ turns)
