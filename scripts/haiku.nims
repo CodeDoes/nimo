@@ -2,7 +2,7 @@
 ## Demonstrates the observable workflow.
 ## Run with: nim nimscripts scripts/haiku.nims
 
-import std/[strutils, times]
+import std/[strutils]
 
 const
   Prompt = "write a haiku about AI"
@@ -15,20 +15,16 @@ proc main() =
   echo "Schema: " & Schema
   echo ""
   
-  let t0 = cpuTime()
-  
   # Simulate generate() call
   let output = """{"lines": ["bits of light", "thinking in silicon", "quiet minds"], "wordCount": 5}"""
-  
-  let elapsed = cpuTime() - t0
   
   # Observable event (this is what gets logged)
   let event = """{
     "id": "gen_001",
-    "timestamp": """ & now().format("yyyy-MM-dd'T'HH:mm:ss") & """,
+    "timestamp": "2024-01-15T10:30:00",
     "prompt": """ & Prompt & """,
     "output": """ & output & """,
-    "elapsed": """ & $elapsed & """,
+    "elapsed": 1.234,
     "tokensIn": 8,
     "tokensOut": 12,
     "temperature": 0.7,
@@ -45,8 +41,6 @@ proc main() =
   echo ""
   echo "Generated:"
   echo output
-  echo ""
-  echo "Elapsed: " & $elapsed & "s"
   echo ""
   echo "Saved to: " & OutputFile
 
