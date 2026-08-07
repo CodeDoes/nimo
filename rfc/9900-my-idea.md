@@ -7,6 +7,7 @@
     ("User Profile",recall "user profile")
     ("Instructions", "A simple greeting")
   )
+recall
 >
   Recent Sessions:
   - ...
