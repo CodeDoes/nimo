@@ -22,7 +22,7 @@ Sessions follow the pi-agent JSONL message-tree format (parentId chains).
 
 ```bash
 devenv shell                 # enter dev env (nim, cmake, CUDA toolkit, python+torch)
-devenv shell build_libs      # build CUDA and CPU backend libraries
+devenv shell build_libs      # build CUDA backend library
 devenv shell nimo-unit         # offline unit test suite (no model needed)
 devenv shell build_all       # nimble build all binaries
 ```

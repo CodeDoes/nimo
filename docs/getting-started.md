@@ -9,7 +9,7 @@
 ## 1. Build the tools
 
 ```bash
-devenv shell build-all
+devenv shell build_all
 ```
 
 This compiles everything via `nimble build_all`. The main entry point is `nimble run nimo`.
@@ -74,10 +74,10 @@ plus a `config.toml` and `outline.md` you can edit.
 ## 5. Verify everything works
 
 ```bash
-devenv shell nimo unit
+devenv shell nimo-unit
 ```
 
-This runs the offline self-test suite (34 checks) — no model needed. It tests
+This runs the offline self-test suite (102 checks) — no model needed. It tests
 tool-call parsing, session saving, cache logic, chapter validation, memory
 search, and more. Everything should report PASS.
 

@@ -90,7 +90,7 @@ proc generateStep*(name, context: string, skill=""): Step =
 proc validateStep*(name, text: string): Step =
   Step(kind: skValidate, name: name, input: text, status: ssPending)
 
-proc writeStep*(name, path, content=""): Step =
+proc writeStep*(name, path: string, content=""): Step =
   Step(kind: skWrite, name: name, path: path, content: content,
        status: ssPending)
 

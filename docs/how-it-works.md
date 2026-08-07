@@ -30,7 +30,7 @@ different folders.
 
 ## Choosing a backend (before the model loads)
 
-The model runs on CUDA (NVIDIA GPU), CPU, or Vulkan. The choice happens in one
+The model runs on CUDA (NVIDIA GPU) or Vulkan. The choice happens in one
 place (`selectBackend`):
 
 1. If a `lib` path is set in config, use exactly that library.
@@ -45,7 +45,7 @@ For CUDA specifically, NIMO probes the GPU *first* via the NVIDIA driver
   print the diagnosis and the fix, then stop (no silent crash).
 - **Unknown** — no NVIDIA driver found → same clean refusal.
 
-CPU and Vulkan skip the probe (they don't depend on the NVIDIA driver).
+Vulkan skips the probe (it doesn't depend on the NVIDIA driver).
 
 ## Loading the model (with caches)
 
