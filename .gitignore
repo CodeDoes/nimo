@@ -1,5 +1,5 @@
 models/
-rwkv.cpp/
+rwkv.cpp/*
 build/
 !scripts/build/
 logs/
@@ -16,6 +16,7 @@ src/test_rwkv_full
 # runtime harness artifacts
 .nimo/
 *.so
+!librwkv_cuda.so
 *.jsonl
 nimble.develop
 nimble.paths
