@@ -3,7 +3,7 @@
 ## Current State
 - **Baseline: `v0.9.0`** — solid working app
 - **Multi-turn**: 3+ turns verified (Alice remembered, haiku generated)
-- **Tests**: 87/87 pass
+- **Tests**: 103/103 pass
 - **Backend**: CUDA on RTX 2050
 - **Dev workflow**: devenv shell nimo-* commands
 
@@ -11,7 +11,7 @@
 - [x] `devenv shell nimo-harness` — interactive agent (3+ turns)
 - [x] `devenv shell nimo-generate` — single-shot generation
 - [x] `devenv shell nimo-doctor` — health check
-- [x] `devenv shell nimo-unit` — 87/87 tests
+- [x] `devenv shell nimo-unit` — 103/103 tests
 - [x] `devenv shell nimo-new "goal"` — create plan from goal
 - [x] `devenv shell nimo-chat` — simple chat
 - [x] `./bin/nimo` PATH shim (alternative)

@@ -39,7 +39,7 @@ _Empowerment document for Agnes — your operational north star._
 | Model | `models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin` (Q4_K) |
 | GPU | NVIDIA GeForce RTX 2050 (4 GB VRAM, sm_86) |
 | Build | `nimble build_all` or `nimble run <bin>` |
-| Tests | `devenv shell unit` — must stay green |
+| Tests | `devenv shell nimo-unit` — must stay green |
 | Commits | After every meaningful change. Small, focused, descriptive. |
 
 ### State baking
@@ -63,7 +63,7 @@ _Empowerment document for Agnes — your operational north star._
 
 ### For the developer
 - **RFC-first.** Read the relevant RFC before changing behavior.
-- **Tests enable fearless change.** If you touch logic, run `devenv shell unit`.
+- **Tests enable fearless change.** If you touch logic, run `devenv shell nimo-unit`.
 - **Commit often.** Small, focused commits. The test suite is the safety net.
 - **Code should be elegant.** If something is repeated, abstract it. If a file does too much, split it.
 
@@ -138,6 +138,6 @@ These are the things you should be working on **right now** unless told otherwis
    - High: `nimo` not in PATH
    - Medium: `--` CLI separator broken
    - Medium: `harness` buried in README
-4. **Keep `devenv shell unit` green** — every change must pass 87/87 tests.
+4. **Keep `devenv shell nimo-unit` green** — every change must pass 103/103 tests.
 
 When these are done, come back and ask what's next.

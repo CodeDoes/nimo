@@ -23,7 +23,7 @@ Sessions follow the pi-agent JSONL message-tree format (parentId chains).
 ```bash
 devenv shell                 # enter dev env (nim, cmake, CUDA toolkit, python+torch)
 devenv shell build_libs      # build CUDA and CPU backend libraries
-devenv shell unit            # nimble task / run devenv shell unit (offline, no model needed)
+devenv shell nimo-unit         # offline unit test suite (no model needed)
 devenv shell build_all       # nimble build all binaries
 ```
 
@@ -37,7 +37,7 @@ nimble shell unit
 ```
 
 Tool binaries in `src/` are standalone; each `when isMainModule` is its own CLI
-(`nimble run harness`, `devenv shell unit`, ...).
+(`nimble run harness`, `devenv shell nimo-unit`, ...).
 
 ## Smoke test
 
@@ -178,7 +178,7 @@ make -j$(nproc)
 
 ## Unit Tests
 
-`src/unit.nim` — 61 checks, offline (scripted `genStub`, no model):
+`src/unit.nim` — 103 checks, offline (scripted `genStub`, no model):
 
 1. **Tool calling** — detect `[tool] run_pipeline {...}`, dispatch, feed result back, final answer.
 2. **Loop termination** — max-iteration guard (8); a script that never stops calling
@@ -223,7 +223,7 @@ Small RWKV models frequently emit bare JSON instead of `[tool]` — the fallback
 - Session JSONL must stay **one JSON object per line** (compact `$j`, not `pretty`).
 - Don't break `-d:harnessOffline` builds — the eval suite depends on it.
 - Keep tool handlers deterministic; model output is the only non-determinism.
-- Agent work should leave the unit test suite green: `devenv shell unit`.
+- Agent work should leave the unit test suite green: `devenv shell nimo-unit`.
 
 ## Onboarding — Core Philosophy
 
