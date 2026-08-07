@@ -20,6 +20,9 @@ proc main() =
     createDir(OutputDir)
     echo "Created: " & OutputDir
   
+  echo "Output file: " & OutputFile
+  echo "File exists before: " & $fileExists(OutputFile)
+  
   # Load config
   let cfg = loadConfig()
   echo "Model: " & cfg.modelPath
@@ -42,6 +45,8 @@ proc main() =
   # Open trace file (append mode)
   let f = open(OutputFile, fmAppend)
   defer: f.close()
+  
+  echo "File exists after open: " & $fileExists(OutputFile)
   
   var runId = now().format("yyyyMMddHHmmss")
   echo "Run ID: " & runId
@@ -76,6 +81,7 @@ proc main() =
     event["planId"] = %("plan_" & runId)
     
     f.writeLine($event)
+    f.flushFile()
     
     echo "Generated:"
     echo output
@@ -85,6 +91,7 @@ proc main() =
   
   echo "=== Complete ==="
   echo "Trace saved to: " & OutputFile
+  echo "File exists after: " & $fileExists(OutputFile)
 
 when isMainModule:
   main()
