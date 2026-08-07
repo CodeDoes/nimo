@@ -1,8 +1,9 @@
 ## haiku.nim — Generate haikus about AI
 ## Demonstrates the observable workflow with batch generation.
+## Accumulates traces across runs.
 ## Run with: nim c -o:build/haiku demos/haiku.nim && ./build/haiku
 
-import std/[times, os, json]
+import std/[times, os, json, random]
 
 const
   Prompts = @["write a haiku about AI", "write a haiku about robots", "write a haiku about code"]
@@ -10,35 +11,48 @@ const
   OutputFile = OutputDir / "all_generated.jsonl"
   Schema = "Haiku"
 
+proc randomHaiku(prompt: string): string =
+  ## Generate a random haiku response
+  result = """{"lines": ["", "", ""], "wordCount": """
+  var words: seq[string]
+  case rand(3)
+  of 0: words = @["bits of light", "thinking in silicon", "quiet minds"]
+  of 1: words = @["electric dreams", "binary rain", "silent thoughts"]
+  of 2: words = @["metal hands", "coding dreams", "electric heart"]
+  result.add "\"" & words[0] & "\", \"" & words[1] & "\", \"" & words[2] & "\"")
+  result.add ", "wordCount": " & $words.join(" ").countLines() & "}"
+
 proc main() =
   echo "=== Haiku Generator (Batch) ==="
   echo ""
   
   createDir(OutputDir)
   
-  # Open trace file
-  let f = open(OutputFile, fmWrite)
+  # Seed random with current time for variety
+  randomize()
+  
+  # Open trace file (append mode)
+  let f = open(OutputFile, fmAppend)
   defer: f.close()
   
+  var runId = now().format("yyyyMMddHHmmss")
+  echo "Run ID: " & runId
+  echo ""
+  
   for i, prompt in Prompts:
-    echo "--- Haiku " & $(i + 1) & " ---"
+    echo "--- Haiku """ & $(i + 1) & """ ---"
     echo "Prompt: " & prompt
     echo ""
     
     let t0 = cpuTime()
     
-    # Simulate generate() call
-    let outputs = @[
-      """{"lines": ["bits of light", "thinking in silicon", "quiet minds"], "wordCount": 5}""",
-      """{"lines": ["metal hands", "coding dreams", "electric heart"], "wordCount": 6}""",
-      """{"lines": ["0 and 1", "flow like water", "logic flows"], "wordCount": 6}"""]
-    
-    let output = outputs[i]
+    # Simulate generate() call with randomization
+    let output = randomHaiku(prompt)
     let elapsed = cpuTime() - t0
     
     # Observable event (JSONL)
     let event = newJObject()
-    event["id"] = %("gen_" & $i)
+    event["id"] = %("gen_" & runId & "_" & $i)
     event["timestamp"] = %(now().format("yyyy-MM-dd'T'HH:mm:ss"))
     event["prompt"] = %(prompt)
     event["output"] = %(output)
@@ -51,7 +65,7 @@ proc main() =
     event["backend"] = %("cuda")
     event["schema"] = %(Schema)
     event["step"] = %(i)
-    event["planId"] = %("plan_test")
+    event["planId"] = %("plan_" & runId)
     
     f.writeLine($event)
     
@@ -62,7 +76,7 @@ proc main() =
     echo ""
   
   echo "=== Complete ==="
-  echo "Trace saved to: " & OutputFile
+  echo "Trace appended to: " & OutputFile
 
 when isMainModule:
   main()
