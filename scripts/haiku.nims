@@ -25,7 +25,7 @@ proc main() =
   # Observable event (this is what gets logged)
   let event = """{
     "id": "gen_001",
-    "timestamp": """ & now().ISO() & """,
+    "timestamp": """ & now().format("yyyy-MM-dd'T'HH:mm:ss") & """,
     "prompt": """ & Prompt & """,
     "output": """ & output & """,
     "elapsed": """ & $elapsed & """,
