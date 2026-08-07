@@ -3,7 +3,7 @@
 ## Usage: LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:$LD_LIBRARY_PATH" nimble haiku -- --use-default-prompt
 ##        LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:$LD_LIBRARY_PATH" nimble haiku -- "write a haiku about X"
 
-import std/[times, os, json]
+import std/[times, os, json, strutils]
 import ../src/config, ../src/bootstrap, ../src/session_manager
 
 const
