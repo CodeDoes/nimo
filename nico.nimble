@@ -5,7 +5,7 @@ description   = "Nim wrapper for rwkv.cpp (RWKV language model inference in C/C+
 license       = "MIT"
 srcDir        = "src"
 binDir        = "build"
-bin           = @["main", "generate", "chat", "test_rwkv_full", "test_state_bake", "bake_state", "nimwave_app", "harness", "quantize", "nimo", "jules"]
+bin           = @["main", "generate", "chat", "test_rwkv_full", "test_state_bake", "bake_state", "nimwave_app", "harness", "quantize", "nimo", "jules", "repl"]
 
 # Dependencies
 requires "nim >= 2.0.0"
@@ -43,6 +43,7 @@ task build_all, "Build all Nim executables into build/":
   exec "nim c -o:build/harness src/harness.nim"
   exec "nim c -o:build/quantize src/quantize.nim"
   exec "nim c -o:build/nimo src/nimo.nim"
+  exec "nim c -o:build/repl src/repl.nim"
 
 task unit, "Run the unit test suite (offline, no model needed)":
   mkdir "build"
@@ -63,6 +64,11 @@ task model_evals, "Run model evals (scored, real model, GPU required)":
   mkdir "build"
   exec "nim c --path:src -o:build/model_evals src/model_evals.nim"
   echo "Built: build/model_evals  — run directly: build/model_evals --scored --trials 1"
+
+task repl, "Run the unified protocol REPL (RFC 2110)":
+  mkdir "build"
+  exec "nim c -o:build/repl src/repl.nim"
+  exec "build/repl"
 
 task build, "Build all executables (README quick start)":
   build_allTask()

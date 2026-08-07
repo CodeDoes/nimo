@@ -72,6 +72,7 @@ ln -s /path/to/nimo/bin/nimo ~/.local/bin/nimo   # (make sure ~/.local/bin is on
 | Report | ✓ | `report.*` |
 | System Instructions | ✓ | `system_instructions.*` |
 | State Baking | ✓ | `nimo bake` |
+| Unified Protocol REPL | ✓ (RFC 2110) | `nimo repl` (send/queue/steer, planner, ws, session, story, cuda, state) |
 | Quant Cache | ✓ | Auto via config |
 | State Cache | ✓ | Auto via config |
 | Context+State Cache | ✓ | `context_state_cache.*` |
@@ -87,6 +88,27 @@ ln -s /path/to/nimo/bin/nimo ~/.local/bin/nimo   # (make sure ~/.local/bin is on
 | Take Note | ✓ | Part of pipeline |
 | FIAAS | ✓ | `fiaas.search` |
 | Memory | ✓ | `memory.*` |
+
+## The REPL (RFC 2110)
+
+`nimo repl` gives you the small deterministic operations the chat composes —
+the two surfaces share the same session / turn machinery.
+
+```
+nimo repl
+nimo> ws new lighthouse-novel
+nimo> session new
+nimo> planner "a story about a lighthouse keeper"
+nimo> send "Open the book. What does the keeper see first?"
+nimo> story chapter validate chapters/ch1.md
+nimo> quit
+```
+
+Every model-touching command (send/steer, story write, wiki edit) loads the
+model once via the same `bootstrapSession` seam the harness uses and runs each
+turn through the harness's own `runHarnessTurn` — there is no second backend
+path. Offline commands (ws/planner/session/story-validate/cuda status) need no
+GPU.
 
 ## Architecture
 

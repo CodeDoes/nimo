@@ -37,6 +37,8 @@ The future is bright.
 - [x] State cache corruption self-heals (NaN guard re-bakes); capped at 512 MB (was: corrupt across runs, clear manually)
 - [ ] `nimo run` uses stub generator
 - [x] nimo dispatcher now preserves quoted args (was: shell-split `--prompt "Say OK."` into `Say`+`OK.`)
+- [x] Unified Protocol REPL (RFC 2110): `nimo repl` = send/queue/steer, planner, ws, session, story chapter/wiki, cuda, state — same bootstrap + runHarnessTurn seam as chat
+- [ ] Chat `run_pipeline` -> route through the shared protocol registry (RFC 2110 follow-up)
 - [ ] CLI `--` separator broken in `nimble run` (nimble-side forwarding; separate from the dispatcher fix)
 
 ## Commands

@@ -339,6 +339,7 @@ Commands:
   new          Create session from goal
   run          Execute a plan
   story        Story pipeline
+  repl         Unified protocol REPL (RFC 2110)
   unit         Run the unit test suite
   doctor       Check environment health
   eval         (alias) Run the unit test suite
@@ -351,6 +352,7 @@ Usage:
   nimo chat --backend cuda <model>
   nimo workspace create <name>
   nimo story generate <premise> --workspace <name>
+  nimo repl
   nimo unit
 """
     quit(0)
@@ -375,6 +377,7 @@ Commands:
   new          Create session from goal
   run          Execute a plan
   story        Story pipeline
+  repl         Unified protocol REPL (RFC 2110)
   unit         Run the unit test suite
   doctor       Check environment health
   eval         (alias) Run the unit test suite
@@ -387,6 +390,7 @@ Usage:
   nimo chat --backend cuda <model>
   nimo workspace create <name>
   nimo story generate <premise> --workspace <name>
+  nimo repl
   nimo unit
 """
     quit(0)
@@ -422,6 +426,10 @@ Usage:
     quit(cmdWorkspace(rest))
   of "story":
     quit(cmdStory(rest))
+  of "repl":
+    let binary = baseDir / "repl"
+    var cmdLine = joinQuoted(binary, rest)
+    if execCmd(cmdLine) != 0: quit(1)
   of "unit", "eval":
     let binary = baseDir / "unit"
     if fileExists(binary):
