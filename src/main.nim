@@ -18,7 +18,7 @@ proc main() =
     return
 
   printInfo &"Loading model from {modelPath}..."
-  let model = initRwkvModel(modelPath, nThreads = DefaultThreads, nGpuLayers = DefaultGpuLayers)
+  let model = initRwkvModel(modelPath, nThreads = uint32(DefaultThreads), nGpuLayers = 0)
   printSuccess &"Vocab size: {model.nVocab}"
   printInfo      &"Embed size: {model.nEmbed}"
   printInfo      &"Layer count: {model.nLayer}"

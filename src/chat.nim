@@ -3,7 +3,7 @@
 
 import std/[os, strutils, strformat, terminal, options]
 import cli, ./session_manager, ./config, ./tokenizer, ./rwkv, ./logger,
-       ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend,
+       ./rwkv/backend/cuda/cuda_backend,
        ./rwkv/backend/vulkan/vulkan_backend
 
 type

@@ -3,7 +3,7 @@
 
 import std/[os, strutils, strformat, times, options]
 import cli, ./session_manager, ./config, ./tokenizer, ./rwkv, ./sampling, ./logger, ./macros,
-       ./rwkv/model/header, ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend,
+       ./rwkv/model/header, ./rwkv/backend/cuda/cuda_backend,
        ./rwkv/backend/vulkan/vulkan_backend, ./lock
 
 type

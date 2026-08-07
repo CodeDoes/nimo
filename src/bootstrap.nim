@@ -14,7 +14,6 @@ import ./lock
 when not defined(harnessOffline):
   import std/[strutils]
   import ./rwkv, ./gpu, ./rwkv/quant/cache,
-         ./rwkv/backend/cpu/cpu_backend,
          ./rwkv/backend/cuda/cuda_backend,
          ./rwkv/backend/vulkan/vulkan_backend
 
@@ -132,14 +131,6 @@ when not defined(harnessOffline):
       if err.len > 0:
         result.ok = false
         result.lines.add "CUDA load check failed: " & err
-        return
-    of bkCpu:
-      layers = 0
-      result.lines.add "[gpu] CPU backend: gpuLayers=0."
-      let err = checkCpuLoad(backend, modelToLoad, "default")
-      if err.len > 0:
-        result.ok = false
-        result.lines.add "CPU load check failed: " & err
         return
     of bkVulkan:
       result.lines.add "[gpu] Vulkan backend: using " & $layers & " GPU layer(s)."

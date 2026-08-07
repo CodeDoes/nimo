@@ -36,23 +36,21 @@ const
 # "backend" chooses the rwkv.cpp runtime lib; "lib" overrides the lib path itself.
 type
   RwkvBackendKind* = enum
-    bkCpu = "cpu"
     bkCuda = "cuda"
     bkVulkan = "vulkan"
 
 proc parseBackendKind*(s: string): RwkvBackendKind =
-  ## Parses "cpu"/"cuda"/"vulkan" (also accepts "nvidia"). Raises ValueError otherwise.
+  ## Parses "cuda"/"vulkan" (also accepts "nvidia"/"amd"). Raises ValueError otherwise.
   case s.toLowerAscii()
-  of "cpu": bkCpu
   of "cuda", "nvidia": bkCuda
   of "vulkan", "amd": bkVulkan
-  else: raise newException(ValueError, "unknown backend '" & s & "' (expected cpu|cuda|vulkan)")
+  else: raise newException(ValueError, "unknown backend '" & s & "' (expected cuda|vulkan)")
 
 type
   NimoConfig* = object
     modelPath*: string
     vocabPath*: string
-    gpuLayers*: int      # <0: auto (model nLayer clamped by free VRAM); 0: CPU; >0: explicit cap
+    gpuLayers*: int      # <0: auto (model nLayer clamped by free VRAM); 0: no offload; >0: explicit cap
     backend*: RwkvBackendKind      # runtime backend: cuda | vulkan
     backendSet*: bool              # true when backend came from config/env (beats rwkv default)
     libPath*: string               # explicit librwkv.so path (overrides per-backend default)

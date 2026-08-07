@@ -1,5 +1,5 @@
 models/
-rwkv.cpp/*
+rwkv.cpp/
 build/
 !scripts/build/
 logs/

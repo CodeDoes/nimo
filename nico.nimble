@@ -62,7 +62,10 @@ task model_evals, "Run model evals (scored, real model, GPU required)":
     build_libsTask()
   mkdir "build"
   exec "nim c --path:src -o:build/model_evals src/model_evals.nim"
-  exec "./build/model_evals" @args
+  echo "Built: build/model_evals  — run directly: build/model_evals --scored --trials 1"
+
+task build, "Build all executables (README quick start)":
+  build_allTask()
 
 task harness, "Run the harness (interactive agent)":
   if not fileExists("rwkv.cpp/librwkv_cuda.so"):

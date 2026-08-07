@@ -4,13 +4,13 @@
 ## This is the BACKEND DISPATCHER (RFC 7500): it binds the rwkv.cpp C API at
 ## runtime to whichever backend librwkv.so is selected, in priority order
 ##   config file > runtime flags > rwkv (compile-time default) > backend modules.
-## Backend providers live in rwkv_cpu / rwkv_cuda / rwkv_vulkan; each only
+## Backend providers live in rwkv_cuda / rwkv_vulkan; each only
 ## knows its own lib. The single controlled switch point is selectBackend() +
 ## bindBackend(path) — after that, every call below goes through the bound lib.
 
 import std/[macros, strformat, dynlib]
 import ./config
-import ./rwkv/backend/types, ./rwkv/backend/cpu/cpu_backend, ./rwkv/backend/cuda/cuda_backend, ./rwkv/backend/vulkan/vulkan_backend
+import ./rwkv/backend/types, ./rwkv/backend/cuda/cuda_backend, ./rwkv/backend/vulkan/vulkan_backend
 
 when defined(linux):
   {.passL: "-lstdc++ -fopenmp -Wl,-rpath,/usr/lib/x86_64-linux-gnu -Wl,-rpath,/run/opengl-driver/lib -Wl,-rpath,$ORIGIN/rwkv.cpp -Wl,-rpath,$ORIGIN/rwkv.cpp/ggml/src -Wl,-rpath,rwkv.cpp -Wl,-rpath,rwkv.cpp/ggml/src".}
@@ -91,10 +91,9 @@ var loadedLib*: LibHandle = nil   # keep the bound library alive for the process
 # Backend selection & binding (RFC 7500; single controlled switch point)
 # ---------------------------------------------------------------------------
 proc backendFor*(kind: RwkvBackendKind): RwkvBackend =
-  ## Maps a backend kind to its runtime record. Backend modules (rwkv_cpu /
-  ## rwkv_cuda / rwkv_vulkan) are the LOWEST authority: they only know their lib.
+  ## Maps a backend kind to its runtime record. Backend modules (rwkv_cuda /
+  ## rwkv_vulkan) are the LOWEST authority: they only know their lib.
   case kind
-  of bkCpu:    cpuBackend()
   of bkCuda:   cudaBackend()
   of bkVulkan: vulkanBackend()
 
