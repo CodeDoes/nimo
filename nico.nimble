@@ -106,7 +106,7 @@ task haiku, "Run haiku demo (observable workflow with real model)":
     build_libsTask()
   mkdir "build"
   exec "nim c --path:src -o:build/haiku demos/haiku.nim"
-  # Extract user args after -- (skip nimble internals)
+  # Pass through all args after --
   var userArgs = ""
   var foundSep = false
   for i in 1 .. paramCount():

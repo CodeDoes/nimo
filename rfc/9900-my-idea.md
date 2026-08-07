@@ -2,13 +2,29 @@
 ```
 /
   generate format(
-    ("Current Time", current_time())
+    ("Current Time", get_current_time())
     ("Recent Sessions",recall "recent sessions")
     ("User Profile",recall "user profile")
     ("Instructions", "A simple greeting")
   )
-recall
->
+
+
++/current_time=get_current_time()
+|09:00AM
+
++/recent_sessions = recall "recent sessions"
+|select last 5 * from sessions
+
++/user_profile = recall "user profile"
+|select * from user_profile
+
++/generate format(
+    ("Current Time", current_time)
+    ("Recent Sessions",recent_sessions)
+    ("User Profile",user_profile)
+    ("Instructions", "A simple greeting")
+  )
++>
   Recent Sessions:
   - ...
   - ...
@@ -23,30 +39,4 @@ recall
   A simple greeting
 |
   Hello there! Last night was wild wasn't it!
-```
-
-## Recent Sessions
-```
-/recall "recent sessions"
-/enter_subagent "memory agent"
-/generate "I want to recall recent sessions"
->I want to recall recent sessions
-|select last 5 * from sessions
-/exit_subagent "memory agent"
-```
-
-## User Profile
-```
-/recall "user profile"
-/enter_subagent "memory agent"
->recall user profile
-|select * from user_profile
-/exit_subagent "memory agent"
-```
-
-## Current Time
-Built in function.
-```
-/current_time
-|09:00AM
 ```
