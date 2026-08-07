@@ -1,65 +1,105 @@
-# Nimo Workflow — The User Journey
+# Workflow
 
-## What is nimo?
+A workflow is a **saved plan** — a sequential Nim script that uses inference to perform a function.
 
-Nimo is a **deterministic harness** for a non-deterministic model. The coherence lives in the program, not the model.
+## What It Is
 
-## Core Workflows
+```nim
+# A workflow is just a plan you save and reuse
+let outline = structured StoryOutline "create a story for: " & premise
+save "outline.json", outline
 
-### 1. Chat (Conversational)
+for char in outline.characters:
+    let wiki = structured CharacterWiki "wiki for: " & char
+    save "wikis/" & char & ".json", wiki
 ```
-User → "Tell me about AI" → Model responds → User follows up
+
+## Properties
+
+| Property | What it means |
+|----------|---------------|
+| **Sequential** | Steps run in order |
+| **Uses inference** | Calls `structured()` to generate content |
+| **Easy to monitor** | Each step shows ▶ or ✔ |
+| **Easy to edit** | Plain Nim script, editable in any editor |
+| **Easy to write** | Same DSL as interactive plans |
+
+## Lifecycle
+
 ```
-- Bare conversational loop
-- No plans, no tools, just generate
-- Good for: quick questions, brainstorming, exploration
-
-### 2. Plan & Execute (Goal-Directed)
+1. Write    → /edit or create from template
+2. Monitor  → /run shows progress step-by-step
+3. Edit     → Fix issues, re-run
+4. Save     → Store for reuse
+5. Run      → Execute anytime
 ```
-User → "Write a story about X" → Plan produced → User reviews → User runs → Artifacts created
+
+## Examples
+
+### Simple Workflow
+```nim
+# docs/examples/01-simple-generate.md
+let haiku = structured Haiku "write a haiku about AI"
+save "haiku.md", haiku
 ```
-- Describe a goal
-- See the plan (Nim script)
-- Edit if needed
-- Execute
-- Get structured output
 
-### 3. Story Pipeline (Creative)
+### Story Workflow
+```nim
+# docs/examples/06-story-pipeline.md
+let outline = structured StoryOutline "..."
+save "outline.json", outline
+
+for char in outline.characters:
+    let wiki = structured CharacterWiki "..." & char
+    save "wikis/" & char & ".json", wiki
 ```
-User → "Write a 3-chapter story" → Outline → Characters → Wikis → Chapters → Validation
+
+### Data Pipeline Workflow
+```nim
+let raw = load "input.json"
+let transformed = structured Transform "..." & raw
+save "output.json", transformed
 ```
-- Multi-phase generation
-- Each phase produces artifacts
-- Validation at each step
-- Self-correcting
 
-### 4. Memory & Recall (Contextual)
+## Why "Workflow" and Not "Plan"
+
+- **Plan** = produced by `/plan "goal"` (one-off)
+- **Workflow** = saved plan you reuse (persistent)
+
+Same DSL, different purpose.
+
+## Storage
+
 ```
-User → "Remember that I like X" → Stored → Later → "Based on what I told you..."
+.nimo/workflows/
+  story.md        # Story generation workflow
+  haiku.md        # Haiku generation workflow
+  transform.md    # Data transformation workflow
 ```
-- Cross-turn context
-- User preferences
-- Workspace state
 
-### 5. One-shot Generation (Batch)
+Each workflow is a `.md` file with the Nim script.
+
+## Run a Workflow
+
 ```
-User → "Generate Y from X" → Output → Done
+nimo> /run .nimo/workflows/story.md
+▶ produce plan from file
+▶ run
+▶ generate
+  ...
 ```
-- No conversation, just transform
-- Good for: data processing, formatting, conversion
 
-## The Unifying Thread
+Or just edit and run:
 
-All workflows share:
-- **One model backend** (CUDA/Vulkan)
-- **One session** (message tree)
-- **One state cache** (baked context)
-- **One plan executor** (engine.run)
+```
+nimo> /edit .nimo/workflows/story.md
+# ... modify ...
+nimo> /run
+▶ run
+▶ generate
+  ...
+```
 
-## The Question
+## Key Insight
 
-What's the **primary** workflow? What do 80% of users do?
-
-My guess: **Chat + Plan & Execute**. The rest are specialized cases.
-
-What do you think?
+A workflow is just a **reusable script**. No magic. No visual editor. Just Nim code that calls the model.

@@ -1,40 +1,93 @@
-# NIMO Engine (plan/engine intent)
+# The DSL Is the Engine
 
-The NIMO engine is the core framework that manages and executes complex, multi-step tasks. It operates on a robust, stateful pipeline that guarantees tasks are thoughtfully planned, sequentially executed, and accurately reported.
+## Core Insight
 
-## Core Flow
+The nimo DSL **is** nimo-chat's engine. Not a wrapper, not a plugin — the foundation.
 
-The engine operates via a four-stage pipeline:
+```
+┌─────────────────────────────────────────┐
+│          nimo-chat (interactive)        │
+│  ┌───────────────────────────────────┐  │
+│  │   DSL Engine (the loop)           │  │
+│  │  structured() → for → if → save   │  │
+│  │                                   │  │
+│  │  + custom code:                   │  │
+│  │    - readline loop                │  │
+│  │    - steer/queue/inbox            │  │
+│  │    - _ convention                 │  │
+│  │    - /plan command                │  │
+│  └───────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+```
 
-1. **Intent**: The engine captures the overarching goal or specific user request. This defines what needs to be achieved.
-2. **Plan**: Based on the intent, the engine breaks the task down into discrete, manageable steps.
-3. **Execute**: The engine sequentially processes each planned step.
-4. **Report**: After execution, the engine compiles the results and presents a summary or the final output.
+## What This Means
 
-## Step Types
+| Surface | How it works |
+|---------|--------------|
+| **Interactive chat** | DSL loop + readline + steer/queue |
+| **Plan execution** | DSL loop (autonomous) |
+| **Workflow** | DSL loop (from file) |
+| **One-shot** | DSL loop (single step) |
 
-During the `Execute` phase, the engine can utilize various step types to accomplish its goals. These steps represent the foundational actions the model can take:
+Same engine, different driver.
 
-- **Extract**: Pull specific facts, data, or context from the provided text or workspace.
-- **Summarize**: Condense large amounts of information into a concise format.
-- **Generate**: Create new content (like prose, code, or ideas) based on the current context and prompt.
-- **Validate**: Check the generated output against specific rules, facts, or instructions to ensure accuracy.
-- **Write**: Save the final, validated output to the file system (e.g., writing a story chapter to disk).
+## The Loop
 
-## Session Persistence (JSONL)
+```nim
+proc runDSL(script: string): void =
+  for step in compile(script):
+    case step.kind
+    of structured:
+      let output = generate(step.prompt)
+      bind(step.variable, parse(step.schema, output))
+    of for:
+      for item in step.items:
+        runDSL(step.body)  # recursive!
+    of if:
+      if check(step.condition):
+        runDSL(step.then)
+      else:
+        runDSL(step.else)
+    of save:
+      writeFile(step.path, getVariable(step.variable))
+    of say:
+      echo step.text
+```
 
-To maintain state and allow for long-running or interrupted tasks, the engine persists sessions using a **JSONL (JSON Lines)** format.
+**Chat adds:**
+- Readline loop (get user input)
+- Steer/queue inbox (inject during execution)
+- `_` convention (last result)
+- `/plan` command (produce script from goal)
 
-- **Append-only log**: Each turn (user input, model response, tool call, or internal state change) is appended as a new JSON object on a new line in the session file.
-- **Message-tree format**: This structured logging captures the complete history and context, ensuring that the engine has a perfect record of the ongoing task.
-- **Location**: These files are typically stored in the workspace's `sessions/` directory.
+## Why This Matters
 
-## Resuming a Session
+1. **One codebase** — no separate "chat engine" and "plan engine"
+2. **Debuggable** — step through the DSL like any script
+3. **Extensible** — add new step types, extend the loop
+4. **Transparent** — what you see is what runs
 
-Because every action is logged to the JSONL file, resuming a session is straightforward:
+## The Custom Layer
 
-1. The engine reads the JSONL file line by line.
-2. It rebuilds the context window and the internal state up to the exact point the session was paused or interrupted.
-3. It determines the next required action based on the reconstructed state (e.g., executing the next step in the `Plan` or asking the user for input).
+The "custom code" is thin:
 
-This allows you to stop a long-running pipeline and seamlessly continue it later without losing progress or context.
+```nim
+# Chat driver (custom)
+while true:
+  let input = readLine()
+  if input.startsWith("/"):
+    handleCommand(input)
+  else:
+    let plan = producePlan(input)
+    runDSL(plan)  # same engine!
+```
+
+The engine doesn't know it's being driven by chat. It just runs steps.
+
+## Implications
+
+- **Workflows ARE chat** — just saved to file
+- **Plans ARE chat** — just produced from `/plan`
+- **Chat IS workflows** — just interactive
+
+No special cases. One loop.
