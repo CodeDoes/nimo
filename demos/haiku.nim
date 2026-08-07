@@ -2,8 +2,8 @@
 ## Demonstrates the observable workflow with real inference.
 ## Run with: LD_LIBRARY_PATH="rwkv.cpp:rwkv.cpp/ggml/src:$LD_LIBRARY_PATH" nim c -o:build/haiku demos/haiku.nim && ./build/haiku
 
-import std/[times, os, json, random]
-import ../src/config, ../src/bootstrap, ../src/session_manager, ../src/engine, ../src/program
+import std/[times, os, json]
+import ../src/config, ../src/bootstrap, ../src/session_manager
 
 const
   Prompts = @["write a haiku about AI", "write a haiku about robots", "write a haiku about code"]
@@ -15,7 +15,10 @@ proc main() =
   echo "=== Haiku Generator (Real Model) ==="
   echo ""
   
-  createDir(OutputDir)
+  # Create output directory
+  if not dirExists(OutputDir):
+    createDir(OutputDir)
+    echo "Created: " & OutputDir
   
   # Load config
   let cfg = loadConfig()
@@ -81,7 +84,7 @@ proc main() =
     echo ""
   
   echo "=== Complete ==="
-  echo "Trace appended to: " & OutputFile
+  echo "Trace saved to: " & OutputFile
 
 when isMainModule:
   main()
