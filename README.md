@@ -44,18 +44,27 @@ nimble build
 
 ### Using `nimo` without `./bin/` prefix
 
-Add to your shell profile:
+The quick start uses `./bin/nimo` — that works from inside the repo. To use
+plain `nimo` from any directory, pick one:
+
 ```bash
+# Option A: add this repo's bin/ to your PATH (add to ~/.bashrc / ~/.zshrc)
 export PATH="$PATH:/path/to/nimo/bin"
+
+# Option B: symlink into an existing bin dir that's already on PATH
+ln -s /path/to/nimo/bin/nimo ~/.local/bin/nimo   # (make sure ~/.local/bin is on PATH)
 ```
+
+`bin/nimo` is a wrapper that finds the repo, sets the library path, and runs
+`build/nimo`. Verify with: `nimo --help`.
 
 ## Features
 
 | Feature | Status | Command |
 |---------|--------|---------|
 | Quantize | ✓ | `nimo quantize` |
-| Generate (CUDA/CPU/Vulkan) | ✓ | `nimo generate --backend cuda` |
-| Evals | ✓ (34/34) | `nimo unit` |
+| Generate (CUDA/Vulkan) | ✓ | `nimo generate --backend cuda` |
+| Evals | ✓ (103/103) | `nimo unit` |
 | Workspace | ✓ | `nimo workspace create/use/list` |
 | Sessions | ✓ | Built into harness |
 | Session Branching | ✓ | `session_branch.*` |
@@ -92,8 +101,7 @@ Harness (nimo)
     └── Workload Config (chat/story)
     ↓
 Model (RWKV-7)
-    ├── CUDA Backend (~176ms/token)
-    ├── CPU Fallback
+    ├── CUDA Backend (~105ms/token)
     └── Vulkan Backend
 ```
 
@@ -142,7 +150,7 @@ nimo harness
 ./scripts/e2e_demo.sh
 
 # Run evals
-nimo unit  # 34/34 passed
+nimo unit  # 103/103 passed
 
 # Test CUDA
 nimo generate --backend cuda --model models/*.q4k.bin --prompt "Test" --max-length 10

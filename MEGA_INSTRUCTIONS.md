@@ -35,7 +35,7 @@ _Empowerment document for Agnes — your operational north star._
 
 | Constraint | Rule |
 |------------|------|
-| Backend | CUDA preferred. CPU fallback only when explicitly allowed by config. |
+| Backend | CUDA preferred (GPU-only; CUDA or Vulkan). No CPU backend. |
 | Model | `models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin` (Q4_K) |
 | GPU | NVIDIA GeForce RTX 2050 (4 GB VRAM, sm_86) |
 | Build | `nimble build_all` or `nimble run <bin>` |

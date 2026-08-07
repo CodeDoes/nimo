@@ -10,7 +10,7 @@ import ./gpu
 proc cmdPlanner(rest: seq[string]): int =
   ## `nimo planner "<goal>"` — compile a natural-language goal into a plan
   ## and show the steps. Deterministic, no model needed.
-  if rest.len == 0:
+  if rest.len == 0 or rest[0] in ["--help", "-h", "help"]:
     echo """Usage: nimo planner "<goal>"
 
 Shows the plan the orchestrator would create from your goal.
@@ -86,7 +86,7 @@ proc resolveWorkspace*(nameOrPath: string = ""): Workspace =
   return ws
 
 proc cmdWorkspace(rest: seq[string]): int =
-  if rest.len == 0:
+  if rest.len == 0 or rest[0] in ["--help", "-h", "help"]:
     echo """Usage: nimo workspace <command> [args]
 
 Commands:
@@ -154,7 +154,7 @@ Commands:
   return 0
 
 proc cmdStory(rest: seq[string]): int =
-  if rest.len == 0:
+  if rest.len == 0 or rest[0] in ["--help", "-h", "help"]:
     echo """Usage: nimo story <command> [args]
 
 Commands:
@@ -235,7 +235,7 @@ Commands:
 
 proc cmdRun(rest: seq[string]): int =
   ## `nimo run <plan_path>` — execute a plan through the engine
-  if rest.len == 0:
+  if rest.len == 0 or rest[0] in ["--help", "-h", "help"]:
     echo """Usage: nimo run <plan_path> [--resume]
 
 Execute a plan artifact through the engine.
@@ -272,7 +272,7 @@ Example:
 
 proc cmdNew(rest: seq[string]): int =
   ## `nimo new <goal>` — open a session, compile goal, run plan
-  if rest.len == 0:
+  if rest.len == 0 or rest[0] in ["--help", "-h", "help"]:
     echo """Usage: nimo new "<goal>"
 
 Open a session and run the plan for your goal.

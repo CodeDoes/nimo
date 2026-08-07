@@ -32,7 +32,7 @@ devenv shell nimo-test
 # L0 only
 devenv shell nimo-unit
 
-# L2: real-model smoke (GPU/CPU)
+# L2: real-model smoke (GPU)
 devenv shell scripts/smoke_test.sh
 ```
 
