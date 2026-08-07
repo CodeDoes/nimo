@@ -21,7 +21,7 @@ proc main() =
   defer: f.close()
   
   for i, prompt in Prompts:
-    echo "--- Haiku """ & $(i + 1) & """ ---"
+    echo "--- Haiku " & $(i + 1) & " ---"
     echo "Prompt: " & prompt
     echo ""
     
