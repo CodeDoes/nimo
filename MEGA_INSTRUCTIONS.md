@@ -38,8 +38,8 @@ _Empowerment document for Agnes — your operational north star._
 | Backend | CUDA preferred. CPU fallback only when explicitly allowed by config. |
 | Model | `models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin` (Q4_K) |
 | GPU | NVIDIA GeForce RTX 2050 (4 GB VRAM, sm_86) |
-| Build | `nimble build` or `nim c --path:src -o:build/<bin> src/<bin>.nim` |
-| Tests | `./build/unit` — must stay green |
+| Build | `nimble build_all` or `nimble run <bin>` |
+| Tests | `devenv shell unit` — must stay green |
 | Commits | After every meaningful change. Small, focused, descriptive. |
 
 ### State baking
@@ -49,7 +49,7 @@ _Empowerment document for Agnes — your operational north star._
 
 ### CLI conventions
 - `nimble run nimo <subcommand>` — not `nimble run nimo -- <subcommand>` (the `--` separator is broken).
-- `nimo` is not in PATH by default — users run `./build/nimo` or `nimble run nimo`.
+- `nimo` is not in PATH by default — users run `nimble run nimo`.
 
 ---
 
@@ -63,7 +63,7 @@ _Empowerment document for Agnes — your operational north star._
 
 ### For the developer
 - **RFC-first.** Read the relevant RFC before changing behavior.
-- **Tests enable fearless change.** If you touch logic, run `./build/unit`.
+- **Tests enable fearless change.** If you touch logic, run `devenv shell unit`.
 - **Commit often.** Small, focused commits. The test suite is the safety net.
 - **Code should be elegant.** If something is repeated, abstract it. If a file does too much, split it.
 
@@ -138,6 +138,6 @@ These are the things you should be working on **right now** unless told otherwis
    - High: `nimo` not in PATH
    - Medium: `--` CLI separator broken
    - Medium: `harness` buried in README
-4. **Keep `./build/unit` green** — every change must pass 87/87 tests.
+4. **Keep `devenv shell unit` green** — every change must pass 87/87 tests.
 
 When these are done, come back and ask what's next.

@@ -27,35 +27,35 @@ echo ""
 # Step 2: Generate with CUDA
 echo "STEP 2: Generate with CUDA"
 echo "---------------------------"
-./build/generate --model models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin --device gpu-0 --prompt "System: You are" --max-length 10 --backend cuda 2>&1 | grep -E "(backend|device|Generated|CUDA)" || true
+nimble run generate --model models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin --device gpu-0 --prompt "System: You are" --max-length 10 --backend cuda 2>&1 | grep -E "(backend|device|Generated|CUDA)" || true
 echo "  PASS: CUDA generation working"
 echo ""
 
 # Step 3: Run Unit Tests
 echo "STEP 3: Run Unit Tests"
 echo "----------------------"
-./build/nimo unit 2>&1 | tail -3
+devenv shell nimo unit 2>&1 | tail -3
 echo "  PASS: All unit tests passing"
 echo ""
 
 # Step 4: Create Workspace
 echo "STEP 4: Workspace Management"
 echo "-----------------------------"
-./build/nimo workspace create e2e_demo 2>&1 | grep -E "(Creating|Created)" || true
-./build/nimo workspace list 2>&1 | grep "e2e_demo" && echo "  PASS: Workspace created"
+devenv shell nimo workspace create e2e_demo 2>&1 | grep -E "(Creating|Created)" || true
+devenv shell nimo workspace list 2>&1 | grep "e2e_demo" && echo "  PASS: Workspace created"
 echo ""
 
 # Step 5: Test Chat
 echo "STEP 5: Chat with CUDA"
 echo "----------------------"
-echo "/quit" | ./build/chat --backend cuda models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin 2>&1 | grep -E "(backend|User|Bot)" | head -5 || true
+echo "/quit" | nimble run chat --backend cuda models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin 2>&1 | grep -E "(backend|User|Bot)" | head -5 || true
 echo "  PASS: Chat working"
 echo ""
 
 # Step 6: Test Story Pipeline
 echo "STEP 6: Story Pipeline"
 echo "----------------------"
-./build/nimo story generate "A cyberpunk story about a robot ninja named Max" --workspace e2e_demo 2>&1 | grep -E "(pipeline|Generating)" || true
+devenv shell nimo story generate "A cyberpunk story about a robot ninja named Max" --workspace e2e_demo 2>&1 | grep -E "(pipeline|Generating)" || true
 echo "  PASS: Story pipeline accessible"
 echo ""
 

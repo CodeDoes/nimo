@@ -53,7 +53,7 @@ type
     modelPath*: string
     vocabPath*: string
     gpuLayers*: int      # <0: auto (model nLayer clamped by free VRAM); 0: CPU; >0: explicit cap
-    backend*: RwkvBackendKind      # runtime backend: cpu | cuda | vulkan
+    backend*: RwkvBackendKind      # runtime backend: cuda | vulkan
     backendSet*: bool              # true when backend came from config/env (beats rwkv default)
     libPath*: string               # explicit librwkv.so path (overrides per-backend default)
     threads*: int

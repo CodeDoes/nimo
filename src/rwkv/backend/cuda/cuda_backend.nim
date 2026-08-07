@@ -27,7 +27,7 @@ proc checkCudaLoad*(backend: RwkvBackend, modelPath: string,
   # Check CUDA driver
   let gpu = gpuProbe()
   if gpu.status == gpuUnknown:
-    return "No NVIDIA CUDA driver found. Install NVIDIA drivers or use --backend cpu"
+    return "No NVIDIA CUDA driver found. Install NVIDIA drivers."
   if gpu.status == gpuUnusable:
     return &"GPU unusable: {gpu.detail}"
 
@@ -42,7 +42,7 @@ proc checkCudaLoad*(backend: RwkvBackend, modelPath: string,
     return &"Insufficient VRAM: need at least {CudaMinVramMiB} MiB, found {freeVram} MiB"
   if modelMiB > freeVram:
     return &"Model too large for VRAM: {modelMiB} MiB > {freeVram} MiB free. " &
-           "Try a smaller quant (Q4_K -> Q4_0) or use --backend cpu"
+           "Try a smaller quant (Q4_K -> Q4_0)."
 
   # Validate requested layers fit
   if requestedLayers > int(h.nLayer):

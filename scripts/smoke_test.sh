@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
-# nimo backend smoke test: NVIDIA (CUDA) or CPU fallback.
-# Selects each backend through the SINGLE controlled path: rwkv.selectBackend(cfg)
+# nimo backend smoke test: NVIDIA (CUDA) only.
+# Selects the backend through the SINGLE controlled path: rwkv.selectBackend(cfg)
 # fed by an explicit --backend flag (same convention as generate.nim) — no env
 # precedence chain.
 # Uses the harness single-shot --smoke mode (no agent loop, no system prompt):
 # load model once, generate a short reply, report PASS/FAIL + wall time.
 # No pipes: harness output goes to a temp file, checked with bash patterns.
-#
-# Priority: CUDA if available, otherwise CPU.
 #
 # Usage:   devenv shell scripts/smoke_test.sh
 set -u
@@ -15,7 +13,7 @@ cd "$(dirname "$0")/.."
 OUT=/tmp/nimo_smoke_out.txt
 SMOKE_PROMPT="${SMOKE_PROMPT:-Say OK.}"
 SMOKE_TOKENS="${SMOKE_TOKENS:-16}"
-HARNESS="${HARNESS:-./build/harness}"
+HARNESS="${HARNESS:-$(nimble run harness --dry-run 2>/dev/null | head -1)}"
 
 echo "nimo backend smoke test  $(date -Iseconds)"
 echo "prompt=\"$SMOKE_PROMPT\"  tokencap=$SMOKE_TOKENS  harness=$HARNESS"
@@ -35,6 +33,7 @@ run_backend() {  # name backend_kind
   else
     printf "  %-8s FAIL  %ss\n" "$name" "$secs"
     [[ -f "$OUT" ]] && printf "      tail: %s\n" "$(tail -n 3 "$OUT")"
+    exit 1
   fi
 }
 
@@ -47,8 +46,9 @@ if [[ $have_nvidia -eq 1 ]]; then
   echo "== NVIDIA (CUDA) =="
   run_backend nvidia cuda
 else
-  echo "== CPU (fallback) =="
-  run_backend cpu cpu
+  echo "FAIL: no NVIDIA GPU detected"
+  echo "CUDA backend requires a working NVIDIA GPU."
+  exit 1
 fi
 
 echo "----------------------------------------------"

@@ -17,8 +17,8 @@
 ## (like rwkv.cpp's own tiny tests) rather than tokenizing text — the real
 ## bakeContext -> tokenizer path is exercised by the online smoke/evals.
 ##
-## Build (devenv): nim c -o:build/test_state_bake src/test_state_bake.nim
-## Run:            LD_LIBRARY_PATH=... ./build/test_state_bake
+## Build:       nimble state_bake_test
+## Run:        LD_LIBRARY_PATH=... ./test_state_bake
 
 import std/[os, strformat, strutils, math, random, sequtils]
 import ./rwkv, ./macros, ./state_cache

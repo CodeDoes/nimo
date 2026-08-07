@@ -75,7 +75,7 @@ when not defined(harnessOffline):
     if not acquireModelLock():
       result.ok = false
       result.lines.add "[gpu] ERROR: Another process is loading the model. Waiting..."
-      result.lines.add "Try again in a moment, or run: pkill -f 'nimo|build/harness'"
+      result.lines.add "Try again in a moment, or run: pkill -f 'nimo|harness'"
       return
     
     var s = newSession(cwd)
@@ -90,7 +90,7 @@ when not defined(harnessOffline):
       result.ok = false
       result.lines.add "Backend error: " & e.msg
       result.lines.add "To run a different backend, set backend/lib in nimo.json or:"
-      result.lines.add "  --backend cpu|cuda|vulkan --lib <librwkv.so path>"
+      result.lines.add "  --backend cuda|vulkan --lib <librwkv.so path>"
       return
     result.lines.add "[backend] " & backend.name & "  lib=" & backend.libPath
 
@@ -116,11 +116,8 @@ when not defined(harnessOffline):
       if gpuDecision.decision == gdBlocked:
         result.ok = false
         result.lines.add "Cannot start: the GPU is unusable."
-        result.lines.add "Options:"
-        result.lines.add "  1. Fix the GPU (see the [gpu] message above), or"
-        result.lines.add "  2. Use a non-CUDA backend:"
-        result.lines.add "       nimo.json -> { \"backend\": \"cpu\" }"
-        result.lines.add "       or       -> --backend cpu"
+        result.lines.add "Fix the GPU and retry:"
+        result.lines.add "  reboot, or: sudo modprobe -r nvidia_uvm nvidia_drm nvidia_modeset nvidia && sudo modprobe nvidia"
         return
       # Derive offload from the model's own shape (header nLayer), clamped to
       # free VRAM — there is no hardcoded default layer count.
@@ -166,8 +163,7 @@ when not defined(harnessOffline):
       if upper.contains("CUDA") or upper.contains("GPU") or upper.contains("DEVICE"):
         result.lines.add "This looks like a GPU/CUDA init failure. The driver may report \"GPU requires reset\":"
         result.lines.add "  reboot, or: sudo modprobe -r nvidia_uvm nvidia_drm nvidia_modeset nvidia && sudo modprobe nvidia"
-        result.lines.add "Then retry. Or use a different backend:"
-        result.lines.add "  --backend cpu"
+        result.lines.add "Then retry."
       return
 
     result.ok = true

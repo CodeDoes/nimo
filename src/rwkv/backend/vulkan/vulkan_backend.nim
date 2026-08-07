@@ -27,7 +27,7 @@ proc checkVulkanLoad*(backend: RwkvBackend, modelPath: string,
   # Real Vulkan memory query requires vkGetPhysicalDeviceMemoryProperties
   if modelMiB > 8192:  # >8GB is likely too large for most integrated GPUs
     return &"Model is {modelMiB} MiB — likely too large for Vulkan on integrated graphics. " &
-           "Try Q4_0 quant or use --backend cpu"
+           "Try Q4_0 quant."
 
   if requestedLayers > int(h.nLayer):
     return &"Requested layers ({requestedLayers}) exceeds model layers ({h.nLayer})"

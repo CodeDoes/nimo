@@ -459,7 +459,7 @@ proc main() =
         cfg.backend = parseBackendKind(paramStr(i))
         cfg.backendSet = true
       except ValueError:
-        echo "Error: unknown backend '" & paramStr(i) & "' (expected cpu|cuda|vulkan)"
+        echo "Error: unknown backend '" & paramStr(i) & "' (expected cuda|vulkan)"
         quit(1)
     elif a == "--model" and i < paramCount():
       inc i; cfg.modelPath = paramStr(i)

@@ -12,7 +12,7 @@
 devenv shell build-all
 ```
 
-This compiles everything into `build/`. The main entry point is `build/nimo`.
+This compiles everything via `nimble build_all`. The main entry point is `nimble run nimo`.
 
 ## 2. Get a model
 
@@ -21,13 +21,13 @@ You need a GGML-format model file. Two common cases:
 **Already have a quantized model** (recommended, e.g. the Q4_K file):
 
 ```bash
-./build/nimo generate --backend cuda --model models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin --prompt "Hello" --max-length 10
+devenv shell nimo generate --backend cuda --model models/rwkv7-g1i-2.9b-20260729-ctx16384-q4k.bin --prompt "Hello" --max-length 10
 ```
 
 **Have a raw FP16 model** — shrink it first:
 
 ```bash
-./build/nimo quantize models/raw-model-f16.bin Q4_K models/model-q4k.bin
+devenv shell nimo quantize models/raw-model-f16.bin Q4_K models/model-q4k.bin
 ```
 
 Quantization turns a ~5.9 GB file into ~2.2 GB (Q4_K), which fits in the 4 GB
@@ -39,20 +39,20 @@ quantized), runs the quantizer, and reports the new size.
 **One-shot generation:**
 
 ```bash
-./build/nimo generate --backend cuda --model models/model-q4k.bin --prompt "Write a haiku about rain" --max-length 40
+devenv shell nimo generate --backend cuda --model models/model-q4k.bin --prompt "Write a haiku about rain" --max-length 40
 ```
 
 **Interactive chat:**
 
 ```bash
-./build/nimo chat --backend cuda models/model-q4k.bin
+devenv shell nimo chat --backend cuda models/model-q4k.bin
 # type /quit to exit, /reset to start over
 ```
 
 **The harness (tool calling):**
 
 ```bash
-./build/nimo harness --backend cuda --model models/model-q4k.bin
+devenv shell nimo harness --backend cuda --model models/model-q4k.bin
 ```
 
 The harness gives the model access to a `run_pipeline` tool. Ask it to "write a
@@ -63,9 +63,9 @@ poem about roses" and watch it call the tool, get the result, and answer you.
 Workspaces keep projects separate. Create one, then check its status:
 
 ```bash
-./build/nimo workspace create my_story
-./build/nimo workspace use my_story
-./build/nimo workspace status
+devenv shell nimo workspace create my_story
+devenv shell nimo workspace use my_story
+devenv shell nimo workspace status
 ```
 
 A workspace contains `wiki/`, `chapters/`, `sessions/`, and `.nimo/` folders,
@@ -74,7 +74,7 @@ plus a `config.toml` and `outline.md` you can edit.
 ## 5. Verify everything works
 
 ```bash
-./build/nimo unit
+devenv shell nimo unit
 ```
 
 This runs the offline self-test suite (34 checks) — no model needed. It tests
@@ -83,21 +83,21 @@ search, and more. Everything should report PASS.
 
 ## 6. Spawn a Jules coding agent
 
-`build/jules` is a thin CLI for the [Jules](https://jules.google.com) codeling
+`nimble run jules` is a thin CLI for the [Jules](https://jules.google.com) codeling
 agent API — spawn a session on a GitHub repo and watch it work:
 
 ```bash
 # validate the API key (masked; resolved from $JULES_API_KEY or .env)
-./build/jules check
+nimble run jules check
 
 # create a session that auto-opens a PR, and queue it locally
-./build/jules spawn "CodeDoes/nimo" "improve the unit suite" --pr
+nimble run jules spawn "CodeDoes/nimo" "improve the unit suite" --pr
 
 # see queued jobs (icon + id + PR when ready)
-./build/jules queue
+nimble run jules queue
 
 # poll the most recent queued session until it finishes, streaming activity
-./build/jules watch
+nimble run jules watch
 ```
 
 Other commands: `status <id>`, `activities <id>`, `prs`, `sessions`,
@@ -108,7 +108,6 @@ printed; spawned jobs are recorded in `./.jules.json`.
 
 - `--backend cuda` needs a working NVIDIA GPU. If it fails, the GPU probe
   prints the reason and how to fix it.
-- `--backend cpu` always works but is slower (~15s vs ~1s for 8 tokens).
 - `--backend vulkan` uses the AMD/other Vulkan driver path.
 - You can pick the backend once in `nimo.json` (`"backend": "cuda"`) so you
   don't pass `--backend` every time.

@@ -57,6 +57,13 @@ task state_bake_test, "Deterministic state_bake equivalence (tiny model)":
 task eval, "Alias for the unit test suite":
   unitTask()
 
+task model_evals, "Run model evals (scored, real model, GPU required)":
+  if not fileExists("rwkv.cpp/librwkv_cuda.so"):
+    build_libsTask()
+  mkdir "build"
+  exec "nim c --path:src -o:build/model_evals src/model_evals.nim"
+  exec "./build/model_evals" @args
+
 task harness, "Run the harness (interactive agent)":
   if not fileExists("rwkv.cpp/librwkv_cuda.so"):
     build_libsTask()

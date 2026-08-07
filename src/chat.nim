@@ -19,9 +19,6 @@ proc checkBackendDeviceCompatibility(backend: RwkvBackendKind, device: string): 
   ## Returns error message if backend/device combination is invalid.
   let dev = device.toLowerAscii()
   case backend
-  of bkCpu:
-    if dev != "cpu" and dev != "":
-      return &"CPU backend requires --device cpu, got '{device}'"
   of bkCuda:
     if not dev.startsWith("gpu") and dev != "cuda":
       return &"CUDA backend requires --device gpu-* or 'cuda', got '{device}'"
@@ -43,8 +40,8 @@ proc parseArgs(args: seq[string]): ChatOpts =
       echo """nimo chat [OPTIONS] [MODEL] [VOCAB] [STATE]
 
 Backend/Device selection:
-  --device NAME     target device (e.g. gpu-0, cpu, vulkan-0)
-  --backend CPU|CUDA|VULKAN   choose backend
+  --device NAME     target device (e.g. gpu-0, vulkan-0)
+  --backend CUDA|VULKAN   choose backend
   --lib PATH        explicit librwkv.so (overrides --backend)
 
 Model:
@@ -63,11 +60,10 @@ Examples:
     elif arg == "--backend" and i + 1 < args.len:
       inc i
       let s = args[i].strip().toLowerAscii()
-      if s == "cpu": opts.backend = some(bkCpu)
-      elif s == "cuda": opts.backend = some(bkCuda)
+      if s == "cuda": opts.backend = some(bkCuda)
       elif s == "vulkan": opts.backend = some(bkVulkan)
       else:
-        echo "Error: unknown backend '" & s & "' (expected cpu|cuda|vulkan)"
+        echo "Error: unknown backend '" & s & "' (expected cuda|vulkan)"
         quit(1)
     elif arg == "--lib" and i + 1 < args.len:
       inc i
@@ -136,7 +132,7 @@ proc main() =
     printError &"Backend error: {e.msg}"
     echo ""
     echo "To run a different backend:"
-    echo "  --backend cpu|cuda|vulkan"
+    echo "  --backend cuda|vulkan"
     echo "  --lib <path to librwkv.so>"
     quit(1)
 

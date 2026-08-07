@@ -26,7 +26,7 @@ So: **env > nimo.json > defaults**.
   "threads": 8,
 
   // Backend (see 7500-gpu.md)
-  "backend": "cuda",          // "cpu" | "cuda" | "vulkan" (also accepts "nvidia"/"amd")
+  "backend": "cuda",          // "cuda" | "vulkan" (also accepts "nvidia"/"amd")
   "lib": "",                  // explicit librwkv.so path (overrides backend default)
   "gpuLayers": 99,            // layers offloaded to VRAM
 
@@ -46,14 +46,14 @@ So: **env > nimo.json > defaults**.
 `NIMO_MODEL`, `NIMO_VOCAB`, `NIMO_GPU_LAYERS`, `NIMO_QUANT`,
 `NIMO_MODEL_CACHE`, `NIMO_STATE_CACHE`, `NIMO_SYSTEM_PROMPT`,
 `NIMO_BAKE_CONTEXT=1`, `NIMO_MAX_TOKENS`, `NIMO_THREADS`,
-`NIMO_BACKEND=cpu|cuda|vulkan`, `NIMO_LIB=<path>`,
+`NIMO_BACKEND=cuda|vulkan`, `NIMO_LIB=<path>`,
 `NIMO_SMOKE=1`, `NIMO_SMOKE_PROMPT`.
 
 Boolean flags accept `1`/`true`/`yes`.
 
 ## Backend parsing
 
-`parseBackendKind` accepts: `cpu`, `cuda` (or `nvidia`), `vulkan` (or `amd`).
+`parseBackendKind` accepts: `cuda` (or `nvidia`), `vulkan` (or `amd`).
 Unknown values raise an error.
 
 ## Workspace config
