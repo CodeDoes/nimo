@@ -115,67 +115,198 @@ The loop drains the inbox **between steps**, never mid-step.
 - [3600-engine.md](3600-engine.md) — the streaming executor (`engine.run`)
 - [2110-repl.md](2110-repl.md) — the protocol it supersedes
 
-## The action set: what the plan (and the chat) can do
+## The DSL: Nim-script plan templates
 
-The plan DSL is the command DSL. Every plan step is a command the user can
-also type with `/`, and every command the user types is a step the plan can run.
-This is the single grammar.
+Plans are **Nim script templates** — valid Nim code that compiles to plan
+steps and runs through the engine. This gives you:
 
-### Engine steps (the mechanical backbone)
+- Full Nim syntax (variables, loops, conditionals, string interpolation)
+- Natural-language prompts inside `structured()` calls
+- Schemas as Nim `object` types
+- One primitive: `structured <SchemaType> "<prompt>"`
 
-These are the atomic actions the executor runs, one per step. Each is
-invocable by the plan (and by the human via a matching command):
+### Core syntax
 
-| DSL command | Engine kind | What it does | Needs model? |
-|-------------|-------------|--------------|--------------|
-| `/generate ...` or `/plan generate ...` | `skGenerate` | produce prose via the model (the only thinking step) | yes |
-| `/extract <filter> from <source>` | `skExtract` | pull a focused slice from a source (model or memory lookup) | sometimes |nimo | `skExtract` | pull a focused slice from a source (model or memory lookup) | | sometimes |
-| `/summarize <input> to <length>` | `skSummarize` | condense to essence | yes |
-| `/validate <text>` | `skValidate` | deterministic gate: word count, paragraph count, repeating segments | no |
-| `/write <path> <content>` | `skWrite` | deterministic file output | no |
-| `/loop <items>` | `skLoop` | data-driven fan-out: splices a sub-plan per item | no (the loop itself; items come from prior steps) |
-| `/report <title>` | `skReport` | checkpoint visible to the user | no |
+```
+nim
+# Variable binding
+let outline = structured StoryOutline "create a story for: " & premise
 
-### Chat-level verbs (wrappers around engine steps + chat state)
+# String interpolation
+let context = "extract characters from: " & outline
 
-| Verb | Description |
-|------|-------------|
-| `/send <text>` | start a new user turn (idle-only) |
-| `/steer <text>` | inject a directive at the next action boundary (does not interrupt the in-flight step) |
-| `/queue <text>` [on-action/on-finish] | hold until the chosen gate opens |
-| `/flush` | flush the queue immediately |
-| `/plan <goal>` | ask the agent to **produce a plan in the DSL** for the given goal |
-| `/run <plan-dsl>` | run a plan (or pasted plan text) through the same dispatcher |
-| `/save [path]` | persist the session JSONL |
-| `/quit` | end the session |
+# Control flow
+for char in characters:
+    let wiki = structured CharacterWiki "wiki for: " & char.name
+    save "wikis/" & char.name & ".json", wiki
 
-### Workspace / session / story / state (the infra verbs, currently repl-only but folded into chat)
+# Conditional
+if validate(chapter):
+    save "chapter.md", chapter.content
+else:
+    chapter = structured Chapter "revise: " & chapter.content
+    save "chapter.md", chapter.content
 
-These are the non-model, deterministic commands the planner's plan may also call:
+# Checkpoint
+say "done"
+```
 
-| Verb | Description |
-|------|-------------|
-| `/ws status \| list \| new <name> \| switch <path>` | workspace management |
-| `/session new [path] \| status` | session management |
-| `/story chapter validate <file>` | deterministic quality check |
-| `/story chapter write <path> -p <premise> [--skip-validate]` | generate a chapter (uses `skGenerate` internally) |
-| `/story wiki edit <file> -p <directive>` | update wiki entry (uses `skGenerate` internally) |
-| `/state list \| ingest -p <text> <file> \| load <file>` | baked-state cache ops |
-| `/cuda status` | GPU probe |
-| `/planner --dry <goal>` | deterministic `interpret` without the model (offline plan draft) |
+### Schema definition
 
-### Mapping to the existing codebase
+```
+nim
+type
+  StoryOutline* = object
+    premise*: string
+    acts*: seq[string]
+    characters*: seq[string]
+  
+  CharacterWiki* = object
+    name*: string
+    traits*: seq[string]
+    backstory*: string
+  
+  Chapter* = object
+    title*: string
+    content*: string
+    wordCount*: int
+```
 
-- **engine steps** come from `src/engine.nim` (the `kind` enum: `skExtract`, `skGenerate`, `skLoop`, `skReport`, `skSummarize`, `skValidate`, `skWrite`) and `src/program.nim` (the DSL serialization — already round-trips to/from JSON via `planToJson`).
-- **plan tool** is `pipelineTool` in `src/pipeline.nim` (the JSON-arguments tool the model currently emits as `[tool] run_pipeline {intent, target}`). Under 2111 this becomes the model's natural way to produce a plan that the dispatcher then parses.
-- **chat command verbs** (`/send`, `/steer`, `/queue`, `/flush`, `/save`, `/quit`, `/plan`, `/run`) live in the new threaded `chat.nim` dispatcher loop.
-- **infrastructure commands** (`/ws`, `/session`, `/story`, `/state`, `/cuda`, `/planner`) are currently in `repl.nim` — they fold into `chat` as `/`-prefixed commands, no reimplementation needed.
+Schemas are Nim `type` definitions. The `structured()` call generates output
+that conforms to the schema. The engine validates and binds to the variable.
+
+### The `structured()` primitive
+
+```
+nim
+let <variable> = structured <SchemaType> "<natural language prompt>"
+```
+
+Expands to:
+1. `Generate(prompt)` — model produces text
+2. `Parse<SchemaType>(output)` — deserialize into the schema
+3. `Bind(variable, parsed)` — store in variable scope
+
+That's it. Everything else is Nim syntax around this primitive.
+
+### Full example: story pipeline
+
+```
+nim
+# Inputs
+let premise = "a lighthouse keeper discovers a message in a bottle"
+
+# Step 1: generate outline
+let outline = structured StoryOutline "create a story outline for: " & premise
+save "outline.json", outline
+
+# Step 2: extract characters
+let characters = structured seq[CharacterWiki] "list main characters from: " & outline
+
+# Step 3: generate wikis
+for char in characters:
+    let wiki = structured CharacterWiki "write wiki entry for: " & char.name
+    save "wikis/" & char.name & ".json", wiki
+
+# Step 4: generate chapters
+for i in 1..3:
+    let chapter = structured Chapter "write chapter " & $i & " about: " & outline
+    if validate(chapter):
+        save "chapters/ch" & $i & ".md", chapter.content
+    else:
+        let revised = structured Chapter "revise chapter " & $i & " (needs more words): " & chapter.content
+        save "chapters/ch" & $i & ".md", revised.content
+
+say "story complete"
+```
+
+### How it compiles to plan steps
+
+The Nim script compiles to `seq[Step]`:
+
+```
+nim
+let outline = structured StoryOutline "..."
+```
+
+→
+
+```
+nim
+Step(kind: skGenerate, name: "outline", context: "...", skill: "StoryOutline")
+Step(kind: skWrite, name: "save-outline", path: "outline.json", content: <variable:outline>)
+```
+
+The compiler translates Nim syntax to the existing engine step types. The
+runtime is identical — only the surface syntax changes.
+
+### Variable scope and piping
+
+Variables live in a scope map:
+
+```
+nim
+let outline = structured StoryOutline "..."
+let chars = structured seq[Character] "extract from: " & outline  # uses $outline
+```
+
+Piping is just variable reference:
+
+```
+nim
+# Explicit
+let wiki = structured CharacterWiki "..." & char.name
+save "path", wiki
+
+# Implicit (last output)
+structured CharacterWiki "..." & char.name
+save "path"  # saves lastOutput
+```
+
+### Natural language prompts
+
+The prompt is **natural language**, not JSON:
+
+```
+nim
+# Good (natural)
+outline = structured StoryOutline "create a story outline for: a lighthouse"
+
+# Bad (mechanical)
+Step(kind: skGenerate, name: "generate-outline", context: "Create a story outline...", skill: "output:outline")
+```
+
+The model sees the same prompt either way — the Nim script just makes it
+readable for humans and editable as a plan artifact.
+
+### Chat-level verbs (Nim-script form)
+
+| Verb | Nim form |
+|------|----------|
+| send | `send "<text>"` |
+| steer | `steer "<text>"` |
+| queue | `queue "<text>"` |
+| plan | `plan "<goal>"` → returns script text |
+| run | `run "<script>"` |
+| save | `save "<path>"` (session) |
+| quit | `quit()` |
+
+### Infrastructure verbs (Nim-script form)
+
+| Verb | Nim form |
+|------|----------|
+| workspace | `ws.status()`, `ws.new("name")`, `ws.switch("path")` |
+| session | `session.new()`, `session.status()` |
+| story | `story.chapter.validate("file")`, `story.chapter.write("path", premise)` |
+| state | `state.list()`, `state.ingest("text", "file")`, `state.load("file")` |
+| cuda | `cuda.status()` |
+| planner | `planner.dry("goal")` |
 
 ### Unified invariant
 
-> **A plan is a script of commands in the same grammar a human types.**
-> The dispatcher runs them indistinguishably.
-> The agent emits one; the human pastes the same thing back — same code path.
+> **A plan is a Nim script of `structured()` calls and variable wiring.**
+> The dispatcher runs it. The agent emits it. The human types it.
+> One grammar, one executor, three drivers.
 
 ## Follow-ups (this RFC does not implement)
 
