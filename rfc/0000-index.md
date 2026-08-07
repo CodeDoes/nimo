@@ -30,6 +30,8 @@ status of the whole project is tracked in git history.
 | 1200 | [Chat](1200-chat.md) | The interactive chat workflow. |
 | 1300 | [Story](1300-story.md) | The creative writing workflow. |
 | 2000 | [CLI](2000-cli.md) | The command surface. |
+| 2110 | [Repl](2110-repl.md) | The Unified Protocol REPL (send/queue/steer/command grammar). **Superseded by 2111 — see chat.** |
+| 2111 | [Unified Chat](2111-unified-chat.md) | One interactive `chat` command (multithreaded) with `/send /steer /queue /plan`. Plan DSL ≡ command DSL. One dispatcher. |
 | 3000 | [Pipeline](3000-pipeline.md) | Intent → plan → execute. |
 | 3100 | [Chat Pipeline](3100-chat.md) | The interactive chat loop with plan compilation. |
 | 3200 | [Story Pipeline](3200-story.md) | Multi-chapter story generation with validation. |
@@ -67,5 +69,6 @@ status of the whole project is tracked in git history.
 ## Implementation Status
 
 All RFCs marked ✅ are implemented in `src/` and covered by the offline test
-suite (`devenv shell unit`, 87 checks)
-for the module-by-module map and known gaps.
+suite (`devenv shell unit`, 102 checks).
+- ✅ RFC 2110: implemented (repl.nim — superseded by 2111)
+- 📝 RFC 2111: design only (unified chat not yet implemented)

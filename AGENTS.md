@@ -211,6 +211,7 @@ Small RWKV models frequently emit bare JSON instead of `[tool]` — the fallback
 - `src/state_cache.nim` — context-read -> state -> cache (RFC 8000): baked state
   keyed by (model sig | vocab hash | context); resume-on-miss via `bakeContext`.
 - `src/harness.nim` — agent loop + tool parsing + CLI (loads `nimo.json`).
+- `src/chat.nim` — (future) unified interactive entry with `/send /steer /queue /plan` verbs; see [RFC 2111](rfc/2111-unified-chat.md).
 - `src/pipeline.nim` — `run_pipeline` tool: steps, target files, state in `.nimo/`.
 - `src/session.nim` — low-level RWKV session (real generation).
 - `src/config.nim` — `NimoConfig` (model/vocab/layers/quant/caches + env overrides).
@@ -280,6 +281,18 @@ Small RWKV models frequently emit bare JSON instead of `[tool]` — the fallback
 - **Pi sessions** (`~/.pi/agent/sessions/--home-kit-dev-nimo--/`): the reasoning.
   Ephemeral session artifacts (plan/, analysis/, critique/) live here, not in the repo.
 - **Docs** (`docs/`): end-user facing explanation.
+
+### Vocabulary
+
+- **`turn`** — a complete exchange: either a **user turn** (input) or an
+  **assistant turn** (one full agent cycle: plan → tool steps → answer). A
+  session is a sequence of turns.
+- **`step`** (synonym: **`action`**) — an atomic action *inside* a turn: one
+  `Generate`, one `tool_call`, a `validate`, a `write`, or a plan step.
+  Steer/queue inject **between steps**, never mid-step.
+
+The rule of thumb: **a turn is conversational; a step is mechanical.**
+See [RFC 2111](rfc/2111-unified-chat.md) for the full state machine.
 
 ### Message format
 

@@ -34,7 +34,8 @@ decision; ONE binary everywhere.
       (simulates no-GPU / jules-CPU / CI) — no hard failure.
 
 ## Next
-- [ ] Commit + keep `main` synced with `origin/main`.
+- [x] Design RFC 2111 (Unified Chat & the command DSL) — step/turn vocab, send/steer/queue gates, plan DSL = command DSL, single `chat` entry
+- [ ] Implement RFC 2111 (threaded chat, `/send /steer /queue /plan`, fold repl/harness into aliases)
 
 > Tooling: this machine's `grep` floods stderr with `libpcre2 … no version
 > information` noise — use `rg`/`awk` (added to AGENTS.md Conventions).
@@ -69,7 +70,7 @@ The future is bright.
 - [ ] `nimo run` uses stub generator
 - [x] nimo dispatcher now preserves quoted args (was: shell-split `--prompt "Say OK."` into `Say`+`OK.`)
 - [x] Unified Protocol REPL (RFC 2110): `nimo repl` = send/queue/steer, planner, ws, session, story chapter/wiki, cuda, state — same bootstrap + runHarnessTurn seam as chat
-- [ ] Chat `run_pipeline` -> route through the shared protocol registry (RFC 2110 follow-up)
+- [ ] RFC 2111: unify `chat` + `repl` into a single command-aware interactive (`/send /steer /queue /plan`); plan DSL ≡ command DSL
 - [ ] CLI `--` separator broken in `nimble run` (nimble-side forwarding; separate from the dispatcher fix)
 
 ## Commands
