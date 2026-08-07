@@ -495,7 +495,18 @@ proc main() =
     else:
       positional.add(a)
     inc i
-  # legacy positional: <model> <vocab>
+  # No bare text may be pushed into the session. A positional arg is only ever
+  # a model/vocab FILE path (legacy); anything else is almost certainly a
+  # mistyped message, and silently swallowing it as a model path drops the
+  # text. Initial messages must be explicit via -p/--prompt.
+  if positional.len > 0 and not fileExists(positional[0]) and not dirExists(positional[0]):
+    echo "Error: unrecognized positional '" & positional[0] & "'."
+    echo ""
+    echo "To send a message into the session, use explicitly:"
+    echo "  nimo harness -p \"<message>\"   (or --prompt)"
+    echo "To pick a model file:"
+    echo "  nimo harness --model <path> [--vocab <path>]"
+    quit(1)
   if positional.len > 0: cfg.modelPath = positional[0]
   if positional.len > 1: cfg.vocabPath = positional[1]
   runHarnessCli(cfg, getCurrentDir(), opts)

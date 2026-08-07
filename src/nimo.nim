@@ -7,16 +7,35 @@ import ./gpu
 # ---------------------------------------------------------------------------
 # Goal-first CLI commands (RFC 2000)
 # ---------------------------------------------------------------------------
+
+## POSIX-style control request. Always means "show help" — it must be handled
+## before any routing, never passed onward as a goal/prompt/subcommand.
+proc isHelpFlag(a: string): bool =
+  a in ["--help", "-h", "help"]
+
+## Build a command line that preserves argument boundaries: each arg is shell-
+## quoted, so values like --prompt "Say OK." reach the subcommand intact
+## (previously the dispatcher joined raw args and the shell re-split them).
+proc joinQuoted(binary: string, args: seq[string]): string =
+  result = binary
+  for a in args:
+    result.add " " & quoteShell(a)
+
 proc cmdPlanner(rest: seq[string]): int =
   ## `nimo planner "<goal>"` — compile a natural-language goal into a plan
   ## and show the steps. Deterministic, no model needed.
-  if rest.len == 0 or rest[0] in ["--help", "-h", "help"]:
+  if rest.len == 0 or isHelpFlag(rest[0]):
     echo """Usage: nimo planner "<goal>"
 
 Shows the plan the orchestrator would create from your goal.
 Example:
   nimo planner "create a story about a lighthouse"
 """
+    return (if rest.len > 0: 0 else: 1)
+  # Convention: a flag is a control request, never a goal. Never let it flow
+  # into the NL planner (that's how `--help` once became a "plan").
+  if rest[0].startsWith("-") and not isHelpFlag(rest[0]):
+    echo "Error: unexpected option '" & rest[0] & "' (planner takes a goal, not a flag)."
     return 1
 
   var goal = ""
@@ -86,7 +105,7 @@ proc resolveWorkspace*(nameOrPath: string = ""): Workspace =
   return ws
 
 proc cmdWorkspace(rest: seq[string]): int =
-  if rest.len == 0 or rest[0] in ["--help", "-h", "help"]:
+  if rest.len == 0 or isHelpFlag(rest[0]):
     echo """Usage: nimo workspace <command> [args]
 
 Commands:
@@ -95,7 +114,7 @@ Commands:
   use <name|path>                Switch to workspace
   status                         Show workspace status
   remove <name|path>             Remove workspace"""
-    return 1
+    return (if rest.len > 0: 0 else: 1)
 
   let wsCmd = rest[0].strip().toLowerAscii()
   let wsArgs = if rest.len > 1: rest[1 ..< rest.len] else: @[]
@@ -154,7 +173,7 @@ Commands:
   return 0
 
 proc cmdStory(rest: seq[string]): int =
-  if rest.len == 0 or rest[0] in ["--help", "-h", "help"]:
+  if rest.len == 0 or isHelpFlag(rest[0]):
     echo """Usage: nimo story <command> [args]
 
 Commands:
@@ -162,7 +181,7 @@ Commands:
   validate <chapter-file> [--workspace <name>]
   critique <chapter-file> [--workspace <name>]
   outline [--workspace <name>] [--premise <text>]"""
-    return 1
+    return (if rest.len > 0: 0 else: 1)
 
   let storyCmd = rest[0].strip().toLowerAscii()
   let storyArgs = if rest.len > 1: rest[1 ..< rest.len] else: @[]
@@ -235,7 +254,7 @@ Commands:
 
 proc cmdRun(rest: seq[string]): int =
   ## `nimo run <plan_path>` — execute a plan through the engine
-  if rest.len == 0 or rest[0] in ["--help", "-h", "help"]:
+  if rest.len == 0 or isHelpFlag(rest[0]):
     echo """Usage: nimo run <plan_path> [--resume]
 
 Execute a plan artifact through the engine.
@@ -243,7 +262,7 @@ Example:
   nimo run .nimo/programs/myplan.json
   nimo run .nimo/programs/myplan.json --resume
 """
-    return 1
+    return (if rest.len > 0: 0 else: 1)
 
   let planPath = rest[0]
   let resume = "--resume" in rest
@@ -272,13 +291,16 @@ Example:
 
 proc cmdNew(rest: seq[string]): int =
   ## `nimo new <goal>` — open a session, compile goal, run plan
-  if rest.len == 0 or rest[0] in ["--help", "-h", "help"]:
+  if rest.len == 0 or isHelpFlag(rest[0]):
     echo """Usage: nimo new "<goal>"
 
 Open a session and run the plan for your goal.
 Example:
   nimo new "create a story about a lighthouse"
 """
+    return (if rest.len > 0: 0 else: 1)
+  if rest[0].startsWith("-") and not isHelpFlag(rest[0]):
+    echo "Error: unexpected option '" & rest[0] & "' (new takes a goal, not a flag)."
     return 1
 
   let goal = rest.join(" ")
@@ -372,23 +394,23 @@ Usage:
   case cmd
   of "generate":
     let binary = baseDir / "generate"
-    var cmdLine = binary & " " & rest.join(" ")
+    var cmdLine = joinQuoted(binary, rest)
     if execCmd(cmdLine) != 0: quit(1)
   of "quantize":
     let binary = baseDir / "quantize"
-    var cmdLine = binary & " " & rest.join(" ")
+    var cmdLine = joinQuoted(binary, rest)
     if execCmd(cmdLine) != 0: quit(1)
   of "harness":
     let binary = baseDir / "harness"
-    var cmdLine = binary & " " & rest.join(" ")
+    var cmdLine = joinQuoted(binary, rest)
     if execCmd(cmdLine) != 0: quit(1)
   of "chat":
     let binary = baseDir / "chat"
-    var cmdLine = binary & " " & rest.join(" ")
+    var cmdLine = joinQuoted(binary, rest)
     if execCmd(cmdLine) != 0: quit(1)
   of "bake":
     let binary = baseDir / "bake_state"
-    var cmdLine = binary & " " & rest.join(" ")
+    var cmdLine = joinQuoted(binary, rest)
     if execCmd(cmdLine) != 0: quit(1)
   of "planner", "plan":
     quit(cmdPlanner(rest))

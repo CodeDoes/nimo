@@ -36,7 +36,8 @@ The future is bright.
 ## Known Issues
 - [x] State cache corruption self-heals (NaN guard re-bakes); capped at 512 MB (was: corrupt across runs, clear manually)
 - [ ] `nimo run` uses stub generator
-- [ ] CLI `--` separator broken in `nimble run`
+- [x] nimo dispatcher now preserves quoted args (was: shell-split `--prompt "Say OK."` into `Say`+`OK.`)
+- [ ] CLI `--` separator broken in `nimble run` (nimble-side forwarding; separate from the dispatcher fix)
 
 ## Commands
 ```bash
