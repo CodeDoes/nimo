@@ -1,12 +1,13 @@
 ## haiku.nim — Generate a haiku about AI
 ## Demonstrates the observable workflow.
-## Run with: nim c -o:build/haiku scripts/haiku.nim && ./build/haiku
+## Run with: nim c -o:build/haiku demos/haiku.nim && ./build/haiku
 
-import std/[times]
+import std/[times, os]
 
 const
   Prompt = "write a haiku about AI"
-  OutputFile = "haiku.md"
+  OutputDir = ".nimo/demos/haikus"
+  OutputFile = OutputDir / "haiku.md"
   Schema = "Haiku"
 
 proc main() =
@@ -49,6 +50,7 @@ proc main() =
   echo "Elapsed: " & $elapsed & "s"
   
   # Save output
+  createDir(OutputDir)
   writeFile(OutputFile, output)
   echo ""
   echo "Saved to: " & OutputFile
