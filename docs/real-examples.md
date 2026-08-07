@@ -300,3 +300,59 @@ let result = structured Result "consider: " & recall("important context")
 3. **Plans are editable** — paste, modify, re-run
 4. **Streaming is visible** — each step shows ▶ or ✔
 5. **Steer is boundary-safe** — never mid-generation, always at step boundary
+
+---
+
+## Plan vs Run: The Key Distinction
+
+```
+nimo> /plan "write a haiku about AI"
+▶ produce plan
+  let haiku = structured Haiku "write a haiku about AI"
+  save "haiku.md", haiku
+  say "done"
+  
+  # Plan produced. Not executed.
+  # User can review, edit, then run.
+nimo> /run "let haiku = structured Haiku \"write a haiku about AI\"; save \"haiku.md\", haiku; say \"done\""
+▶ generate
+  wrote 47 bytes -> haiku.md
+▶ done
+nimo> 
+```
+
+**Separation of concerns:**
+- `/plan` = **compile** (like `nim check`)
+- `/run` = **execute** (like `nim run`)
+
+This lets you:
+1. See what the agent would do
+2. Edit the plan if needed
+3. Execute with confidence
+
+---
+
+## How It Feels
+
+```
+nimo> /plan "write a story about a lighthouse"
+▶ produce plan
+  let premise = "a lighthouse keeper discovers a message in a bottle"
+  let outline = structured StoryOutline "create a story outline for: " & premise
+  save "outline.json", outline
+  
+  for char in outline.characters:
+      let wiki = structured CharacterWiki "write wiki entry for: " & char
+      save "wikis/" & char & ".json", wiki
+  ...
+  
+  # Plan has 12 steps. 3 loops. Ready to run.
+nimo> /run   # or just press Enter to accept
+▶ generate
+  wrote 412 bytes -> outline.json
+▶ loop: characters (4 items)
+  ...
+▶ story complete
+nimo> 
+```
+
